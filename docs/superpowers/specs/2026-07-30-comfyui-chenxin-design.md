@@ -44,7 +44,7 @@ Spawn these 5 reviewers on every PR (in parallel):
 
 1. **code-reviewer** (general quality)
 2. **security-reviewer** (secrets + injection + scope)
-3. **aesthetic-judge** (workflow JSON schema if applicable)
+3. **chenxin-doctor** (workflow JSON graph schema if applicable) — covers the old `aesthetic-judge` role
 4. **comfyui-doctor** (VRAM decision if model added)
 5. **recipe-expert** (prompt dialect if recipe added)
 
