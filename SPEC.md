@@ -5,12 +5,12 @@
 
 ## Current phase
 
-> **P0.1** — Knowledge substrate (74 recipes + 578 templates index)
+> **P0.3** — L4 mega-skill `chenxin-core` (consolidates 11 prior skills; binds recipes + templates + VRAM into one entry point)
 
 ## P0 — Foundation
 
 - [ ] P0.1 Knowledge substrate → PR #TBD → planned phase/P0.1-knowledge
-- [/] P0.2 MCP tool enhancements → PR #TBD → in progress (branch phase/P0.2-mcp-tools)
+- [x] P0.2 MCP tool enhancements → merge `8715150` → main → phase/P0.2-mcp-tools
 - [ ] P0.3 L4 mega-skill `chenxin-core` → PR #TBD → planned phase/P0.3-mega-skill
 
 ## P1 — Application unification
