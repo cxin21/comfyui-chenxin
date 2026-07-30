@@ -12,7 +12,7 @@ Every phase opens a PR and passes 5-dim adversarial review before merge:
 
 1. **code-reviewer** — quality, naming, <800 lines/file
 2. **security-reviewer** — secrets, MCP injection, auth scope
-3. **aesthetic-judge** — workflow JSON graph schema (if applicable)
+3. **chenxin-doctor** — workflow JSON graph schema (if applicable) — covers the old `aesthetic-judge` role
 4. **comfyui-doctor** — VRAM decision accuracy (if model added)
 5. **recipe-expert** — prompt dialect accuracy (if recipe added)
 
