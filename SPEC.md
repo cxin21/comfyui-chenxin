@@ -10,7 +10,7 @@
 ## P0 — Foundation
 
 - [ ] P0.1 Knowledge substrate → PR #TBD → planned phase/P0.1-knowledge
-- [ ] P0.2 MCP tool enhancements → PR #TBD → planned phase/P0.2-mcp-tools
+- [/] P0.2 MCP tool enhancements → PR #TBD → in progress (branch phase/P0.2-mcp-tools)
 - [ ] P0.3 L4 mega-skill `chenxin-core` → PR #TBD → planned phase/P0.3-mega-skill
 
 ## P1 — Application unification
