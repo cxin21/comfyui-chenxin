@@ -128,7 +128,7 @@ bash skills/lora-trainer/scripts/train-anima-standalone.sh \
 ## 10. 评分与验证
 
 ```bash
-# 用 aesthetic-judge skill 评分
+# 用 manga-stage-3-review 内部 6 维算法评分
 # 5 张图：
 #   总分 ≥ 7/10 → lora_verified: true
 #   总分 < 7/10 → 调整 LoRA 强度/重训/换 trigger_word

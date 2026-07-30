@@ -167,8 +167,8 @@ Stage 2 输出
 Step 4: 对每个 panel:
 
   v1: 首次审查
-    mcp__comfyui__view_image(scene_NN.png)
-    aesthetic-judge skill → 6 维 + 建议
+    mcp__comfyui-mcp__view_image(scene_NN.png)
+    (内部 6 维 + 建议 — 已 absorbed aesthetic-judge)
 
   v1 评分 → review.md + manifest.json.stage3_review
 
