@@ -75,7 +75,7 @@ bash bootstrap.sh --title-cn "..." --title-en "..." --characters "..." --scenes 
 ─── Stage 1: LoRA 训练 ───
 对每个 character/scene:
   → bash lora-trainer/scripts/train-anima-standalone.sh --name <name> --refs <dir>
-  → 5 张 test 图 + aesthetic-judge 评分 ≥ 7.0 → lora_verified
+  → 5 张 test 图 + manga-stage-3-review 内部 6 维评分 ≥ 7.0 → lora_verified
   → sync vault: knowledge-{date}-{char-name}-lora-verified.md
   ↓
 ─── Stage 2: 分镜面板 ───

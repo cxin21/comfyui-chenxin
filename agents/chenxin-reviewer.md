@@ -30,7 +30,7 @@ A phase passes when `blockers == []` AND `passed >= 4/5`.
 ## Workflow
 
 1. `git diff --cached` to capture the staged diff.
-2. Detect which dims apply (e.g. `aesthetic-judge` only fires if the diff
+2. Detect which dims apply (e.g. `chenxin-doctor`'s workflow-JSON role only fires if the diff
    touches `*.json` in `templates/` or workflow files).
 3. Spawn each applicable reviewer in parallel via Agent tool.
 4. Collect verdicts; aggregate.

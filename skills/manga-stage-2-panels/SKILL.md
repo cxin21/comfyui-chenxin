@@ -36,7 +36,7 @@ Stage 2 接受 Stage 0（项目骨架）和 Stage 1（LoRA 训练）的产出，
 
 **v2.0 角色一致性增强**（可选）：
 - **默认**：B1 LoRA only（已有 3 个固定 LoRA）
-- **可选**：叠加 IP-Adapter（`comfyui-anima-ipadapter` 已部署）+ face attention（v2 提示，可在 metadata 标注启用但不默认打开）
+- **可选 [PACK-CANDIDATE]**：叠加 IP-Adapter（`comfyui-anima-ipadapter` 不在 plugin ship 范围,需 `scripts/install.sh --with-anima-ipadapter` 选装）+ face attention（v2 提示，可在 metadata 标注启用但不默认打开）
 - **P1.2 PhotoMaker V2**：单图 ID 嵌入替代 LoRA 训练（秒级，1 张参考图即可）
 
 ### PhotoMaker V2 替代/补充路径（v2.0 + P1.2）
@@ -136,11 +136,15 @@ Stage 0 输出                              Stage 1 输出
 | Width | 832 | 39 |
 | Height | 1216 | 47 |
 
-## 6. Prompt 构造（prompt-forge — 与 Stage 4 说话场景对齐）
+## 6. Prompt 构造(chenxin-core recipes — 与 Stage 4 说话场景对齐)
+
+> Plugin `prompt-forge` skill 在 2026-07-30 hard-delete(commit 531dd62)。
+> 方法学保留于 `skills/chenxin-core/internals/legacy/prompt-forge-methodology.md`,
+> 但运行时 recipe dialect 通过 `skills/chenxin-core/internals/recipe_lookup.py --model anima` 拉。
 
 ### 正向 prompt
 
-使用 `prompt-forge` skill 的 Anima 预设（§B2）：
+使用 chenxin-core `recipes/MODELS.md` 的 Anima 预设（§B2）：
 
 ```
 score_9, score_8_up, score_7_up,
