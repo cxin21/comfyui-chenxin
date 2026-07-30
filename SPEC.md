@@ -5,7 +5,7 @@
 
 ## Current phase
 
-> **P2.2** — Docs + ADR (last phase)
+> **(all 8 phases landed)**
 
 ## P0 — Foundation
 
@@ -22,7 +22,7 @@
 ## P2 — Distribution
 
 - [x] P2.1 Marketplace publish → commit `63e6b2c` → main → phase/P2.1-marketplace
-- [/] P2.2 Docs + tutorials → in progress (TROUBLESHOOTING + ADR + README tagline fix)
+- [x] P2.2 Docs + tutorials → commit `2244427` → main → phase/P2.2-docs
 
 ## P3 — Optional (YAGNI evaluation)
 
