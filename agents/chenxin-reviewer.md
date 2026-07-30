@@ -21,7 +21,7 @@ Runs each of the following against the staged diff and aggregates verdicts:
 |---|------------------|-------------------------------------------------------------|
 | 1 | code-reviewer    | quality, naming, < 800 lines/file, no deep nesting           |
 | 2 | security-reviewer| secrets, MCP injection, auth scope, OWASP Top 10             |
-| 3 | aesthetic-judge  | workflow JSON graph schema (only if workflow JSON changed)   |
+| 3 | chenxin-doctor   | workflow JSON graph schema (only if workflow JSON changed)   |
 | 4 | comfyui-doctor   | VRAM decision accuracy (only if model added / hardware changed) |
 | 5 | recipe-expert    | prompt dialect accuracy (only if recipe added)               |
 

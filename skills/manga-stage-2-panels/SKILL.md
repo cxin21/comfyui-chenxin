@@ -83,14 +83,14 @@ Stage 0 输出                              Stage 1 输出
 |------|------|------|
 | 解析 01_plan.md | bash | `scripts/parse-plan.sh` |
 | 验证前置 | bash | `scripts/validate-preconditions.sh` |
-| 推断镜头表（如空） | **Agent** | prompt-forge 框架 |
-| 备份工作流配置 | **Agent** | `mcp__comfyui__query_workflow` |
-| 修改 prompt 节点 | **Agent** | `mcp__comfyui__modify_workflow`（仅节点 3、4） |
-| 提交生成 | **Agent** | `mcp__comfyui__enqueue_workflow` |
-| 等待完成 | **Agent** | `mcp__comfyui__get_job_status` |
-| 拉图 | **Agent** | `mcp__comfyui__get_image` |
-| 恢复工作流配置 | **Agent** | `mcp__comfyui__modify_workflow` |
-| 评分 | **Agent** | `aesthetic-judge` skill（6 维） |
+| 推断镜头表（如空） | **Agent** | chenxin-core recipe auto-pull (via `skills/chenxin-core/internals/recipe_lookup.py`) |
+| 备份工作流配置 | **Agent** | `mcp__comfyui-mcp__query_workflow` |
+| 修改 prompt 节点 | **Agent** | `mcp__comfyui-mcp__modify_workflow`（仅节点 3、4） |
+| 提交生成 | **Agent** | `mcp__comfyui-mcp__enqueue_workflow` |
+| 等待完成 | **Agent** | `mcp__comfyui-mcp__get_job_status` |
+| 拉图 | **Agent** | `mcp__comfyui-mcp__get_image` |
+| 恢复工作流配置 | **Agent** | `mcp__comfyui-mcp__modify_workflow` |
+| 评分 | **Agent** | manga-stage-3-review 内部 6 维算法（已 absorbed aesthetic-judge） |
 | 落盘 | bash | `cp` + `Write` |
 
 ## 4. 输入参数

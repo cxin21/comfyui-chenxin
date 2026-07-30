@@ -68,9 +68,9 @@ Stage 0 (bootstrap) → Stage 1 (LoRA) → Stage 2 (panels)
 读 01_plan.md 或从 synopsis 推断（Stage 0 任务）
   ↓
 ─── Stage 0: bootstrap ───
-bash bootstrap.sh --title-cn "..." --title-en "..." --characters "..." --scenes "..."
+bash scripts/bootstrap.sh --title-cn "..." --title-en "..." --characters "..." --scenes "..."
   → 生成 02_assets/, 03_storyboard/01_plan.md, pipeline_state.json
-  → sync vault: 00-Inbox/processed/decision-{date}-manga-bootstrap.md
+  → sync vault: 00-Inbox/processed/decision-{date}-manga-orchestrator.md
   ↓
 ─── Stage 1: LoRA 训练 ───
 对每个 character/scene:

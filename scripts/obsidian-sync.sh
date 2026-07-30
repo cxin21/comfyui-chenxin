@@ -8,9 +8,10 @@
 #   bash scripts/obsidian-sync.sh post-write-SPEC.md
 #   bash scripts/obsidian-sync.sh post-write-plugin.json
 #
-# The vault path is hard-coded to D:/ObsidianWorkSpace/workspace per the
-# global `~/.claude/rules/obsidian-workflow.md` rule. If the vault is
-# missing, the script prints a warning and exits 0 (idempotent, non-fatal).
+# The vault default is D:/ObsidianWorkSpace/workspace per the user's global
+# `~/.claude/rules/obsidian-workflow.md` rule. Override via
+# $OBSIDIAN_VAULT_PATH. If the vault is missing, the script prints a
+# warning and exits 0 (idempotent, non-fatal).
 #
 # Writes:
 #   D:/ObsidianWorkSpace/workspace/00-Inbox/processed/decision-<YYYY-MM-DD>-<event>.md
