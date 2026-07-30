@@ -1,7 +1,7 @@
 # comfyui-chenxin
 
 > **Local-first ComfyUI mega-skill for Claude Code.**
-> 74 model prompt recipes · 578 workflow templates · hardware-aware model selection · self-updating knowledge substrate · manga end-to-end pipeline.
+> 80 model prompt recipes · 662 workflow templates · hardware-aware model selection · self-updating knowledge substrate · manga end-to-end pipeline.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-FFD27D.svg)](LICENSE)
 [![Claude Code: required](https://img.shields.io/badge/Claude_Code-plugin-5BAEE3.svg)](https://claude.com/claude-code)

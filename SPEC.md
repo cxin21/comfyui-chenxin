@@ -5,7 +5,7 @@
 
 ## Current phase
 
-> **P2.1** — Marketplace publish (validate plugin.json + marketplace.json; consider CI workflow)
+> **P2.2** — Docs + ADR (last phase)
 
 ## P0 — Foundation
 
@@ -21,8 +21,8 @@
 
 ## P2 — Distribution
 
-- [ ] P2.1 Marketplace publish → PR #TBD → planned phase/P2.1-marketplace
-- [ ] P2.2 Docs + tutorials → PR #TBD → planned phase/P2.2-docs
+- [x] P2.1 Marketplace publish → commit `63e6b2c` → main → phase/P2.1-marketplace
+- [/] P2.2 Docs + tutorials → in progress (TROUBLESHOOTING + ADR + README tagline fix)
 
 ## P3 — Optional (YAGNI evaluation)
 
