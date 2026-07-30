@@ -127,7 +127,8 @@ Saves a workflow JSON graph (file path or stdin) to
 the ComfyUI root from `$COMFYUI_PATH` (env) or `~/ComfyUI` (default). Validates
 the input is UTF-8 JSON, computes a SHA-256 fingerprint, and — bonus — drops a
 `_manifest.json` sidecar when an installed skill context is detected under
-`~/.claude/skills/`.
+the plugin's own `skills/` tree (or, in pre-cleanup environments, under
+`~/.claude/skills/`, which was deprecated in 2026-07-30 hard-delete).
 
 ```bash
 python mcp/extensions/gui_save.py --graph /tmp/my.json --name my_workflow
