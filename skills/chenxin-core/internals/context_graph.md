@@ -9,7 +9,7 @@ codebase.
 | Layer | Name                | Owns                                              | Path(s)                                                              |
 |-------|---------------------|---------------------------------------------------|----------------------------------------------------------------------|
 | L1    | ComfyUI runtime     | The graph execution engine                        | External (user's `~/ComfyUI`)                                        |
-| L2    | MCP driver          | 108 tools (`mcp__comfyui-mcp-server__*`)         | User-side MCP install                                                |
+| L2    | MCP driver          | 108 tools (`mcp__comfyui-mcp__*`)              | User-side MCP install                                                |
 | L3    | Knowledge substrate | 80 recipes, 662 templates, 8 GB hardware matrix   | `skills/chenxin-core/recipes/`, `templates_index.json`, `hardware/`  |
 | L4    | **Mega-skill (this layer)** | Routing keyword → which L2/L3/L5 tool to invoke | `skills/chenxin-core/SKILL.md` + `internals/*.py`                    |
 | L5    | Application logic   | Stage 0–6 manga pipeline, etc.                    | `skills/<app>/SKILL.md` (future P1.1)                                |
@@ -29,7 +29,7 @@ Trace a single request through the layers to see the wiring:
      - "出" / 8 GB      → L3 lookup via internals/hardware_decide.py → quant + sampler defaults
      - "出动漫角色"    → L5 application (manga-stage-2-panels, P1.1) or L2 generate_image
 4. L4 composes the prompt: dialect block from L3 + VRAM-safe defaults from L3.
-5. L4 calls L2 (mcp__comfyui__generate_image) → L1 (ComfyUI) renders.
+5. L4 calls L2 (mcp__comfyui-mcp__generate_image) → L1 (ComfyUI) renders.
 6. L2 returns asset_id → L4 returns control to user with the image.
 7. L6 hooks fire PostToolUse → optionally L7 obsidian-sync.sh writes a
    decision note to the user's vault.

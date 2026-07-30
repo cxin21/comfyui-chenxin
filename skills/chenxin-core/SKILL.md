@@ -48,7 +48,7 @@ the rest is dormant content.
 
 Invoke chenxin-core **before** doing ANY of the following:
 
-- Calling `mcp__comfyui-mcp-server__*` tools (L2)
+- Calling `mcp__comfyui-mcp__*` tools (L2)
 - Writing a generation prompt for a specific named model
 - Selecting a workflow template (L3 templates_index.json)
 - Choosing sampler / quant / steps / cfg for a model on given VRAM
@@ -85,18 +85,19 @@ When invoked, follow this decision tree:
    - any user-supplied content (subject, style, mood)
 
 6. Invoke the right L2 tool:
-   - mcp__comfyui__generate_image            (text-to-image)
-   - mcp__comfyui__generate_video            (text-to-video)
-   - mcp__comfyui__generate_audio            (text-to-audio)
-   - mcp__comfyui__generate_with_controlnet  (controlnet-conditioned)
-   - mcp__comfyui__generate_with_ip_adapter  (IP-Adapter)
-   - mcp__comfyui__remove_background         (BiRefNet)
-   - mcp__comfyui__upscale_image             (ESRGAN upscale)
+   - mcp__comfyui-mcp__generate_image            (text-to-image)
+   - mcp__comfyui-mcp__generate_video            (text-to-video)
+   - mcp__comfyui-mcp__generate_audio            (text-to-audio)
+   - mcp__comfyui-mcp__generate_with_controlnet  (controlnet-conditioned)
+   - mcp__comfyui-mcp__generate_with_ip_adapter  (IP-Adapter)
+   - mcp__comfyui-mcp__remove_background         (BiRefNet)
+   - mcp__comfyui-mcp__upscale_image             (ESRGAN upscale)
 
 7. For multi-stage pipelines, hand off to the L5 skill:
-   - manga-orchestrator / manga-stage-*  (future P1.1)
-   - openmontage                          (video production)
-   - seedance-2-0                         (premium cinematic video)
+   - skills/manga-orchestrator/SKILL.md     (Stage 0–6 coordinator — ported in P1.1)
+   - skills/manga-stage-{1..4}-*/SKILL.md   (ported in P1.1)
+   - skills/ffmpeg-pipeline/SKILL.md        (Stage 5)
+   - skills/lora-trainer/SKILL.md           (Stage 1 standalone)
 ```
 
 ## What L4 explicitly does NOT do

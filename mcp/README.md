@@ -214,9 +214,16 @@ adversarial review.
 
 ## Boundary with the upstream `comfyui-mcp` driver
 
-This layer **augments** L2; it does **not** replace or fork it. `comfyui-mcp`
-remains the registered MCP server providing the ~108 core tools (`generate_image`,
-`enqueue_workflow`, `list_models`, …). P0.2 adds four orthogonal capabilities
-that are awkward or impossible to express in the upstream JSON-RPC surface
-(particularly anything that **starts a subprocess**, like `auto_launch`, or
-that **writes into ComfyUI's user-default directory**, like `gui_save`).
+This layer **augments** L2; it does **not** replace or fork it. The plugin's
+`.claude-plugin/plugin.json` registers the upstream `comfyui-mcp` MCP server
+under the key `comfyui-mcp` (per `mcp/mcp_servers.json`), so its ~108 core
+tools appear to agents as `mcp__comfyui-mcp__*` (e.g.
+`mcp__comfyui-mcp__generate_image`, `mcp__comfyui-mcp__enqueue_workflow`,
+`mcp__comfyui-mcp__list_models`, …). P0.2's four CLI extensions
+(`auto_launch.py`, `vram_decide.py`, `template_get.py`, `gui_save.py`) live
+alongside this MCP driver as **subprocess invocations** because each augments
+L2 with capabilities that are awkward or impossible to express in the
+upstream JSON-RPC surface — particularly anything that **starts a subprocess**
+(`auto_launch`), or that **writes into ComfyUI's user-default directory**
+(`gui_save`), or that **reads the local knowledge substrate** (`vram_decide`,
+`template_get`).
