@@ -123,16 +123,27 @@ def load_hardware(vram_gb: int) -> dict:
     """Load skills/chenxin-core/hardware/<vram_gb>.json. Returns {} if missing.
 
     The hardware JSON layout is owned by the P0.1 worker; we only consume it.
+
+    Accepts multiple filename conventions (in priority order) so that workers
+    and future schemas cannot drift apart silently:
+        1. hardware/<vram_gb>.json      (preferred canonical name)
+        2. hardware/<vram_gb>gb.json    (legacy / human-readable variant)
     """
-    path = HARDWARE_DIR / f"{int(vram_gb)}.json"
-    if not path.exists():
-        return {}
-    try:
-        with path.open("r", encoding="utf-8") as f:
-            return json.load(f)
-    except (OSError, json.JSONDecodeError) as e:
-        emit_human(f"[warn] failed to read hardware profile {path}: {e}")
-        return {}
+    vram = int(vram_gb)
+    candidates = [HARDWARE_DIR / f"{vram}.json", HARDWARE_DIR / f"{vram}gb.json"]
+    tried: list[str] = []
+    for path in candidates:
+        tried.append(path.name)
+        if not path.exists():
+            continue
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                return json.load(f)
+        except (OSError, json.JSONDecodeError) as e:
+            emit_human(f"[warn] failed to read hardware profile {path}: {e}")
+            continue
+    emit_human(f"[info] no hardware profile for vram_gb={vram} (tried: {', '.join(tried)})")
+    return {}
 
 
 def load_templates_index() -> dict:
