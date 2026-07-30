@@ -10,7 +10,7 @@ triggers:
   - "评图"
   - "stage 3"
   - "judge images"
-allowed-tools: Bash, Read, Write, "mcp__comfyui__*"
+allowed-tools: Bash, Read, Write, "mcp__comfyui-mcp__*"
 ---
 
 # Manga Stage 3 — 像素级审查 (v2.1, ported — 6 维)
@@ -22,7 +22,7 @@ allowed-tools: Bash, Read, Write, "mcp__comfyui__*"
 ## 1. 概述
 
 Stage 3 接受 Stage 2 的 PNG panels，**自动**完成：
-1. 调 `aesthetic-judge` skill 对每张图 **6 维** 评分（构图 / 光线 / 色彩 / 细节 / 风格 / **氛围**）
+1. 调 manga-stage-3-review 内部 6 维算法 skill 对每张图 **6 维** 评分（构图 / 光线 / 色彩 / 细节 / 风格 / **氛围**）
 2. 生成双层 review.md（**6 维总表** + 每镜详细）
 3. 按阈值（< 7.0 / 10）标 verified / failed
 4. failed panel **自动**调 Stage 2 `--panel N` 重跑 1 次
@@ -260,8 +260,8 @@ status: active
 
 ## 13. 性能估算 / Caveats / 升级路径 / 引用
 
-- 性能：24 panels × 6 维评分 ≈ 5-8 min（纯 mcp__comfyui__view_image + aesthetic-judge）
-- Caveats：mcp__comfyui__view_image 需要 ComfyUI 在线
+- 性能：24 panels × 6 维评分 ≈ 5-8 min（纯 mcp__comfyui-mcp__view_image + aesthetic-judge）
+- Caveats：mcp__comfyui-mcp__view_image 需要 ComfyUI 在线
 - 升级：[ ] 加并行 review；[ ] 加语义 diff（vs 上一次生成）
 
 ## 14. 相关引用
@@ -269,7 +269,7 @@ status: active
 - **上游**: `skills/chenxin-core/SKILL.md`（L4 — 必须先加载 for VRAM/recipe）
 - 上游: `skills/manga-stage-2-panels/SKILL.md` (Stage 2 panels)
 - 下游: `skills/manga-stage-4-motion/SKILL.md` (Stage 4 视频)
-- 评分器: `aesthetic-judge` skill
+- 评分器: manga-stage-3-review 内部 6 维算法 skill
 - orchestrator: `skills/manga-orchestrator/SKILL.md` §4 Stage 3
 
 ## 15. 版本

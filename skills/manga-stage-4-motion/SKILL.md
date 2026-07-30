@@ -12,7 +12,7 @@ triggers:
   - "加台词"
   - "唇型同步"
   - "talking head"
-allowed-tools: Bash, Read, Write, "mcp__comfyui__*"
+allowed-tools: Bash, Read, Write, "mcp__comfyui-mcp__*"
 ---
 
 # Manga Stage 4 — 视频生成（含说话场景）v3.1, ported
@@ -79,7 +79,7 @@ Stage 3 verified panels
 - 输入：首帧 PNG（multi-shot capable）
 - 输出：mp4 视频
 - 与主路区别：**chunk-wise 5-10s panel 衔接更自然；Q4 量化降低 8GB 卡门槛**
-- 集成状态：**待 `mcp__comfyui__apply_manifest magi1` 或 `install_custom_node magi1`（暂无标准 pack 名）**
+- 集成状态：**待 `mcp__comfyui-mcp__apply_manifest magi1` 或 `install_custom_node magi1`（暂无标准 pack 名）**
 
 ### 3.4 modify_workflow 模板（主路）
 
@@ -215,7 +215,7 @@ if scene_type == speaking:
 - 来源：comfyui-mcp `video-upscale` skill（已就绪在 ComfyUI bundled list）
 - 模型：SeedVR2（高精度）或 FlashVSR（快速）
 - 触发：用户说"视频超分""放大视频""upscale 2x/4x"
-- 调用：`mcp__comfyui__upscale_image` 或自定义 video upscale workflow
+- 调用：`mcp__comfyui-mcp__upscale_image` 或自定义 video upscale workflow
 - pipeline 位置：**Stage 4 完成后 → Stage 5 之前**
 
 ### 集成方案

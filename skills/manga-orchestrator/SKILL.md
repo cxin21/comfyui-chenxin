@@ -10,7 +10,7 @@ triggers:
   - "orchestrate manga"
   - "跑全流程"
   - "auto manga"
-allowed-tools: Bash, Read, Write, "mcp__comfyui__*"
+allowed-tools: Bash, Read, Write, "mcp__comfyui-mcp__*"
 ---
 
 # Manga Orchestrator — AI 漫剧自驱动编排 (v1.1, ported)
@@ -36,7 +36,7 @@ Stage 0 (bootstrap) → Stage 1 (LoRA) → Stage 2 (panels)
 | 0 | `skills/manga-orchestrator/bootstrap.sh`（项目骨架，本 skill 自带脚本） |
 | 1 | `skills/lora-trainer/SKILL.md`（训练 LoRA，1 路径 v2.2） |
 | 2 | `skills/manga-stage-2-panels/SKILL.md` + comfyui-director agent |
-| 3 | `skills/manga-stage-3-review/SKILL.md` + `aesthetic-judge` skill |
+| 3 | `skills/manga-stage-3-review/SKILL.md` + manga-stage-3-review 内部 6 维算法 skill |
 | 4 | `skills/manga-stage-4-motion/SKILL.md` + comfyui-director agent |
 | 5 | `skills/ffmpeg-pipeline/SKILL.md`：字幕 + 拼接 |
 | **同步** | **`obsidian-suite:writing` skill** — 每次 Stage 完成自动写 vault |
@@ -174,9 +174,9 @@ bash skills/ffmpeg-pipeline/bootstrap.sh --project-root ...
 - **Stage 0/5**：只用 bash，不调 ComfyUI
 - **Stage 1**：独立 venv 训练，**不需要** ComfyUI 在线（v2.2 单路径）
 - **Stage 2/4**：必须 ComfyUI 在线服务（`http://127.0.0.1:8188`）
-- **Stage 3**：只用 mcp__comfyui__view_image 读图
+- **Stage 3**：只用 mcp__comfyui-mcp__view_image 读图
 
-**前置检查**：orchestrator 启动时 `mcp__comfyui__get_system_stats` 确认 ComfyUI 在线。如离线，提示用户重启 licyk 启动器。
+**前置检查**：orchestrator 启动时 `mcp__comfyui-mcp__get_system_stats` 确认 ComfyUI 在线。如离线，提示用户重启 licyk 启动器。
 
 ## 9. 已知 Caveats
 
@@ -202,7 +202,7 @@ bash skills/ffmpeg-pipeline/bootstrap.sh --project-root ...
 
 - **上游**: `skills/chenxin-core/SKILL.md`（L4 mega-skill — 必须先加载）
 - 6 个依赖 skills: `skills/manga-orchestrator/`（自含 bootstrap）/ `skills/lora-trainer/` / `skills/manga-stage-2-panels/` / `skills/manga-stage-3-review/` / `skills/manga-stage-4-motion/` / `skills/ffmpeg-pipeline/`
-- 外部依赖: `aesthetic-judge` skill / `obsidian-suite:writing` skill
+- 外部依赖: manga-stage-3-review 内部 6 维算法 skill / `obsidian-suite:writing` skill
 - ComfyUI: MCP server 必需在线（Stage 2/4）
 - vault: `D:/ObsidianWorkSpace/workspace/10-Projects/claude-code/`
 - 调度 Agent: `comfyui-director`（Stage 2/4）

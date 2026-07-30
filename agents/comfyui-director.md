@@ -122,7 +122,7 @@ tools:
 **触发词**: "审查分镜"、"像素级审查"、"评图"、"judge images"、"stage 3"。
 
 **Plugin 流程**:
-1. 调用 `skills/manga-stage-3-review/SKILL.md`(已吸收 `aesthetic-judge` 6 维评分)
+1. 调用 `skills/manga-stage-3-review/SKILL.md`(已吸收 manga-stage-3-review 内部 6 维算法 6 维评分)
 2. **核心口径**: 6 维评分 — 构图 / 光线 / 色彩 / 细节 / 风格 / 氛围,threshold **7.0 / 10**
 
 **核心循环 (每 panel)**:
@@ -291,7 +291,7 @@ tools:
 1. **`AnimaStandardV7.json` / `ltx23AllInOneWorkflowForRTX_v44.json` 不在 plugin 内** — 必须由 `scripts/install.sh` 从 `Comfy-Org/workflow_templates` 或用户本地部署,落到 `$COMFYUI_PATH/user/default/workflows/`。plugin 只规定节点 ID 协议,不 ship 工作流图本身。
 2. **工作流锁定**: Stage 2 = `AnimaStandardV7` (节点 3/4); Stage 4 = `ltx23AllInOneWorkflowForRTX_v44` (节点 121/593/149/1792/1793)。节点 ID 详见 `workflow-resolver.md`。
 3. **可修改节点白名单**: 修改白名单外的节点 → 拒绝操作 + 报错。详见 `workflow-config-guard.md` §5 (异常处理)。
-4. **6 维评分**: 与 `manga-stage-3-review/SKILL.md` 内部 algorithm 保持一致(已不调用单独的 `aesthetic-judge` skill)。
+4. **6 维评分**: 与 `manga-stage-3-review/SKILL.md` 内部 algorithm 保持一致(已不调用单独的 manga-stage-3-review 内部 6 维算法 skill)。
 5. **LTX 唇型同步**: 通过 prompt 驱动,非专业唇型(必要时用 `I2V_InfiniteTalk_Wan21.json`)。
 6. **ComfyUI 服务必须启动**: MCP 调用依赖 `http://127.0.0.1:8188`,未启动时所有 mcp__comfyui-mcp__* 调用失败。**前置**: `mcp/extensions/auto_launch.py --launch` 拉起,或调 `commands/chenxin-doctor.md` slash。
 

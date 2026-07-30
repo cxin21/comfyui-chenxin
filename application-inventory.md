@@ -11,7 +11,7 @@
 | 1 | `skills/manga-orchestrator/SKILL.md` | ported from a `~/.claude/skills/` original (manga-bootstrap / manga-orchestrator — both pre-cleanup) | **in plugin** |
 | 2 | `skills/manga-stage-1-lora/SKILL.md` | n/a (no source material) | **stub** (49 lines; coverage via `lora-trainer`) |
 | 3 | `skills/manga-stage-2-panels/SKILL.md` | ported | **in plugin** |
-| 4 | `skills/manga-stage-3-review/SKILL.md` | ported (absorbed `aesthetic-judge` 6-dim scoring into internal algorithm) | **in plugin** |
+| 4 | `skills/manga-stage-3-review/SKILL.md` | ported (absorbed manga-stage-3-review 内部 6 维算法 6-dim scoring into internal algorithm) | **in plugin** |
 | 5 | `skills/manga-stage-4-motion/SKILL.md` | ported (absorbed `manga-stage-5-talking-head`) | **in plugin** |
 | 6 | `skills/ffmpeg-pipeline/SKILL.md`     | ported | **in plugin** |
 | 7 | `skills/lora-trainer/SKILL.md`        | ported | **in plugin** |

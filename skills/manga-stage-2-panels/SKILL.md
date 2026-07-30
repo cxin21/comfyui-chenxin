@@ -10,7 +10,7 @@ triggers:
   - "stage 2"
   - "storyboard panels"
   - "跑分镜"
-allowed-tools: Bash, Read, Write, "mcp__comfyui__*"
+allowed-tools: Bash, Read, Write, "mcp__comfyui-mcp__*"
 ---
 
 # Manga Stage 2 — 分镜面板生成 (v2.1, ported)
@@ -24,7 +24,7 @@ allowed-tools: Bash, Read, Write, "mcp__comfyui__*"
 Stage 2 接受 Stage 0（项目骨架）和 Stage 1（LoRA 训练）的产出，**自动**完成：
 1. 从 synopsis + character/scene 描述推断出 `01_plan.md` 镜头表
 2. 用 **AnimaStandardV7.json** 工作流逐镜生成 PNG（仅修改 prompt + LoRA）
-3. 自动调 `aesthetic-judge` skill **6 维**评分（v2 起与 Stage 3 对齐）
+3. 自动调 manga-stage-3-review 内部 6 维算法 skill **6 维**评分（v2 起与 Stage 3 对齐）
 4. 落盘到 `04_outputs/01_panels/` 和 `03_storyboard/02_panels/`
 5. 维护 `manifest.json` 和 `pipeline_state.json`
 
@@ -50,7 +50,7 @@ Stage 2 接受 Stage 0（项目骨架）和 Stage 1（LoRA 训练）的产出，
 PhotoMaker V2 触发条件：
 - 用户说"用 1 张照片生成 LoRA"/"no LoRA 训练"
 - 或 `--identity-source single-image --reference <path>`
-- 包：TencentARC/PhotoMaker-V2（Apache-2.0）+ ComfyUI 包装节点（待 `mcp__comfyui__search_custom_nodes` 验证）
+- 包：TencentARC/PhotoMaker-V2（Apache-2.0）+ ComfyUI 包装节点（待 `mcp__comfyui-mcp__search_custom_nodes` 验证）
 
 **优势**：跳过整个 Stage 1（lora-trainer），适合"快速验证剧情面板"或"角色还没定稿"场景。
 **限制**：跨 panel 一致性弱于 LoRA（无 batch 训练）；推荐作为 Stage 2 fallback 而非默认。
@@ -223,7 +223,7 @@ Step 4: modify_workflow(ops=[恢复节点3,恢复节点4]) → query_workflow �
 
 - **上游**: `skills/chenxin-core/SKILL.md`（L4 — 必须先加载 for VRAM/recipe）
 - 上游: `skills/manga-orchestrator/SKILL.md` (Stage 0) / `skills/lora-trainer/SKILL.md` (Stage 1)
-- 下游: `aesthetic-judge` (Stage 3) / `skills/manga-stage-3-review/SKILL.md` (Stage 4)
+- 下游: manga-stage-3-review 内部 6 维算法 (Stage 3) / `skills/manga-stage-3-review/SKILL.md` (Stage 4)
 - 工作流: `_shared/workflow_resolver.md` §2
 - 配置守护: `_shared/workflow_config_guard.md`
 - 评分: 6 维（构图/光线/色彩/细节/风格/**氛围**），threshold 7.0

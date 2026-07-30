@@ -169,7 +169,7 @@ test_generations: 02_assets/<target>/05_test_generations/
 | Toml 自动生成 | bash | 缺失时生成训练 + 数据集 toml |
 | 训练 | bash | `scripts/train-anima-standalone.sh` → `accelerate-launch` |
 | 测试图 | Agent | `mcp__comfyui-mcp__generate_image` × 5 |
-| 评分 | Agent | `aesthetic-judge` skill |
+| 评分 | Agent | manga-stage-3-review 内部 6 维算法 skill |
 | deploy | bash | `scripts/train-anima-standalone.sh --deploy` |
 
 ## 13. 已知 Caveats
@@ -194,4 +194,4 @@ test_generations: 02_assets/<target>/05_test_generations/
 - 工具：[gazingstars123/Anima-Standalone-Trainer](https://github.com/gazingstars123/Anima-Standalone-Trainer)
 - 上游: `skills/manga-orchestrator/SKILL.md` (Stage 0)
 - 下游: `skills/manga-stage-2-panels/SKILL.md` (Stage 2)
-- 评分器: `aesthetic-judge` skill
+- 评分器: manga-stage-3-review 内部 6 维算法 skill
