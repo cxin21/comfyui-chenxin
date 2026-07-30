@@ -1,0 +1,74 @@
+# weekly-update.yml — P1.2 weekly self-update daemon (cron: Mondays 09:00 UTC).
+#
+# What it does:
+#   1. checkouts the repo at the pinned SHA.
+#   2. runs scripts/check_updates.py --apply (creates a fixup branch + report).
+#   3. uploads scripts/check_updates_report.json as a workflow artifact.
+#
+# Notes:
+#   - --apply is the only mode that actually mutates the working tree.
+#     The P0.3 `chenxin-update-bot` agent still has to open the PR
+#     (this workflow cannot `gh pr create` without a PAT scoped to
+#     the repo, which is intentionally not granted here).
+#   - To open the PR automatically, dispatch `chenxin-update-bot` with
+#     `/chenxin-update` after this workflow has produced its branch.
+
+name: weekly-update
+
+on:
+  schedule:
+    # Mondays at 09:00 UTC (POST-Monday standup).
+    - cron: "0 9 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  check-updates:
+    name: Check upstream knowledge substrate for drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run check_updates.py (--apply)
+        id: check
+        run: |
+          python scripts/check_updates.py --apply --timeout 30 > check_updates.stdout.json
+          echo "STATUS=$(jq -r .recommended_action check_updates.stdout.json)" >> "$GITHUB_OUTPUT"
+        env:
+          # Network: git + HTTPS only. No secrets required.
+          GIT_TERMINAL_PROMPT: "0"
+
+      - name: Show human-readable summary
+        if: always()
+        run: |
+          if [ -f check_updates.stdout.json ]; then
+            echo "::group::check_updates.py --apply (summary)"
+            jq -r '
+              "mode: \(.mode)\nchecked_at_utc: \(.checked_at_utc)\nrecommended_action: \(.recommended_action)\n",
+              (.sources | to_entries[] | "  \(.key): \(.value.status)\n")
+            ' check_updates.stdout.json
+            echo "::endgroup::"
+          fi
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-update-report
+          path: |
+            check_updates.stdout.json
+            scripts/check_updates_report.json
+          if-no-files-found: ignore
+          retention-days: 30
