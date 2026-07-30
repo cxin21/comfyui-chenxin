@@ -9,7 +9,7 @@
 
 ## P0 — Foundation
 
-- [ ] P0.1 Knowledge substrate → PR #TBD → planned phase/P0.1-knowledge
+- [x] P0.1 Knowledge substrate → merge `TBD-pending-fixup` → main → phase/P0.1-knowledge (YAML deferred to P0.3)
 - [x] P0.2 MCP tool enhancements → merge `8715150` → main → phase/P0.2-mcp-tools
 - [ ] P0.3 L4 mega-skill `chenxin-core` → PR #TBD → planned phase/P0.3-mega-skill
 
