@@ -126,7 +126,7 @@ Every PR to L4 must pass the 5-dim review defined in `ROADMAP.md`:
 
 1. code-reviewer           — quality, naming, < 800 lines/file
 2. security-reviewer       — secrets, MCP injection, auth scope
-3. aesthetic-judge         — if workflow JSON changed
+3. chenxin-doctor          — workflow JSON graph schema (if workflow JSON changed) — covers the old `aesthetic-judge` role
 4. comfyui-doctor          — if VRAM decision logic changed
 5. recipe-expert           — if recipe content changed
 

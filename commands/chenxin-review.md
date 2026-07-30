@@ -29,7 +29,7 @@ A phase passes when `blockers == []` AND `passed >= 4/5`.
 ```
 [review] 1/5 code-reviewer      … PASS (0 blockers, 1 warning)
 [review] 2/5 security-reviewer  … PASS (0 blockers, 0 warnings)
-[review] 3/5 aesthetic-judge    … SKIP (no workflow JSON in diff)
+[review] 3/5 chenxin-doctor    … SKIP (no workflow JSON in diff)
 [review] 4/5 comfyui-doctor     … PASS
 [review] 5/5 recipe-expert      … FAIL (1 blocker: dialect wrong for Hunyuan)
 [review] summary: passed=4/5, blockers=1
