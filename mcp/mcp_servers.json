@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "comfyui-mcp": {
+      "type": "stdio",
+      "command": "comfyui-mcp",
+      "args": [],
+      "env": {}
+    }
+  }
+}

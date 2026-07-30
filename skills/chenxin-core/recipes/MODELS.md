@@ -109,12 +109,15 @@ modality: image
 dialect: natural-language sentences (word order matters), no negatives
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - 'Prompt style:** natural-language sentences, not comma tags.'---
-### FLUX.1 (Black Forest Labs)- **Prompt style:** natural-language sentences, not comma tags. Word order matters (earlier tokens weighted more).
+  - "Prompt style:** natural-language sentences, not comma tags."
+---
+
+### FLUX.1 (Black Forest Labs)
+- **Prompt style:** natural-language sentences, not comma tags. Word order matters (earlier tokens weighted more).
 - **Structure:** Subject -> Action/Pose -> Style/Medium -> Context/Environment -> Technical details; most important first. Rendered text in quotes (keep under ~25 chars); hex codes tied to specific objects work.
 - **Strengths:** native text rendering, photorealism via real camera/lens/film language, hex color control, multilingual.
 - **Avoid:** negative prompts NOT supported on any FLUX.1 version (may add the unwanted element); no named fonts (describe the style).
@@ -128,13 +131,16 @@ modality: image
 dialect: natural-language sentences (word order matters), no negatives
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: PolyForm Noncommercial 1.0.0
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - InpaintStitchImproved
-  - ComfyUI-Flux2Klein-Enhancer---
-### FLUX.2 (Black Forest Labs)- **Prompt style:** natural language OR JSON structured (natural for iteration, JSON for precise production control).
+  - "InpaintStitchImproved"
+  - "ComfyUI-Flux2Klein-Enhancer"
+---
+
+### FLUX.2 (Black Forest Labs)
+- **Prompt style:** natural language OR JSON structured (natural for iteration, JSON for precise production control).
 - **Structure:** main subject -> key action -> critical style -> essential context -> secondary details.
 - **Strengths:** photorealism, text rendering, hex color, product shots, native multilingual; multi-reference compositing (pro up to 8, flex ~10, dev ~6) with identity/style/pose typing.
 - **Avoid:** negative prompts NOT supported.
@@ -185,12 +191,15 @@ modality: image
 dialect: natural-language sentences (word order matters), no negatives
 negative_policy: not supported
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - 'Prompt style:** natural-language instructions (tell it what to change, like instructing a person).'---
-### FLUX.1 Kontext (image edit)- **Prompt style:** natural-language instructions (tell it what to change, like instructing a person).
+  - "Prompt style:** natural-language instructions (tell it what to change, like instructing a person)."
+---
+
+### FLUX.1 Kontext (image edit)
+- **Prompt style:** natural-language instructions (tell it what to change, like instructing a person).
 - **Structure:** "Change/Replace/Add/Remove [target] to/with [description]"; add preservation language ("keeping the pose unchanged"); one focused edit per instruction; text edits in quotes.
 - **Strengths:** outfit/background swaps, object add/remove, text editing (Max = best typography), character identity + style transfer.
 - **Avoid:** "don't" instructions (rephrase positively); stacking many complex edits; re-describing the whole image.
@@ -204,13 +213,16 @@ modality: image
 dialect: natural-language subject-first, no negatives (CFG-distilled)
 negative_policy: not supported (distilled/guidance-0)
 triggers:
-  - (none)
+  - "(none)"
 license: Apache-2.0
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - 2.1-2602-8steps
-  - control_context_scale---
-### Z-Image-Turbo (Tongyi / Alibaba)- **Prompt style:** natural-language descriptive, subject-first; no special token syntax. Optional LLM prompt-enhancement template in the repo.
+  - "2.1-2602-8steps"
+  - "control_context_scale"
+---
+
+### Z-Image-Turbo (Tongyi / Alibaba)
+- **Prompt style:** natural-language descriptive, subject-first; no special token syntax. Optional LLM prompt-enhancement template in the repo.
 - **Strengths:** photorealism, accurate bilingual (EN/CN) text, strong instruction adherence, sub-second on 16GB VRAM.
 - **Avoid:** negative prompts not used (CFG-distilled); high CFG (4+) degrades results.
 - **Settings:** 9 steps (8 DiT forwards) per the official card; CFG 0.0 per the official card (community ComfyUI guides ~1.5-2.0 if any); torch_dtype bfloat16 (official); 1024x1024 best (2K direct can distort, upscale + second pass at ~0.3 denoise); community sampler euler_ancestral or dpmpp_sde, scheduler sgm_uniform.
@@ -225,12 +237,15 @@ modality: image
 dialect: structured natural language, one style; negatives limited/not supported
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - 'Prompt style:** structured natural language, not tag dumps.'---
-### Qwen-Image (Alibaba)- **Prompt style:** structured natural language, not tag dumps.
+  - "Prompt style:** structured natural language, not tag dumps."
+---
+
+### Qwen-Image (Alibaba)
+- **Prompt style:** structured natural language, not tag dumps.
 - **Structure:** Subject -> Style -> Details -> Composition -> Lighting; choose ONE primary style; add framing or it defaults centered; exact text in quotes with font/position.
 - **Strengths:** commercial-grade text in 26+ languages, posters/infographics/layouts, human realism (2512), natural textures.
 - **Avoid:** negatives accepted but inconsistent; long text passages degrade; contradictory styles confuse it.
@@ -244,14 +259,16 @@ modality: image
 dialect: structured natural language, one style; negatives limited/not supported
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: Apache-2.0
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - oumoumad/LumiPic
-  - ,
-  natural-photo alt---
-### Qwen-Image-Edit (Alibaba)- **Prompt style:** surgical natural-language instructions, describe only the change.
+  - "oumoumad/LumiPic"
+  - ","
+---
+
+### Qwen-Image-Edit (Alibaba)
+- **Prompt style:** surgical natural-language instructions, describe only the change.
 - **Structure:** "Add/Remove/Change [element + color/size/orientation] [position]"; text edits in English double quotes; reference inputs by number ("Image 1", up to 3 in 2509+); keep 50-200 chars.
 - **Strengths:** add/remove/replace, background swap, style transfer, bilingual text editing, portrait/pose edits, multi-image fusion, old-photo restoration.
 - **Avoid:** negative prompts NOT supported (use a single space if a field is required); no mask inpainting/outpainting.
@@ -283,13 +300,16 @@ modality: image
 dialect: natural language (hybrid tags ok), positive+negative
 negative_policy: supported
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - high_noise_frac=0.8
-  - denoising_end=0.8---
-### SDXL (Stability)- **Prompt style:** natural language preferred (dual encoder), short comma tags work as hybrid.
+  - "high_noise_frac=0.8"
+  - "denoising_end=0.8"
+---
+
+### SDXL (Stability)
+- **Prompt style:** natural language preferred (dual encoder), short comma tags work as hybrid.
 - **Structure:** subject + descriptors + style + quality/medium + lighting.
 - **Strengths:** 1024-native coherence, better hands/anatomy than SD1.5, huge LoRA/ControlNet ecosystem.
 - **Avoid:** negatives supported and effectively required (no built-in quality filter); never generate at 512x512.
@@ -300,15 +320,18 @@ sample_prompts:
 id: stable_diffusion_1_5
 family: sd15
 modality: image
-dialect: 'comma-separated tags with (token:1.2) weighting'
+dialect: "comma-separated tags with (token:1.2) weighting"
 negative_policy: supported
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - 'Prompt style:** comma-separated tags / keyword-driven; `(token:1.'---
-### Stable Diffusion 1.5- **Prompt style:** comma-separated tags / keyword-driven; `(token:1.2)` weighting works.
+  - "Prompt style:** comma-separated tags / keyword-driven; `(token:1."
+---
+
+### Stable Diffusion 1.5
+- **Prompt style:** comma-separated tags / keyword-driven; `(token:1.2)` weighting works.
 - **Structure:** subject tags -> descriptor tags -> style/quality tags.
 - **Strengths:** speed, low VRAM, massive community models/LoRAs/embeddings.
 - **Avoid:** negatives supported and heavily used ("blurry, lowres, bad anatomy, watermark"); don't generate far above 512 natively (use hi-res fix); weak hands/text.
@@ -322,12 +345,15 @@ modality: image
 dialect: natural language (no weighting syntax)
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - 'Prompt style:** natural-language sentences (trained on natural language; handles them far better than SD1.'---
-### Stable Diffusion 3.5 Large (Stability)- **Prompt style:** natural-language sentences (trained on natural language; handles them far better than SD1.5/SDXL).
+  - "Prompt style:** natural-language sentences (trained on natural language; handles them far better than SD1."
+---
+
+### Stable Diffusion 3.5 Large (Stability)
+- **Prompt style:** natural-language sentences (trained on natural language; handles them far better than SD1.5/SDXL).
 - **Structure:** Style, Subject + Action, Composition/Framing, Lighting/Color, Technical, Text integration, Negative; ~1MP, dimensions divisible by 64.
 - **Avoid:** keyword weighting and bracket/emphasis syntax do NOT work, write plain natural language.
 - **Settings:** steps 28 (official example; community up to ~40), guidance 3.5-4.5 (4.5 complex); max_sequence_length 512 for the long / quantized-prompt path; SD3-family nodes; ~1MP divisible by 64.
@@ -341,12 +367,15 @@ modality: image
 dialect: natural language, full=guidance; dev/fast inert at guidance 0
 negative_policy: not supported (distilled/guidance-0)
 triggers:
-  - (none)
+  - "(none)"
 license: MIT
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - meta-llama/Meta-Llama-3.1-8B-Instruct---
-### HiDream-I1- **Prompt style:** natural-language (multi-encoder incl. an LLM text encoder); no prescribed tag format.
+  - "meta-llama/Meta-Llama-3.1-8B-Instruct"
+---
+
+### HiDream-I1
+- **Prompt style:** natural-language (multi-encoder incl. an LLM text encoder); no prescribed tag format.
 - **Strengths:** state-of-the-art prompt adherence and quality (DPG-Bench 85.89, GenEval 0.83), good text rendering.
 - **Avoid:** negative-prompt support not documented; Full (CFG-guided) can use them, Dev/Fast run at guidance 0.0 so negatives are inert.
 - **Settings:** Full 50 steps guidance 5.0; Dev 28 steps guidance 0.0; Fast 16 steps guidance 0.0; ComfyUI HiDream sampler nodes.
@@ -360,14 +389,17 @@ modality: image
 dialect: natural language
 negative_policy: see body
 triggers:
-  - image_boogu_image_0_1_turbo_t2i.json
-  - image_boogu_image_0_1_edit.json
+  - "image_boogu_image_0_1_turbo_t2i.json"
+  - "image_boogu_image_0_1_edit.json"
 license: Apache-2.0
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - boogu_image_turbo_lora_rank_128
-  - image_boogu_image_0_1_turbo_t2i.json---
-### Boogu Image 0.1- **Prompt style:** natural-language descriptive (Qwen3-VL-8B text encoder); a built-in prompt rewriter (instruction reasoner, Qwen3-VL-32B-Instruct) expands terse inputs, so plain prompts work but detail steers better.
+  - "boogu_image_turbo_lora_rank_128"
+  - "image_boogu_image_0_1_turbo_t2i.json"
+---
+
+### Boogu Image 0.1
+- **Prompt style:** natural-language descriptive (Qwen3-VL-8B text encoder); a built-in prompt rewriter (instruction reasoner, Qwen3-VL-32B-Instruct) expands terse inputs, so plain prompts work but detail steers better.
 - **Structure:** subject + scene + style + lighting + composition in complete sentences; the VLM encoder favors natural language over tags.
 - **Strengths:** open-weight Apache-2.0 (commercial-OK, not gated); three variants - Base (quality), Turbo (few-step distilled, competitive with Z-Image-Turbo), Edit (instruction image edit at 1K/1.5K/2K); rides the Qwen3-VL stack + FLUX VAE.
 - **Avoid:** no tag-weighting / bracket syntax (natural language only); negative-prompt support not documented.
@@ -385,13 +417,16 @@ modality: image
 dialect: natural language with quoted literal text
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - '** ship now. The old **'
-  - 'nodes were REMOVED in v0.28.0** (Comfy-Org PR #14712), so an older graph that loads them will fail to resolve the node; rebuild it on V3 / V4. Confirmed from'---
-### Ideogram (2.x to 4.0)- **Nodes available (ComfyUI v0.28.0):** only **`IdeogramV3`** and **`IdeogramV4`** ship now. The old **`IdeogramV1` and `IdeogramV2` nodes were REMOVED in v0.28.0** (Comfy-Org PR #14712), so an older graph that loads them will fail to resolve the node; rebuild it on V3 / V4. Confirmed from `comfy_api_nodes/nodes_ideogram.py` on master (only V3, V4 and the extension are defined) plus the v0.28.0 release notes.
+  - "** ship now. The old **"
+  - "nodes were REMOVED in v0.28.0** (Comfy-Org PR #14712), so an older graph that loads them will fail to resolve the node; rebuild it on V3 / V4. Confirmed from"
+---
+
+### Ideogram (2.x to 4.0)
+- **Nodes available (ComfyUI v0.28.0):** only **`IdeogramV3`** and **`IdeogramV4`** ship now. The old **`IdeogramV1` and `IdeogramV2` nodes were REMOVED in v0.28.0** (Comfy-Org PR #14712), so an older graph that loads them will fail to resolve the node; rebuild it on V3 / V4. Confirmed from `comfy_api_nodes/nodes_ideogram.py` on master (only V3, V4 and the extension are defined) plus the v0.28.0 release notes.
 - **Prompt style:** natural-language sentences (no tags, no `--ar`/`::` flags); typography specialist.
 - **Structure:** describe as to a person; important elements and text early; exact text in quotes (under ~25 chars), describe font style/position/color, don't name fonts.
 - **Strengths:** quoted-text rendering, posters/logos/signage; `DESIGN` style for typography, `REALISTIC` for photos.
@@ -409,12 +444,15 @@ modality: image
 dialect: rich descriptive prose, NO negatives (phrase positively)
 negative_policy: not supported
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - 'Prompt style:** natural-language, rich descriptive paragraphs (describe the scene, don''t list keywords).'---
-### Nano Banana Pro (Gemini 3 Pro Image)- **Prompt style:** natural-language, rich descriptive paragraphs (describe the scene, don't list keywords).
+  - "Prompt style:** natural-language, rich descriptive paragraphs (describe the scene, don''t list keywords)."
+---
+
+### Nano Banana Pro (Gemini 3 Pro Image)
+- **Prompt style:** natural-language, rich descriptive paragraphs (describe the scene, don't list keywords).
 - **Structure:** prose covering subject, spatial relationships, lighting/mood, woven-in camera language; exact text in quotes; label each reference by role ("Image 1 is the product").
 - **Strengths:** internal reasoning before render, multilingual text + in-image translation, character consistency, reference blending, Google Search grounding (add "using current data"), world-knowledge physics. Up to 11 refs.
 - **Avoid:** keyword lists, bracket templates, telegraphic language, vague praise. Negatives not used, phrase positively ("an empty street", not "no cars").
@@ -427,12 +465,15 @@ modality: image
 dialect: rich descriptive prose, NO negatives (phrase positively)
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - 'Prompt style:** natural-language descriptive prose (same as Pro), speed-optimized (<~20s).'---
-### Nano Banana 2 (Gemini 3.1 Flash Image)- **Prompt style:** natural-language descriptive prose (same as Pro), speed-optimized (<~20s).
+  - "Prompt style:** natural-language descriptive prose (same as Pro), speed-optimized (<~20s)."
+---
+
+### Nano Banana 2 (Gemini 3.1 Flash Image)
+- **Prompt style:** natural-language descriptive prose (same as Pro), speed-optimized (<~20s).
 - **Structure:** six elements - subject, composition/camera, action, aspect ratio (state when non-standard), lighting (photographic terms), style; exact text in quotes; label refs; request resolution above default 1K.
 - **Strengths:** fast iteration, extended ratios (1:4, 4:1, 1:8, 8:1), tiers 0.5K/1K/2K/4K, web+image Search grounding, up to 14 refs, 360-degree character sheets.
 - **Avoid:** keyword dumps, bracket templates, negative phrasing, temperature below 1.0 (loops). Small CJK text and data-viz error-prone; knowledge cutoff Jan 2025 (use grounding).
@@ -445,13 +486,16 @@ modality: image
 dialect: rich descriptive prose, NO negatives (phrase positively)
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - api_nano_banana_2_lite_t2i
-  - api_nano_banana_2_lite_image_edit---
-### Nano Banana 2 Lite (Gemini Flash Image, fast tier)- **Prompt style:** the same descriptive prose as Nano Banana 2, at a lower quality ceiling; built for volume, not the last 5% of fidelity.
+  - "api_nano_banana_2_lite_t2i"
+  - "api_nano_banana_2_lite_image_edit"
+---
+
+### Nano Banana 2 Lite (Gemini Flash Image, fast tier)
+- **Prompt style:** the same descriptive prose as Nano Banana 2, at a lower quality ceiling; built for volume, not the last 5% of fidelity.
 - **Strengths:** the fastest / cheapest Nano Banana tier. Vendor claims from the ComfyUI launch post (treat as marketing): ~4 s per image, ~$0.034 per 1K images. Aimed at high-volume iteration and batch variations (ad-asset batches, 50 concept variants before the brief changes).
 - **Run it:** official Comfy partner API nodes / templates `api_nano_banana_2_lite_t2i` (text-to-image) and `api_nano_banana_2_lite_image_edit` (edit), both confirmed in the Comfy-Org/workflow_templates index (a sibling `api_google_nano_banana2_image_edit` also ships). Cloud / paid (Comfy Cloud or a Gemini API key), NOT a local model.
 - **Source:** ai.google.dev/gemini-api/docs/image-generation ; Comfy-Org/workflow_templates (`api_nano_banana_2_lite_*`).
@@ -463,12 +507,15 @@ modality: image
 dialect: structured spec (identity-lock); positives only
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - 'Prompt style:** structured (technical specifications, direct over narrative - the exception among modern models).'---
-### Seedream 4.0 / 4.5 (ByteDance)- **Prompt style:** structured (technical specifications, direct over narrative - the exception among modern models).
+  - "Prompt style:** structured (technical specifications, direct over narrative - the exception among modern models)."
+---
+
+### Seedream 4.0 / 4.5 (ByteDance)
+- **Prompt style:** structured (technical specifications, direct over narrative - the exception among modern models).
 - **Structure:** explicit identity-lock descriptors (face, hair, build, clothing) for series; state what's consistent vs variable; exact text in quotes; 50-100 words (range 30-300; cap ~600 EN words / 300 CN chars).
 - **Strengths:** up to 15-image sequential batch with identity locking, up to 14 refs, facial-landmark consistency, sharp small-text/logo typography.
 - **Avoid:** keyword dumps, flowery language, missing identity-lock descriptors. Describe positively (no explicit negative guidance).
@@ -481,14 +528,16 @@ modality: image
 dialect: structured spec (identity-lock); positives only
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - '[subject + key trait] [action/pose] [environment with spatial relationship] [optional one-phrase style anchor]'
-  - ').
-- **Avoid:** CRITICAL - quality boosters ("masterpiece", "8K", "best quality") HARM output (distract the CoT pipeline); no'---
-### Seedream 5.0 Lite (ByteDance)- **Prompt style:** natural-language sentences REPLACE keyword lists; relationship-first; CoT reasoning model.
+  - "[subject + key trait] [action/pose] [environment with spatial relationship] [optional one-phrase style anchor]"
+  - "')."
+---
+
+### Seedream 5.0 Lite (ByteDance)
+- **Prompt style:** natural-language sentences REPLACE keyword lists; relationship-first; CoT reasoning model.
 - **Structure:** `[subject + key trait] [action/pose] [environment with spatial relationship] [optional one-phrase style anchor]`; state object relationships; for series state count + consistency; text in double quotes; refs as Figure 1, 2.
 - **Strengths:** coherent from short/abstract prompts, web search, stronger identity lock than 4.x, 2560x1440 to 3072x3072 (`auto_2K`/`auto_3K`).
 - **Avoid:** CRITICAL - quality boosters ("masterpiece", "8K", "best quality") HARM output (distract the CoT pipeline); no `(word:1.3)` weights; negatives NOT supported; no guidance-scale param.
@@ -501,13 +550,16 @@ modality: image
 dialect: structured spec (identity-lock); positives only
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - ByteDanceSeedreamNodeV2
-  - SaveImageAdvanced---
-### Seedream 5.0 Pro (ByteDance)- **Prompt style:** same natural-language, CoT-reasoning family as 5.0 Lite (relationship-first sentences, NOT keyword lists); state object relationships and, for a series, count + consistency; exact text in double quotes; label refs as Figure 1, 2.
+  - "ByteDanceSeedreamNodeV2"
+  - "SaveImageAdvanced"
+---
+
+### Seedream 5.0 Pro (ByteDance)
+- **Prompt style:** same natural-language, CoT-reasoning family as 5.0 Lite (relationship-first sentences, NOT keyword lists); state object relationships and, for a series, count + consistency; exact text in double quotes; label refs as Figure 1, 2.
 - **Strengths:** ByteDance's latest image model - **multi-modal in ONE node** (text-to-image, precise image editing, multi-image inputs); strong **character + product consistency** (portrait identity / lighting / realism held across style changes and edits); **region-precise editing** (edit a target area, leave lighting / depth / texture elsewhere untouched); **structured layouts** (infographics, flowcharts, mixed text+image with legible small text). Up to ~2048x2048.
 - **Avoid:** quality boosters ("masterpiece", "8K", "best quality") HARM output (they distract the CoT pipeline); no `(word:1.3)` weights; negatives NOT supported; no guidance-scale param.
 - **Thinking toggle (ComfyUI v0.28.0):** the Seedream node gained a widget to **disable thinking** (Comfy-Org PR #14853). Leave it ON for the CoT behaviour this recipe assumes (relationship reasoning, layout planning); turn it OFF for a faster, more literal pass when the prompt is already explicit and you do not want the model re-planning the composition.
@@ -524,13 +576,16 @@ modality: image
 dialect: natural language with quoted literal text, no negatives
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: MIT
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - '<detailed description>'
-  - '<style description>'---
-### Recraft (V3)- **Prompt style:** natural-language, specific over vague; long-text + vector design specialist.
+  - "<detailed description>"
+  - "<style description>"
+---
+
+### Recraft (V3)
+- **Prompt style:** natural-language, specific over vague; long-text + vector design specialist.
 - **Structure:** "A `<style>` of `<main content>`. `<detailed description>`. `<background>`. `<style description>`." general -> specific; exact text in quotes.
 - **Strengths:** long multi-word text with exact positioning/sizing; `style` param (`realistic_image`, `digital_illustration`, `vector_illustration`, `icon`) + 100+ presets + custom style refs; true scalable vector/SVG.
 - **Avoid:** negative phrasing confuses it (just omit unwanted elements, no negative field); ambiguous nouns; vague plurals.
@@ -543,15 +598,16 @@ modality: image
 dialect: structured 5-part brief; exclusions slot
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - 'quality is production-grade.
-- **Avoid:** vague praise, generic style tags, one giant rewrite, negative subject phrasing. No negative field, state avoidances in Constraints.
-- **Settings (API):**'
-  - '(low/medium/high/auto), edges multiple of 16, max edge 3840px, <=3:1, reliable up to 2560x1440;'---
-### GPT-Image (gpt-image-2, OpenAI)- **Prompt style:** structured natural-language ("structure beats length"), a labeled five-slot brief.
+  - "'quality is production-grade."
+  - "(low/medium/high/auto), edges multiple of 16, max edge 3840px, <=3:1, reliable up to 2560x1440;"
+---
+
+### GPT-Image (gpt-image-2, OpenAI)
+- **Prompt style:** structured natural-language ("structure beats length"), a labeled five-slot brief.
 - **Structure:** Scene -> Subject -> Important Details (lighting, camera, materials, exact text in quotes) -> Use Case -> Constraints (don'ts/preservation); include literal "photorealistic"; spell unusual names letter-by-letter + "render text verbatim".
 - **Strengths:** accurate dense/multi-font text, identity consistency, any size, up to 10 refs; `low` quality is production-grade.
 - **Avoid:** vague praise, generic style tags, one giant rewrite, negative subject phrasing. No negative field, state avoidances in Constraints.
@@ -565,12 +621,15 @@ modality: image
 dialect: structured 5-part brief; exclusions slot
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - '** (confirmed from'---
-### Grok Image (Grok Imagine Image, xAI)- **Prompt style:** natural-language scene description, six-part formula.
+  - "** (confirmed from"
+---
+
+### Grok Image (Grok Imagine Image, xAI)
+- **Prompt style:** natural-language scene description, six-part formula.
 - **Structure:** Subject -> Style -> Mood -> Lighting -> Camera/Framing -> Finishing; subject in the first words; 60-80 words (cut past 120); one style; in-image text ALL CAPS + quotes, 1-3 words.
 - **Strengths:** behavior-based light, concrete camera/lens, named aesthetics; `-quality` tier adds i2i (1-3 refs) and better non-English text.
 - **Avoid:** negatives IGNORED (rephrase positive); keyword stacking; mixed styles; buried subject.
@@ -584,14 +643,16 @@ modality: image
 dialect: natural language, no negatives
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - param); no documented weighting syntax (don't rely on
-  - ').
-- **Settings (API):** single'---
-### Reve- **Prompt style:** natural-language, descriptive/conversational; high prompt adherence so be concrete and complete.
+  - "param); no documented weighting syntax (don't rely on"
+  - "')."
+---
+
+### Reve
+- **Prompt style:** natural-language, descriptive/conversational; high prompt adherence so be concrete and complete.
 - **Avoid:** negative prompts NOT supported (single `prompt` param); no documented weighting syntax (don't rely on `(red:1.3)`).
 - **Settings (API):** single `prompt`; aspect ratios 16:9/9:16/3:2(def)/2:3/4:3/3:4/1:1; 4K output (Reve 2.x); edit-image endpoint.
 - **Source:** app.reve.com ; docs.aimlapi.com/api-references/image-models/reve. (Official prompt-engineering page is thin.)
@@ -603,12 +664,15 @@ modality: image
 dialect: natural language with supported negatives
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - + negative field,---
-### Kandinsky (3.x, Sber / FusionBrain)- **Prompt style:** natural-language; built-in beautifier LLM expands plain prompts, so describe simply.
+  - "+ negative field,"
+---
+
+### Kandinsky (3.x, Sber / FusionBrain)
+- **Prompt style:** natural-language; built-in beautifier LLM expands plain prompts, so describe simply.
 - **Structure:** subject + setting + style in natural language; select a `style` preset; pass excluded elements via the negative field.
 - **Strengths:** built-in prompt enhancement, style presets, inpainting/i2i, fully open checkpoints.
 - **Avoid:** over-long prompts. Negative prompts ARE supported (dedicated field).
@@ -621,15 +685,18 @@ sample_prompts:
 id: bria_3_x
 family: bria
 modality: image
-dialect: 'short natural language (CFG>1 enables negatives)'
+dialect: "short natural language (CFG>1 enables negatives)"
 negative_policy: supported
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - negative_prompt---
-### BRIA 3.x- **Prompt style:** natural-language descriptive sentences.
+  - "negative_prompt"
+---
+
+### BRIA 3.x
+- **Prompt style:** natural-language descriptive sentences.
 - **Structure:** plain descriptive sentence; for text-in-image name the literal words + style/placement ("the words 'BRIA 3.2' in bold yellow 3D letters"). FLUX-derived MMDiT + T5-XXL.
 - **Strengths:** commercial-safe (licensed-data only), short 1-6 word text rendering, photorealism, prompt adherence.
 - **Avoid:** long text passages (optimized for 1-6 words). Negatives ARE supported (`negative_prompt`, active when guidance_scale > 1).
@@ -643,14 +710,17 @@ modality: image
 dialect: instruction + inline image tags (v2 supports negatives)
 negative_policy: supported
 triggers:
-  - image_omnigen2_t2i.json
-  - image_omnigen2_image_edit.json
+  - "image_omnigen2_t2i.json"
+  - "image_omnigen2_image_edit.json"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - '<img><|image_1|></img>'
-  - image_omnigen2_t2i.json---
-### OmniGen (v1 / v2) - unified gen + edit- **Prompt style:** instruction + inline image placeholders.
+  - "<img><|image_1|></img>"
+  - "image_omnigen2_t2i.json"
+---
+
+### OmniGen (v1 / v2) - unified gen + edit
+- **Prompt style:** instruction + inline image placeholders.
 - **Structure:** v1 refs inline `<img><|image_1|></img>` (one per image), place the image BEFORE the instruction for edits. v2 edit template "Edit the first image: add/replace ... the [object] from the second image. [target]"; name sources explicitly; longer/detailed prompts beat short, English best.
 - **Avoid:** vague cross-image references. Negatives supported in v2 ("blurry, low quality, text, watermark").
 - **Settings:** v1 guidance_scale 2-3, img_guidance_scale ~1.6, output divisible by 16, 1024x1024; v2 text_guidance_scale + image_guidance_scale ~1.2-2.0 (edit) / ~2.5-3.0 (in-context), 50 steps, refs >512x512.
@@ -664,14 +734,17 @@ modality: image
 dialect: natural language, negatives supported
 negative_policy: supported
 triggers:
-  - t5xxl_fp16.safetensors
-  - ae.safetensors
+  - "t5xxl_fp16.safetensors"
+  - "ae.safetensors"
 license: Apache-2.0
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - diffusion_models/
-  - ); needs a T5 XXL text encoder (---
-### Chroma- **Prompt style:** natural-language.
+  - "diffusion_models/"
+  - "); needs a T5 XXL text encoder ("
+---
+
+### Chroma
+- **Prompt style:** natural-language.
 - **Structure:** descriptive sentence(s): subject, style, lighting, palette.
 - **Strengths:** Apache-2.0 open-weight 8.9B from FLUX.1-schnell; broad/less-censored aesthetic range; Chroma1-HD is the higher-quality variant.
 - **Avoid:** no official prompt-recipe doc (maker says users figure settings out), treat numbers as examples. Negatives supported (card example: "low quality, ugly, unfinished, out of focus, deformed, blurry, flat colors").
@@ -686,13 +759,16 @@ modality: image
 dialect: natural language, no weighting syntax (guidance-distilled)
 negative_policy: not supported (distilled/guidance-0)
 triggers:
-  - (none)
+  - "(none)"
 license: non-commercial
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - '(best quality:1.3)'
-  - '[[masterpiece]]'---
-### Krea 1 (FLUX.1 Krea [dev])- **Prompt style:** natural-language, no weighting syntax.
+  - "(best quality:1.3)"
+  - "[[masterpiece]]"
+---
+
+### Krea 1 (FLUX.1 Krea [dev])
+- **Prompt style:** natural-language, no weighting syntax.
 - **Structure:** subject + style + scene + lighting + colors; short imaginative prompts work.
 - **Strengths:** photorealism without the "AI look" (no plastic texture / blurred-bg artifacts); drop-in for FLUX.1 [dev].
 - **Avoid:** filler ("beautiful", "amazing"); ignores `(best quality:1.3)` / `[[masterpiece]]` brackets/colons; guidance-distilled so no true CFG/negative (like FLUX.1 [dev]).
@@ -707,20 +783,21 @@ modality: image
 dialect: natural language with quoted text; RAW=yes (CFG 3.5), Turbo=no (CFG 0)
 negative_policy: see body
 triggers:
-  - redcraftKREA2RedMix_krea2Edition.safetensors
-  - workflow/Krea2_Ostris_Edit.json
-  - krea-detail-enhancer-exp.safetensors
-  - krea2_style_reference.safetensors
-  - krea2_turbo_int8_convrot.safetensors
-  - krea2_style_reference.safetensors
+  - "redcraftKREA2RedMix_krea2Edition.safetensors"
+  - "workflow/Krea2_Ostris_Edit.json"
+  - "krea-detail-enhancer-exp.safetensors"
+  - "krea2_style_reference.safetensors"
+  - "krea2_turbo_int8_convrot.safetensors"
+  - "krea2_style_reference.safetensors"
 license: non-commercial
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - 'as an LLM system prompt).
-- **Example (official prompt guide):** minimal works ('
-  - ), but detail wins. Stack natural-language clauses for subject, composition, lighting, color, texture, and
-  medium, e.g.---
-### Krea 2 (Krea AI, open weights)- **Prompt style:** natural language; long detailed prompts give the best results, but minimal prompts also work;
+  - "'as an LLM system prompt)."
+  - "), but detail wins. Stack natural-language clauses for subject, composition, lighting, color, texture, and"
+---
+
+### Krea 2 (Krea AI, open weights)
+- **Prompt style:** natural language; long detailed prompts give the best results, but minimal prompts also work;
   put words in quotes for text rendering. Built-in prompt enhancement is on by default in the ComfyUI template (swap
   it for OpenAI / Gemini nodes, or use the repo's `expansion.txt` as an LLM system prompt).
 - **Example (official prompt guide):** minimal works (`immense rocket launch exhaust as seen from extremely close
@@ -855,12 +932,15 @@ modality: image
 dialect: instruction + auto prompt enhancer
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: Apache-2.0
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - 'Prompt style:** instruction / natural-language; built-in 3B Prompt Enhancer expands terse inputs.'---
-### ERNIE-Image (Baidu)- **Prompt style:** instruction / natural-language; built-in 3B Prompt Enhancer expands terse inputs.
+  - "Prompt style:** instruction / natural-language; built-in 3B Prompt Enhancer expands terse inputs."
+---
+
+### ERNIE-Image (Baidu)
+- **Prompt style:** instruction / natural-language; built-in 3B Prompt Enhancer expands terse inputs.
 - **Structure:** describe the scene + exact text strings and their layout; handles multi-object relations and knowledge-intensive descriptions; EN/CN + mixed-language text in one image.
 - **Strengths:** layout-sensitive typography, multilingual text, complex/structured compositions (posters, storyboards, multi-panel); Apache-2.0 8B single-stream DiT.
 - **Avoid:** no official CFG/negative/resolution recipe published; lean on the prompt enhancer for terse inputs.
@@ -879,12 +959,15 @@ modality: image
 dialect: instruction (quote literal text), negatives mostly empty
 negative_policy: see body
 triggers:
-  - image_firered_image_edit1_1.json
+  - "image_firered_image_edit1_1.json"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - image_firered_image_edit1_1.json---
-### FireRed Image Edit- **Prompt style:** instruction, bilingual CN-EN; state the change directly.
+  - "image_firered_image_edit1_1.json"
+---
+
+### FireRed Image Edit
+- **Prompt style:** instruction, bilingual CN-EN; state the change directly.
 - **Structure:** direct edit command; text edits name the literal string + placement ("add '2nd Edition' below 'Python'"); makeup/style transfer, virtual try-on, old-photo restoration, multi-element edits; no rigid template.
 - **Strengths:** precise instruction following, identity preservation, high-fidelity text-in-image (open-source SOTA edit).
 - **Avoid:** no official CFG/negative/resolution spec; Lightning-8steps variant for speed.
@@ -899,13 +982,16 @@ modality: image
 dialect: instruction (quote literal text), negatives mostly empty
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - enable_cfg_renorm=True
-  - enable_prompt_rewrite=True---
-### LongCat-Image / LongCat-Image-Edit (Meituan)- **Prompt style:** natural-language (T2I) / instruction (edit), bilingual; 6B.
+  - "enable_cfg_renorm=True"
+  - "enable_prompt_rewrite=True"
+---
+
+### LongCat-Image / LongCat-Image-Edit (Meituan)
+- **Prompt style:** natural-language (T2I) / instruction (edit), bilingual; 6B.
 - **Structure:** CRITICAL text rule - enclose literal target text in quotes ('...' / "..."); a character-level encoder handles quoted content, unquoted text renders poorly. Edit instructions are direct ("turn the cat into a dog").
 - **Strengths:** multilingual text in images, photorealism, efficient (6B beats larger on several benchmarks).
 - **Avoid:** forgetting quotes around target text. Negative prompt can be empty.
@@ -921,13 +1007,16 @@ modality: image
 dialect: instruction (quote literal text), negatives mostly empty
 negative_policy: see body
 triggers:
-  - image_chrono_edit_14B.json
+  - "image_chrono_edit_14B.json"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - --use-prompt-enhancer
-  - image_chrono_edit_14B.json---
-### ChronoEdit (NVIDIA)- **Prompt style:** instruction; optional Prompt Enhancer rewrites it.
+  - "--use-prompt-enhancer"
+  - "image_chrono_edit_14B.json"
+---
+
+### ChronoEdit (NVIDIA)
+- **Prompt style:** instruction; optional Prompt Enhancer rewrites it.
 - **Structure:** image + short imperative ("Add sunglasses to the cat's face"); reframes the edit as a short video between input and edited frame so changes respect physics; up to ~300 tokens.
 - **Strengths:** physically/temporally consistent edits, action-conditioned "world simulation"; can output the reasoning frames.
 - **Avoid:** gated card, sparse on CFG/negatives; use `--use-prompt-enhancer` for terse instructions.
@@ -942,14 +1031,17 @@ modality: image
 dialect: instruction (quote literal text), negatives mostly empty
 negative_policy: see body
 triggers:
-  - joyai_image_edit_int8_convrot.safetensors
-  - qwen3vl_8b_joyimage_edit_int8_convrot.safetensors
+  - "joyai_image_edit_int8_convrot.safetensors"
+  - "qwen3vl_8b_joyimage_edit_int8_convrot.safetensors"
 license: non-commercial
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - comfy_extras/nodes_joyimage.py
-  - TextEncodeJoyImageEdit---
-### JoyAI Image Edit (JD, open weights, Apache-2.0)- **What it is:** an instruction edit model with NATIVE core support since the `comfy_extras/nodes_joyimage.py` extension landed. One node only, `TextEncodeJoyImageEdit`, which does the whole conditioning job: it tokenizes the prompt WITH the reference images attached and, when a VAE is connected, also appends their encoded latents as `reference_latents`. Runs fully local; Apache-2.0, so no gated or non-commercial flag.
+  - "comfy_extras/nodes_joyimage.py"
+  - "TextEncodeJoyImageEdit"
+---
+
+### JoyAI Image Edit (JD, open weights, Apache-2.0)
+- **What it is:** an instruction edit model with NATIVE core support since the `comfy_extras/nodes_joyimage.py` extension landed. One node only, `TextEncodeJoyImageEdit`, which does the whole conditioning job: it tokenizes the prompt WITH the reference images attached and, when a VAE is connected, also appends their encoded latents as `reference_latents`. Runs fully local; Apache-2.0, so no gated or non-commercial flag.
 - **Prompt style:** a plain imperative edit instruction, English, no template and no trigger word. The official template's worked example is exactly `Change the background to a glacial scene.` A second, EMPTY `TextEncodeJoyImageEdit` supplies the negative conditioning, so leave the negative blank unless you have a reason.
 - **Build the graph (confirmed from `comfy_extras/nodes_joyimage.py` on master + the official template `image_joyai_image_edit`):**
   - `UNETLoader` (`joyai_image_edit_int8_convrot.safetensors`, weight_dtype `default`) -> **`CFGNorm`** -> `KSampler.model`. Note the position: `CFGNorm` patches the MODEL, it is NOT a conditioning node, and putting it on the positive branch is the easiest way to get this graph wrong.
@@ -973,12 +1065,15 @@ modality: image
 dialect: natural language
 negative_policy: supported
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - kijai/ComfyUI-PromptRelay---
-### Wan 2.1 & 2.2 (Alibaba)- **Prompt style:** concise cinematic shot description; camera-sees-first, then action, then one camera move; specific descriptors. I2V = motion + camera only (image is the anchor).
+  - "kijai/ComfyUI-PromptRelay"
+---
+
+### Wan 2.1 & 2.2 (Alibaba)
+- **Prompt style:** concise cinematic shot description; camera-sees-first, then action, then one camera move; specific descriptors. I2V = motion + camera only (image is the anchor).
 - **Structure:** shot type -> subject -> primary action -> one camera move -> environment (3-5) -> lighting -> style -> color.
 - **Strengths:** 2.2 better prompt adherence, negative enforcement, camera control, temporal consistency; sequential "first... then...".
 - **Avoid:** multiple actions/conflicting camera moves, keyword stuffing, vague descriptors. Negatives ARE supported (best on 2.2): "blurry, low quality, watermark, jittery motion, deformed hands, extra limbs, distorted face, morphing".
@@ -996,13 +1091,16 @@ modality: image
 dialect: natural language
 negative_policy: supported
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - 'Audio: [dialogue / SFX / ambient / music]'
-  - '@Video1/@Video2/@Video3'---
-### Wan 2.5 / 2.6 (Alibaba, API)- **Prompt style:** cinematic visual first, then layer audio; multi-shot uses a global style line + timed blocks ("Shot 1 [0-3s]: ..."); I2V describes temporal change only.
+  - "Audio: [dialogue / SFX / ambient / music]"
+  - "@Video1/@Video2/@Video3"
+---
+
+### Wan 2.5 / 2.6 (Alibaba, API)
+- **Prompt style:** cinematic visual first, then layer audio; multi-shot uses a global style line + timed blocks ("Shot 1 [0-3s]: ..."); I2V describes temporal change only.
 - **Structure:** shot -> subject -> action -> one camera move -> environment -> lighting -> style -> `Audio: [dialogue / SFX / ambient / music]`; R2V tags `@Video1/@Video2/@Video3`.
 - **Strengths:** synchronized multilingual lip-sync dialogue, ambient/SFX/music, multi-person timbre, multi-shot; make audio specific.
 - **Avoid:** audio overpowering visual instruction; vague audio. Negatives supported (~500 chars); LLM prompt expansion on by default.
@@ -1016,15 +1114,16 @@ modality: image
 dialect: natural language
 negative_policy: supported
 triggers:
-  - (none)
+  - "(none)"
 license: Apache-2.0
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - Sound description
-  - 'tags. Negatives supported.
-- **Settings:** API (open Apache-2.0 weights expected Q2 2026); 720p/1080p; 2-15s; ~80-120 words; ComfyUI partner nodes v0.18.5+.
-- **Source:** node template'---
-### Wan 2.7 (Alibaba)- **Prompt style:** generation formula Subject + Scene + Motion + Aesthetic control (light, shot size, angle, lens, move) + Stylization + `Sound description`. Editing uses imperative commands instead.
+  - "Sound description"
+  - "'tags. Negatives supported."
+---
+
+### Wan 2.7 (Alibaba)
+- **Prompt style:** generation formula Subject + Scene + Motion + Aesthetic control (light, shot size, angle, lens, move) + Stylization + `Sound description`. Editing uses imperative commands instead.
 - **Structure:** subject (appearance) -> scene -> motion (amplitude + speed) -> aesthetic control -> stylization -> audio; R2V uses numbered indices ("the character in Video 1"), NOT `@Video1`; FLF2V = first -> bridging motion -> end.
 - **Strengths:** first+last-frame control, 3x3 image input for cross-shot consistency, up to 5 refs, subject+voice cloning, instruction edits, multi-shot.
 - **Avoid:** multiple actions/camera moves per shot, mixing description with edit commands, `@VideoN` tags. Negatives supported.
@@ -1038,16 +1137,19 @@ modality: image
 dialect: natural language
 negative_policy: see body
 triggers:
-  - prompt_relay_ltx23_test_02.json
-  - LTX_Director_2_Workflow_Hotfix.json
-  - Equirect-Outpaint.json
-  - Burgstall-VR-Outpaint.json
+  - "prompt_relay_ltx23_test_02.json"
+  - "LTX_Director_2_Workflow_Hotfix.json"
+  - "Equirect-Outpaint.json"
+  - "Burgstall-VR-Outpaint.json"
 license: MIT
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - ComfyUI-LTXVideo
-  - LTXICLoRALoaderModelOnly---
-### LTX-2.3 (Lightricks)- **Prompt style (official guide):** ONE flowing cinematography paragraph, not tag dumps. Order: shot/framing ->
+  - "ComfyUI-LTXVideo"
+  - "LTXICLoRALoaderModelOnly"
+---
+
+### LTX-2.3 (Lightricks)
+- **Prompt style (official guide):** ONE flowing cinematography paragraph, not tag dumps. Order: shot/framing ->
   scene (lighting, color, texture, atmosphere) -> action (present-tense verbs) -> character (age, clothing,
   features) -> camera move(s) -> audio. Match prompt length to clip length (a 10-word prompt for a 10s clip
   underperforms; longer beats shorter). Dialogue in quotation marks, short phrases with acting beats between them;
@@ -1178,12 +1280,15 @@ modality: image
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - 'Prompt style:** single flowing paragraph (4-8 sentences), not tag lists (the model resists keyword dumps); a shot list a camera operator could execute.'---
-### LTX-2 Pro (Lightricks)- **Prompt style:** single flowing paragraph (4-8 sentences), not tag lists (the model resists keyword dumps); a shot list a camera operator could execute.
+  - "Prompt style:** single flowing paragraph (4-8 sentences), not tag lists (the model resists keyword dumps); a shot list a camera operator could execute."
+---
+
+### LTX-2 Pro (Lightricks)
+- **Prompt style:** single flowing paragraph (4-8 sentences), not tag lists (the model resists keyword dumps); a shot list a camera operator could execute.
 - **Structure:** scene anchor (location/time/atmosphere) -> subject + action verb -> camera + lens (movement, focal length, aperture, framing) -> style/color science -> motion/time cue; start with the action.
 - **Strengths:** physically plausible camera work, lens/aperture realism, multi-keyframe interpolation, beat-matched audio, camera presets.
 - **Avoid:** tag/adjective lists, multiple actions/characters, contradictory shots. Negatives weak at CFG=1 (describe what you WANT).
@@ -1197,12 +1302,15 @@ modality: video
 dialect: detailed natural language + motion, leans on positive + prompt-rewrite
 negative_policy: positive-only (negatives lean on positive)
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - 'Prompt style:** detailed English natural language (MLLM text encoder); include dynamic motion descriptors and explicit camera cues; built-in Prompt Rewrite (Normal vs Master mode).'---
-### Hunyuan Video (Tencent)- **Prompt style:** detailed English natural language (MLLM text encoder); include dynamic motion descriptors and explicit camera cues; built-in Prompt Rewrite (Normal vs Master mode).
+  - "Prompt style:** detailed English natural language (MLLM text encoder); include dynamic motion descriptors and explicit camera cues; built-in Prompt Rewrite (Normal vs Master mode)."
+---
+
+### Hunyuan Video (Tencent)
+- **Prompt style:** detailed English natural language (MLLM text encoder); include dynamic motion descriptors and explicit camera cues; built-in Prompt Rewrite (Normal vs Master mode).
 - **Structure:** subject + appearance -> action/motion (speed/intensity) -> camera movement -> scene -> lighting/style.
 - **Strengths:** motion quality and physical realism, instruction following, subject consistency across camera moves.
 - **Avoid:** leans on positive description + Prompt Rewrite rather than negatives; FP8 the diffusion model if OOM.
@@ -1217,13 +1325,16 @@ modality: video
 dialect: image + motion params (no text prompt)
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - motion_bucket_id
-  - noise_aug_strength---
-### SVD (Stable Video Diffusion, Stability)- **Prompt style:** NONE (image-conditioned only); motion controlled by numeric parameters, not words.
+  - "motion_bucket_id"
+  - "noise_aug_strength"
+---
+
+### SVD (Stable Video Diffusion, Stability)
+- **Prompt style:** NONE (image-conditioned only); motion controlled by numeric parameters, not words.
 - **Structure:** provide a conditioning image; tune motion/fps via parameters.
 - **Strengths:** animate a strong still into smooth short motion; `motion_bucket_id` is the main dial (higher = more motion).
 - **Avoid:** no text-prompt control, no negative prompt; high `noise_aug_strength` drifts away from the input image.
@@ -1239,14 +1350,16 @@ modality: image
 dialect: natural language
 negative_policy: supported
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - 'max 2. O1 edits use plain instructions.
-- **Structure:** most-important first; multi-shot (V3/O3): label'
-  - ; bind recurring subjects with---
-### Kling (2.1/2.5, 2.6, 3.0/V3, O1, O3) - Kuaishou- **Prompt style:** five-part - Subject (specific) -> Action/Motion (start+end, "first... then... finally...", speed) -> Scene (5-7 details + lighting) -> Camera (move with motivation + lens) -> Audio (tag speakers + tone, on 2.6/V3/O3). `++emphasis++` max 2. O1 edits use plain instructions.
+  - "'max 2. O1 edits use plain instructions."
+  - "; bind recurring subjects with"
+---
+
+### Kling (2.1/2.5, 2.6, 3.0/V3, O1, O3) - Kuaishou
+- **Prompt style:** five-part - Subject (specific) -> Action/Motion (start+end, "first... then... finally...", speed) -> Scene (5-7 details + lighting) -> Camera (move with motivation + lens) -> Audio (tag speakers + tone, on 2.6/V3/O3). `++emphasis++` max 2. O1 edits use plain instructions.
 - **Structure:** most-important first; multi-shot (V3/O3): label `Shot 1 (Xs): [framing] - [subject+action]. [camera]. [audio]`; bind recurring subjects with `@ElementName`.
 - **Strengths:** motion/physics fidelity, explicit camera direction, native audio (2.6/V3/O3) with lip-sync + multi-character dialogue; up to 15s / 6 shots (O3); O1 unifies generate + edit.
 - **Avoid:** open-ended motion (looping), pronouns/synonyms across shots, >2 emphasis. Negatives ARE supported (no negation words).
@@ -1260,12 +1373,15 @@ modality: image
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - 'Prompt style:** natural-language, 100-150 words; one camera move (film terms); audio after the visual ("Audio: .'---
-### Veo 3 / 3.1 (Google)- **Prompt style:** natural-language, 100-150 words; one camera move (film terms); audio after the visual ("Audio: ...").
+  - "Prompt style:** natural-language, 100-150 words; one camera move (film terms); audio after the visual (\"Audio: ."
+---
+
+### Veo 3 / 3.1 (Google)
+- **Prompt style:** natural-language, 100-150 words; one camera move (film terms); audio after the visual ("Audio: ...").
 - **Structure:** Subject -> Action -> Context/Setting -> Style (early) -> Camera/Lens -> Lighting -> Motion -> Audio -> Constraints (end).
 - **Strengths:** native audio (dialogue + SFX + ambient + music) with lip-sync, real-world physics; 3.1 adds native 9:16, up to 3 refs, first/last-frame, Scene Extension.
 - **Avoid:** "don't show X" does NOT work (use descriptive exclusions at the end, 1-3 max); over-constraining; conflicting camera moves.
@@ -1279,13 +1395,16 @@ modality: image
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - GeminiVideoOmni
-  - api_google_gemini_omni_flash_t2v---
-### Gemini Omni Flash (Google)- **What it is (confirmed, Google DeepMind model card, published 2026-05-19):** an any-to-any generative video model - text-to-video, image-to-video, and conversational video *editing* - with **native audio out**. Inputs are text, images, audio, and video; output is high-resolution video with audio. Google's card claims real-world-physics simulation and faithful instruction following.
+  - "GeminiVideoOmni"
+  - "api_google_gemini_omni_flash_t2v"
+---
+
+### Gemini Omni Flash (Google)
+- **What it is (confirmed, Google DeepMind model card, published 2026-05-19):** an any-to-any generative video model - text-to-video, image-to-video, and conversational video *editing* - with **native audio out**. Inputs are text, images, audio, and video; output is high-resolution video with audio. Google's card claims real-world-physics simulation and faithful instruction following.
 - **ComfyUI (confirmed from the official Comfy-Org/workflow_templates, read 2026-06-30):** official partner node **`GeminiVideoOmni`** with three shipped templates - `api_google_gemini_omni_flash_t2v` / `_i2v` / `_video_edit`. It is an API / cloud partner node - runs server-side through Comfy's API, needs a Comfy API key + credits, like Veo / Kling / Sora - and needs a current ComfyUI (the node landed after 0.25.1; if it is missing, update ComfyUI + the frontend / api-nodes package).
   - **Node I/O:** inputs `model.prompt` (STRING), `model.images.image_1..3` (IMAGE, up to 3 reference images, used by I2V), `model.videos.video_1..2` (VIDEO - a source clip plus an optional second for edits); outputs `VIDEO` and a `STRING` (response text). Widgets seen in the templates: `["Omni Flash", "", 1, 0.95, <seed>, "randomize"]` = model variant, an (empty) text field, a count, ~0.95 temperature/guidance, seed, seed-control (exact widget labels inferred - confirm via `get_node_info GeminiVideoOmni` once your build has it).
   - **Three graphs (buildable, from the official templates):** T2V = `GeminiVideoOmni(model.prompt)` -> `SaveVideo` (+ `PreviewAny` on the STRING). I2V = `LoadImage` x1-3 -> `GeminiVideoOmni(image_1..3, prompt)` -> `SaveVideo`. Video-edit = `LoadVideo` -> `GeminiVideoOmni(video_1 [+ optional video_2], prompt)` -> `SaveVideo`.
@@ -1301,12 +1420,15 @@ modality: image
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - 'Prompt style:** storyboard sketch, 50-100 words; write for the lens, not adjectives.'---
-### Sora 2 / Sora 2 Pro (OpenAI)- **Prompt style:** storyboard sketch, 50-100 words; write for the lens, not adjectives.
+  - "Prompt style:** storyboard sketch, 50-100 words; write for the lens, not adjectives."
+---
+
+### Sora 2 / Sora 2 Pro (OpenAI)
+- **Prompt style:** storyboard sketch, 50-100 words; write for the lens, not adjectives.
 - **Structure:** Subject+environment -> Camera (framing, angle, lens, single move) -> Action (2-3 beats with timing) -> Lighting+color (3-5 anchors) -> Audio (one note/line) -> Constraints; front-load visuals into the first ~500 chars.
 - **Strengths:** coherence/continuity, native dialogue + SFX synced to timing, technical lens/film-stock cues; Pro = higher fidelity.
 - **Avoid:** abstract descriptors, >2-3 beats, multiple camera moves, past ~100 words. Exclusions structured at end.
@@ -1320,13 +1442,16 @@ modality: image
 dialect: natural language
 negative_policy: see body
 triggers:
-  - api_seedance2_0_t2v.json
+  - "api_seedance2_0_t2v.json"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - '@Image1 as the main character'
-  - model.reference_images.image_1..9---
-### Seedance 1.0 and 2.0 (ByteDance)- **Prompt style:** structured, concise (2.0 under ~60 words + constraints); cinematic camera language is the core strength.
+  - "@Image1 as the main character"
+  - "model.reference_images.image_1..9"
+---
+
+### Seedance 1.0 and 2.0 (ByteDance)
+- **Prompt style:** structured, concise (2.0 under ~60 words + constraints); cinematic camera language is the core strength.
 - **Structure:** Subject -> Action (one verb/shot + speed + endpoint) -> Camera (shot size, then one move + angle + lens) -> Style -> Constraints; multi-shot via cut words ("Cut to / Camera switching"); 2.0 refs `@Image1 as the main character`.
 - **Strengths:** camera-language response (surround, aerial, zoom, pan, follow, handheld); multi-shot consistency; 2.0 native audio with phoneme-level lip-sync (8+ langs), camera-motion replication, beat-synced editing.
 - **Avoid:** stacking motion verbs, vague mood as camera direction; on-screen text and fast hands glitch; set "not fixed camera" when moving. Constraints (3-5 bans) substitute for a negative field.
@@ -1341,14 +1466,16 @@ modality: image
 dialect: natural language
 negative_policy: see body
 triggers:
-  - api_luma_ray3_3_t2v.json
+  - "api_luma_ray3_3_t2v.json"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - '.
-- **ComfyUI:** Ray 3.x runs via'
-  - LumaRay32ExtendVideoNode---
-### Luma Ray 2 / Ray 3 (Dream Machine)- **Prompt style:** keep camera OUT of the prompt (set via API "Concepts"); content-only.
+  - "'."
+  - "LumaRay32ExtendVideoNode"
+---
+
+### Luma Ray 2 / Ray 3 (Dream Machine)
+- **Prompt style:** keep camera OUT of the prompt (set via API "Concepts"); content-only.
 - **Structure:** Main subject -> Action (direction + endpoint) -> details -> scene/atmosphere -> style -> quality reinforcer at end; pass camera as composable Concepts (20 moves, 14 angles).
 - **Strengths:** photorealism, composable multi-motion camera, Loop + Video Extension (~60s); Ray 3 reasoning + 16-bit EXR HDR.
 - **Avoid:** camera in the prompt text; multiple primary actions; negative phrasing. No negative field, no CFG, no seed, no native audio.
@@ -1363,12 +1490,15 @@ modality: image
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - 'Prompt style:** complete natural-language sentences (not keyword lists); precise verbs; one action + one camera move per sentence with a speed modifier.'---
-### Runway Gen-4 / Gen-4.5- **Prompt style:** complete natural-language sentences (not keyword lists); precise verbs; one action + one camera move per sentence with a speed modifier.
+  - "Prompt style:** complete natural-language sentences (not keyword lists); precise verbs; one action + one camera move per sentence with a speed modifier."
+---
+
+### Runway Gen-4 / Gen-4.5
+- **Prompt style:** complete natural-language sentences (not keyword lists); precise verbs; one action + one camera move per sentence with a speed modifier.
 - **Structure:** Subject action -> Camera motion -> Visual context/style; for I2V don't re-describe the source; references control their domain (Character / Style / Environment, up to 3).
 - **Strengths:** reference consistency across shots, clean cinematic motion; Gen-4.5 adds T2V + sequenced camera choreography + higher resolution.
 - **Avoid:** "no X"/"avoid Y" NOT supported (may backfire); keyword lists; competing actions. No negatives, no CFG, no native audio.
@@ -1382,13 +1512,16 @@ modality: image
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - '[Push in]A lamb stands...'
-  - '[Pan left,Pedestal up]'---
-### MiniMax / Hailuo- **Prompt style:** Subject + Action (dynamic verbs) + Setting + Time + Style; camera commands in square brackets with NO space before text, e.g. `[Push in]A lamb stands...`.
+  - "[Push in]A lamb stands..."
+  - "[Pan left,Pedestal up]"
+---
+
+### MiniMax / Hailuo
+- **Prompt style:** Subject + Action (dynamic verbs) + Setting + Time + Style; camera commands in square brackets with NO space before text, e.g. `[Push in]A lamb stands...`.
 - **Structure:** bracket at the point the move occurs; combine up to 3 moves - simultaneous `[Pan left,Pedestal up]` (no gap) or sequential `[Push in] then [Pan right]`.
 - **Strengths:** physics/motion realism, facial expression, frame-accurate motion; Director-mode camera; keyframe control; multilingual.
 - **Avoid:** vague words, natural-language camera descriptions (use brackets), space after `]`, over-long. Default Prompt Optimizer rewrites prompts (set `prompt_optimizer: false` for precise control). No standard negative field.
@@ -1402,12 +1535,15 @@ modality: image
 dialect: natural language
 negative_policy: supported
 triggers:
-  - (none)
+  - "(none)"
 license: MIT
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - '[Character] [Action] [Scene] with [Visual Style], [Cinematography], and [Mood]'---
-### PixVerse- **Prompt style:** `[Character] [Action] [Scene] with [Visual Style], [Cinematography], and [Mood]`; state camera work explicitly and chain it.
+  - "[Character] [Action] [Scene] with [Visual Style], [Cinematography], and [Mood]"
+---
+
+### PixVerse
+- **Prompt style:** `[Character] [Action] [Scene] with [Visual Style], [Cinematography], and [Mood]`; state camera work explicitly and chain it.
 - **Structure:** character/object -> scene -> cinematography (position, movement, angle) -> style/grade -> mood -> negative prompt.
 - **Strengths:** customizable camera movement/angle, follows camera + lighting words (V5.6), product multi-clip orbit.
 - **Avoid:** generic prompts, visual overload, omitting style, excessive length. Negatives ARE supported (list artifacts/objects/styles to exclude).
@@ -1421,12 +1557,15 @@ modality: image
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - '-label syntax to bind subjects, then action + camera in natural language:'---
-### Vidu (Q1 / Q2)- **Prompt style:** `@`-label syntax to bind subjects, then action + camera in natural language: `@a(short-hair woman in red coat), @b(man in denim)` ... action ... camera.
+  - "-label syntax to bind subjects, then action + camera in natural language:"
+---
+
+### Vidu (Q1 / Q2)
+- **Prompt style:** `@`-label syntax to bind subjects, then action + camera in natural language: `@a(short-hair woman in red coat), @b(man in denim)` ... action ... camera.
 - **Structure:** reference labels first -> action (sequential) -> camera (intentional moves); Q1 leans on keyframes.
 - **Strengths:** multi-subject reference consistency (up to 7, one image each, `@a, @b...`); built-in push/pull, pan, tilt, zoom; motion-amplitude control; video extension.
 - **Avoid:** thin official prompt doc; keep references high-res; fixed seed for repeatable motion. Negative support not documented.
@@ -1440,12 +1579,15 @@ modality: image
 dialect: natural language
 negative_policy: supported
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - ingredients_mode---
-### Pika 2.2 / 2.5- **Prompt style:** shot-plan order - subject + material details -> one motion cue (direction + speed) -> scene/lighting -> one camera move -> style at the end; describe what IS.
+  - "ingredients_mode"
+---
+
+### Pika 2.2 / 2.5
+- **Prompt style:** shot-plan order - subject + material details -> one motion cue (direction + speed) -> scene/lighting -> one camera move -> style at the end; describe what IS.
 - **Structure:** one motion per shot; exactly ONE camera type (zoom OR pan OR rotate OR tilt); "smooth" reduces jitter.
 - **Strengths:** quick turnaround; Pikascenes (combine refs, `ingredients_mode`), Pikaframes (up to 5 keyframes) for transitions/loops.
 - **Avoid:** complex multi-stage motion, stacking camera types, over-describing. Negatives ARE supported ("ugly, blurry, low quality, watermark, distorted, jittery, morphing"). Pikaffects/Pikaswaps are web-UI only.
@@ -1459,13 +1601,16 @@ modality: image
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: MIT
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - comfy_api_nodes/nodes_sync_so.py
-  - SyncLipSyncNode---
-### Sync 3 (sync.so) - lip sync + talking image- **What it is:** a dedicated LIP-SYNC model, not a general video generator. Two jobs: re-sync the mouth of existing footage to new speech, or bring a single still portrait to life from an audio track. Handles close-ups, profiles and partial obstructions automatically while preserving the speaker's expression. Cost scales with output duration. API / paid (Comfy Cloud or a sync.so key).
+  - "comfy_api_nodes/nodes_sync_so.py"
+  - "SyncLipSyncNode"
+---
+
+### Sync 3 (sync.so) - lip sync + talking image
+- **What it is:** a dedicated LIP-SYNC model, not a general video generator. Two jobs: re-sync the mouth of existing footage to new speech, or bring a single still portrait to life from an audio track. Handles close-ups, profiles and partial obstructions automatically while preserving the speaker's expression. Cost scales with output duration. API / paid (Comfy Cloud or a sync.so key).
 - **Prompt style:** only the Talking Image node takes text, and it is OPTIONAL guidance for how the portrait comes to life (framing, mood, small motion), not a scene description. The audio drives everything else. Lip Sync takes no prompt at all.
 - **Build the graph (confirmed from `comfy_api_nodes/nodes_sync_so.py` + the official templates):**
   - **Lip sync existing footage** - `LoadVideo` -> **`SyncLipSyncNode`** ("sync.so Lip Sync") `video`, plus `LoadAudio` (or `RecordAudio`) -> its `audio`; `VIDEO` out -> `SaveVideo`. Template `api_sync_so_lip_sync_video`.
@@ -1487,13 +1632,16 @@ modality: video
 dialect: natural language + camera direction
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: MIT
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - comfy_api_nodes/nodes_heygen.py
-  - HeyGenTalkingPhotoNode---
-### HeyGen (avatar video, talking photo, TTS, video translate)- **What it is:** a PRESENTER / avatar stack, not a scene generator. Four jobs, one per node: drive a stock or custom avatar to speak (Avatar Video), animate any still photo of a person into a lip-synced clip (Talking Photo), synthesize speech alone (Text to Speech), or re-voice an existing spoken video into another language with the original speaker's cloned voice and re-animated mouth (Video Translate). API / paid (Comfy Cloud or a HeyGen key). Priced per second of output.
+  - "comfy_api_nodes/nodes_heygen.py"
+  - "HeyGenTalkingPhotoNode"
+---
+
+### HeyGen (avatar video, talking photo, TTS, video translate)
+- **What it is:** a PRESENTER / avatar stack, not a scene generator. Four jobs, one per node: drive a stock or custom avatar to speak (Avatar Video), animate any still photo of a person into a lip-synced clip (Talking Photo), synthesize speech alone (Text to Speech), or re-voice an existing spoken video into another language with the original speaker's cloned voice and re-animated mouth (Video Translate). API / paid (Comfy Cloud or a HeyGen key). Priced per second of output.
 - **Prompt style:** there is NO scene prompt anywhere. The only free text is the SCRIPT the avatar speaks (or SSML, in the TTS node) and, on Create Avatar, a character DESCRIPTION. Do not write camera or lighting language; it is ignored.
 - **Build the graph (confirmed from `comfy_api_nodes/nodes_heygen.py` on master + the four official templates):**
   - **Talking photo** - `LoadImage` -> **`HeyGenTalkingPhotoNode`** ("HeyGen Talking Photo") `image`; `VIDEO` out -> `SaveVideo`. Template `api_heygen_talking_photo`.
@@ -1518,12 +1666,15 @@ modality: image
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: non-commercial
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - (and optional---
-### Stable Audio (Stability)- **Prompt style:** genre + mood + instruments + BPM/tempo, short English phrase ("128 BPM tech house drum loop"). No lyrics, no realistic vocals.
+  - "(and optional"
+---
+
+### Stable Audio (Stability)
+- **Prompt style:** genre + mood + instruments + BPM/tempo, short English phrase ("128 BPM tech house drum loop"). No lyrics, no realistic vocals.
 - **Structure:** concise tag-like sound description, then set `seconds_total` (and optional `seconds_start`).
 - **Strengths:** SFX, foley, ambiences, drum/instrument loops; precise BPM and instrument naming.
 - **Avoid:** vocals/singing, full songs, non-English prompts.
@@ -1538,13 +1689,16 @@ modality: image
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - ; optional leading language code
-  - for similarity; vocal prominence via LatentOperationTonemapReinhard---
-### ACE-Step- **Prompt style:** two fields. Tags = comma-separated genres/scenes/instruments/vocals/tempo ("electronic, pop, female voice, 110 bpm, melodic"). Lyrics = `[verse]`, `[chorus]`, `[bridge]`, `[outro]`; optional leading language code `[en]`/`[zh]` (19 languages).
+  - "; optional leading language code"
+  - "for similarity; vocal prominence via LatentOperationTonemapReinhard"
+---
+
+### ACE-Step
+- **Prompt style:** two fields. Tags = comma-separated genres/scenes/instruments/vocals/tempo ("electronic, pop, female voice, 110 bpm, melodic"). Lyrics = `[verse]`, `[chorus]`, `[bridge]`, `[outro]`; optional leading language code `[en]`/`[zh]` (19 languages).
 - **Structure:** tags describe the sound; lyrics drive sung content and sections.
 - **Strengths:** mainstream styles, lyric alignment, fast (~4 min audio in ~20s on A100), lyric editing/remix.
 - **Avoid:** less-common languages underperform; lyric edits in small segments; copyright risk.
@@ -1558,15 +1712,16 @@ modality: image
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - eleven_multilingual_v2
-  - '.
-- **Avoid:** over-long SFX prompts; expecting prompt words to control tone (use parameters).
-- **Settings (built-in TTS node):**'---
-### ElevenLabs (API via ComfyUI nodes)- **Prompt style:** TTS = plain text (voice/emotion via parameters). SFX = specific natural-language description (material, size, environment, distance, temporal arc, acoustic space); onomatopoeia helps.
+  - "eleven_multilingual_v2"
+  - "'."
+---
+
+### ElevenLabs (API via ComfyUI nodes)
+- **Prompt style:** TTS = plain text (voice/emotion via parameters). SFX = specific natural-language description (material, size, environment, distance, temporal arc, acoustic space); onomatopoeia helps.
 - **Strengths:** natural multilingual voices, instant cloning, precise SFX; node supports `eleven_multilingual_v2` and `eleven_v3`.
 - **Avoid:** over-long SFX prompts; expecting prompt words to control tone (use parameters).
 - **Settings (built-in TTS node):** `stability` (def 0.5), `similarity_boost` (def 0.75), `style` (def 0.0), `speed` (def 1.0), `use_speaker_boost`. Text-to-Effect: `duration` 0.5-30s, `prompt_influence` 0-1 (def 0.3).
@@ -1579,14 +1734,16 @@ modality: image
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - speeds up speech (lower
-  - 'to compensate); language mismatch causes accent bleed.
-- **Settings:** defaults'---
-### ChatterBox (Resemble AI)- **Prompt style:** literal text to speak (expressiveness via parameters, not words); voice cloning uses a 10s+ reference clip (match language to avoid accent transfer).
+  - "speeds up speech (lower"
+  - "'to compensate); language mismatch causes accent bleed."
+---
+
+### ChatterBox (Resemble AI)
+- **Prompt style:** literal text to speak (expressiveness via parameters, not words); voice cloning uses a 10s+ reference clip (match language to avoid accent transfer).
 - **Strengths:** zero-shot cloning, emotion intensity dial, multilingual (23+ in V3), fast.
 - **Avoid:** high `exaggeration` speeds up speech (lower `cfg_weight` to compensate); language mismatch causes accent bleed.
 - **Settings:** defaults `exaggeration=0.5`, `cfg_weight=0.5`; dramatic `exaggeration` 0.7+ with `cfg_weight` ~0.3.
@@ -1600,13 +1757,16 @@ modality: image
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: MIT
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - '[square brackets]'
-  - says / whispers / replies---
-### Seed Audio 1.0 (ByteDance)- **Prompt style (this is the whole game):** write the scene as a SCRIPT and wrap everything that is NOT spoken dialogue in `[square brackets]` - only text in quotes after `says / whispers / replies` gets voiced. Un-bracketed prose is read aloud as narration and bloats the clip. Order: `[Language: ...]` -> `[Environment: ...]` -> `[Background music / SFX: ...]` -> `Name (voice traits) says: "line"` -> `[beats / SFX / Outro]`. Describe each voice (gender, age, accent, emotion, tone, pace) inside the parentheses before `says`.
+  - "[square brackets]"
+  - "says / whispers / replies"
+---
+
+### Seed Audio 1.0 (ByteDance)
+- **Prompt style (this is the whole game):** write the scene as a SCRIPT and wrap everything that is NOT spoken dialogue in `[square brackets]` - only text in quotes after `says / whispers / replies` gets voiced. Un-bracketed prose is read aloud as narration and bloats the clip. Order: `[Language: ...]` -> `[Environment: ...]` -> `[Background music / SFX: ...]` -> `Name (voice traits) says: "line"` -> `[beats / SFX / Outro]`. Describe each voice (gender, age, accent, emotion, tone, pace) inside the parentheses before `says`.
 - **Lock the language:** English + Chinese only, and it mixes them if you don't pin it. Put `[Language: English only.]` (or `Chinese only.`) near the top AND write "speaks English only" into each character's voice traits.
 - **Limits (confirmed from the templates):** prompt <=3000 chars, output <=2 min.
 - **Strengths:** ONE pass gives a FULL audio scene - ambience + multi-character dialogue (per-voice traits) + background music + SFX - not plain TTS or a music-tag list. Three modes on the same node.
@@ -1620,20 +1780,21 @@ sample_prompts:
 
 ---
 id: hunyuan3d
-family: 3d
-modality: 3d
+family: "3d"
+modality: "3d"
 dialect: subject + materials + style; clean input image
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - Hunyuan3Dv2Conditioning
-  - '.
-- **Strengths:** strong geometry from images, multi-view input, high-res PBR textures.
-- **Avoid:** cluttered/un-preprocessed input images; native ComfyUI gives geometry only on'---
-### Hunyuan3D (Tencent)- **Prompt style:** subject supplied mainly as a clean input image (single or multi-view, background removed); text is secondary.
+  - "Hunyuan3Dv2Conditioning"
+  - "'."
+---
+
+### Hunyuan3D (Tencent)
+- **Prompt style:** subject supplied mainly as a clean input image (single or multi-view, background removed); text is secondary.
 - **Structure:** two stages - Hunyuan3D-DiT geometry, then Hunyuan3D-Paint textures/PBR; use `Hunyuan3Dv2Conditioning` (single) or `...MultiView`.
 - **Strengths:** strong geometry from images, multi-view input, high-res PBR textures.
 - **Avoid:** cluttered/un-preprocessed input images; native ComfyUI gives geometry only on `2mv`.
@@ -1642,19 +1803,21 @@ sample_prompts:
 
 ---
 id: tripo
-family: 3d
-modality: 3d
+family: "3d"
+modality: "3d"
 dialect: subject + materials + style; clean input image
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: MIT
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - '; image input JPG/PNG/WEBP <5MB, solid background, centered.
-- **ComfyUI node:**'
-  - '(Comfy Registry:'---
-### Tripo- **Prompt style:** "Subject + Detail Description + Style Definition" ("A futuristic cybernetic helmet, matte black finish, glowing blue neon strips, high detail, sci-fi style"); concrete geometry/materials/finishes.
+  - "'; image input JPG/PNG/WEBP <5MB, solid background, centered."
+  - "(Comfy Registry:"
+---
+
+### Tripo
+- **Prompt style:** "Subject + Detail Description + Style Definition" ("A futuristic cybernetic helmet, matte black finish, glowing blue neon strips, high detail, sci-fi style"); concrete geometry/materials/finishes.
 - **Structure:** main subject + features clearly; prioritize materials over lighting.
 - **Strengths:** material/texture fidelity, multi-view fusion, smart retopology; texture on/off, face-limit budget.
 - **Avoid:** abstract adjectives, over-long prompts, cluttered/off-center input images.
@@ -1669,13 +1832,16 @@ modality: image
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - DeemosTech/ComfyUI-Rodin
-  - mLoadRodinAPIKEY---
-### Rodin (Hyper3D)- **Prompt style:** specific detailed object description; name materials/textures, include lighting, state style, give context; image upload switches to Image-to-3D.
+  - "DeemosTech/ComfyUI-Rodin"
+  - "mLoadRodinAPIKEY"
+---
+
+### Rodin (Hyper3D)
+- **Prompt style:** specific detailed object description; name materials/textures, include lighting, state style, give context; image upload switches to Image-to-3D.
 - **Strengths:** geometry quality (Gen-2), quad meshes, HD/4K textures, PBR/Shaded/All material modes, broad export.
 - **Avoid:** vague prompts; cluttered backgrounds / low-res inputs (>=512x512, <=16MB); download links expire ~10 min.
 - **Settings:** topology Raw or Quad (def Quad); materials PBR/Shaded/All; quality tiers; formats GLB/USDZ/FBX/OBJ/STL; up to 5 images.
@@ -1684,18 +1850,21 @@ sample_prompts:
 
 ---
 id: meshy
-family: 3d
-modality: 3d
+family: "3d"
+modality: "3d"
 dialect: subject + materials + style; clean input image
 negative_policy: supported
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - negative_prompt
-  - Kazama-Suichiku/ComfyUI-Meshy---
-### Meshy- **Prompt style:** Subject + Modifiers (materials, colors, details) + Style; 3-6 concrete physical details; reference anchors; style keywords (low-poly, photorealistic, cartoon, cyberpunk neon, anime cell shading).
+  - "negative_prompt"
+  - "Kazama-Suichiku/ComfyUI-Meshy"
+---
+
+### Meshy
+- **Prompt style:** Subject + Modifiers (materials, colors, details) + Style; 3-6 concrete physical details; reference anchors; style keywords (low-poly, photorealistic, cartoon, cyberpunk neon, anime cell shading).
 - **Structure:** one object, not a scene; add "T-Pose" to characters you plan to rig.
 - **Strengths:** style range, character/rigging support, iterative refine; prompts up to 800 chars, any language.
 - **Avoid:** describing whole scenes; evaluative adjectives. Negatives ARE supported (`negative_prompt`). Iterate (Generate -> Refine -> Adjust).
@@ -1716,17 +1885,19 @@ modality: image
 dialect: natural language
 negative_policy: supported
 triggers:
-  - Image_capybara_v0_1_image_edit.json
-  - Image_capybara_v0_1_text_to_image.json
-  - qwen_3_06b_base.safetensors
-  - qwen_image_vae.safetensors
-  - anima-lllite-any-test-like-v2.safetensors
-  - depth_anything_3_mono_large.safetensors
+  - "Image_capybara_v0_1_image_edit.json"
+  - "Image_capybara_v0_1_text_to_image.json"
+  - "qwen_3_06b_base.safetensors"
+  - "qwen_image_vae.safetensors"
+  - "anima-lllite-any-test-like-v2.safetensors"
+  - "depth_anything_3_mono_large.safetensors"
 license: non-commercial
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - Image_capybara_v0_1_image_edit.json
-  - Image_capybara_v0_1_text_to_image.json---
+  - "Image_capybara_v0_1_image_edit.json"
+  - "Image_capybara_v0_1_text_to_image.json"
+---
+
 ### Image
 **Capybara** (unified image + video, gen + edit), Glanty / xgen-universe, built on HunyuanVideo-1.5. The card defines
 exactly four `--task_type` values: t2i, t2v, ti2i (instruction image edit), tv2v (instruction video edit); there is no
@@ -1824,14 +1995,16 @@ modality: video
 dialect: natural language + camera direction
 negative_policy: see body
 triggers:
-  - api_happyhorse1_1_t2v.json
-  - _i2v.json
-  - _r2v.json
+  - "api_happyhorse1_1_t2v.json"
+  - "_i2v.json"
+  - "_r2v.json"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - HappyHorseTextToVideoApi
-  - HappyHorseImageToVideoApi---
+  - "HappyHorseTextToVideoApi"
+  - "HappyHorseImageToVideoApi"
+---
+
 ### Video
 **HappyHorse 1.1**, Alibaba, cinematic video model with native synchronized audio, API (muapi.ai / Model Studio
 partner nodes; ComfyUI nodes `HappyHorseTextToVideoApi` / `HappyHorseImageToVideoApi` / `HappyHorseReferenceVideoApi`):
@@ -1866,11 +2039,13 @@ modality: audio
 dialect: natural language (TTS or lyrics)
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - see body---
+  - "see body"
+---
+
 ### Audio
 **Sonilo**, AI music, ComfyUI partner node: primarily video-to-music (scores a video frame-synced), plus a
 text-to-music path. Video-to-music is promptless (analyzes visuals/pacing/emotion); optional brief mood+genre+
@@ -1890,12 +2065,14 @@ modality: utility
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: non-commercial
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - UpscaleModelLoader
-  - ImageUpscaleWithModel---
+  - "UpscaleModelLoader"
+  - "ImageUpscaleWithModel"
+---
+
 ### Upscale, restore, interpolation
 - **Real-ESRGAN / ESRGAN family** (upscale): GAN super-resolution, deterministic and fast; one pass that enlarges
   (2x/4x) and removes compression/blur. Use for a final 2x/4x on a good image or per-frame on video (detail
@@ -1951,12 +2128,14 @@ modality: utility
 dialect: natural language
 negative_policy: see body
 triggers:
-  - llm_qwen3vl_text_gen.json
+  - "llm_qwen3vl_text_gen.json"
 license: Apache-2.0
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - MaskEdgeUltraDetailV2
-  - CLIPLoader(qwen3vl_4b_fp8_scaled.safetensors)---
+  - "MaskEdgeUltraDetailV2"
+  - "CLIPLoader(qwen3vl_4b_fp8_scaled.safetensors)"
+---
+
 ### Segmentation, depth, pose, conditioning
 - **SAM3** (segmentation): detects/segments/tracks every instance matching a text noun phrase or visual prompt,
   across images and video. Use to isolate subjects -> mask for inpaint/background-swap/compositing, or track an
@@ -2010,13 +2189,16 @@ modality: utility
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - UpscaleModelLoader
-  - ImageUpscaleWithModel---
-### Real-ESRGAN / ESRGAN family(upscale): GAN super-resolution, deterministic and fast; one pass that enlarges
+  - "UpscaleModelLoader"
+  - "ImageUpscaleWithModel"
+---
+
+### Real-ESRGAN / ESRGAN family(upscale)
+GAN super-resolution, deterministic and fast; one pass that enlarges
 (2x/4x) and removes compression/blur. Use for a final 2x/4x on a good image or per-frame on video (detail
 preserved, not hallucinated). ComfyUI: `UpscaleModelLoader` -> `ImageUpscaleWithModel`; scale is baked into the
 model file (RealESRGAN_x2/x4plus, 4x-UltraSharp = 4x); add an ImageScale downsample for non-native targets.
@@ -2029,12 +2211,15 @@ modality: utility
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: non-commercial
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - SDXL-based, regenerates plausible high-frequency detail, optional caption.---
-### SUPIR(diffusion restore/upscale): SDXL-based, regenerates plausible high-frequency detail, optional caption.
+  - "SDXL-based, regenerates plausible high-frequency detail, optional caption."
+---
+
+### SUPIR(diffusion restore/upscale)
+SDXL-based, regenerates plausible high-frequency detail, optional caption.
 Use on heavily degraded/low-res photos where ESRGAN stays soft; heavier/slower, a quality pass not a bulk step.
 Settings: scale_by, ~30-45 steps, cfg, denoise, s_churn/s_noise; v0Q (quality) vs v0F (light degradation,
 faithful); ~10GB (512->1024) to 24GB (~3072px), FP8 + VAE tiling cuts VRAM. LICENSE: the SUPIR weights are
@@ -2047,12 +2232,15 @@ modality: utility
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - see body---
-### SeedVR2(video/image upscale+restore): one-step diffusion with temporal consistency (frames denoised
+  - "see body"
+---
+
+### SeedVR2(video/image upscale+restore)
+one-step diffusion with temporal consistency (frames denoised
 together). Target the short edge (default 1080); 3B (fast) vs 7B (quality); FP16/FP8/GGUF; batch follows the
 4n+1 rule (1,5,9,13,17,21...); ~8GB to 24GB+. Source: github.com/numz/ComfyUI-SeedVR2_VideoUpscaler.
 
@@ -2063,13 +2251,16 @@ modality: utility
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: MIT
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - mit-han-lab/Block-Sparse-Attention
-  - ComfyUI-WanVideoWrapper---
-### FlashVSR(video super-res): one-step streaming diffusion, ~17 FPS at 768x1408 on an A100; designed for 4x SR
+  - "mit-han-lab/Block-Sparse-Attention"
+  - "ComfyUI-WanVideoWrapper"
+---
+
+### FlashVSR(video super-res)
+one-step streaming diffusion, ~17 FPS at 768x1408 on an A100; designed for 4x SR
 (use 4x for best stability); V1.1 recommended. CAVEAT: needs the Block-Sparse Attention (LCSA) module
 (`mit-han-lab/Block-Sparse-Attention`, a compile-and-install dependency, memory-intensive at build time); without it
 ComfyUI and other third-party implementations fall back to DENSE attention with noticeable quality degradation at
@@ -2083,12 +2274,15 @@ modality: utility
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - TopazVideoEnhance---
-### Topaz(external API): commercial upscale/denoise/sharpen + frame interpolation via Topaz's API (built-in
+  - "TopazVideoEnhance"
+---
+
+### Topaz(external API)
+commercial upscale/denoise/sharpen + frame interpolation via Topaz's API (built-in
 `TopazVideoEnhance` node). Upscale models Starlight (Astra) Fast/Creative + Starlight Precise 2.5; interpolation 15-240 fps, slow-mo 1-16x; needs a license.
 Source: docs.comfy.org/built-in-nodes/TopazVideoEnhance.
 
@@ -2099,12 +2293,15 @@ modality: utility
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - Google, handles large motion; accepts as few as 2 frames, arbitrary multipliers.---
-### FILM(frame interpolation): Google, handles large motion; accepts as few as 2 frames, arbitrary multipliers.
+  - "Google, handles large motion; accepts as few as 2 frames, arbitrary multipliers."
+---
+
+### FILM(frame interpolation)
+Google, handles large motion; accepts as few as 2 frames, arbitrary multipliers.
 Use for slow-mo / fps boost with large motion. ComfyUI: FILM VFI node (multiplier, clear_cache_after_n_frames).
 Source: github.com/google-research/frame-interpolation.
 
@@ -2115,12 +2312,15 @@ modality: utility
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - 'ComfyUI: RIFE VFI node (ckpt rife47/rife49, multiplier, ensemble).'---
-### RIFE(frame interpolation): fast optical-flow interpolation, the default speed-first choice (e.g. 16->32/60
+  - "ComfyUI: RIFE VFI node (ckpt rife47/rife49, multiplier, ensemble)."
+---
+
+### RIFE(frame interpolation)
+fast optical-flow interpolation, the default speed-first choice (e.g. 16->32/60
 fps over many frames). ComfyUI: RIFE VFI node (ckpt rife47/rife49, multiplier, ensemble). Source: github.com/hzwer/Practical-RIFE.
 **Picking an upscaler + ordering a restore chain** (general practice, not tool-specific). Choose by content, not
 only by scale: a GAN (Real-ESRGAN) is fast and faithful for photoreal footage, but x4 can look plastic on skin and
@@ -2140,12 +2340,15 @@ modality: utility
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - Outputs masks, boxes, scores, per-object IDs.---
-### SAM3(segmentation): detects/segments/tracks every instance matching a text noun phrase or visual prompt,
+  - "Outputs masks, boxes, scores, per-object IDs."
+---
+
+### SAM3(segmentation)
+detects/segments/tracks every instance matching a text noun phrase or visual prompt,
 across images and video. Use to isolate subjects -> mask for inpaint/background-swap/compositing, or track an
 object through a clip. Outputs masks, boxes, scores, per-object IDs. Source: github.com/facebookresearch/sam3.
 
@@ -2156,12 +2359,15 @@ modality: utility
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - see body---
-### BiRefNet(matting): high-res foreground mask with hair-level edges. Use for clean cutouts/background
+  - "see body"
+---
+
+### BiRefNet(matting)
+high-res foreground mask with hair-level edges. Use for clean cutouts/background
 replacement when you need sharper edges than a coarse segmenter. Variants general/portrait/matting/HR (up to
 2048x2048). Source: github.com/ZhengPeng7/BiRefNet.
 
@@ -2172,12 +2378,15 @@ modality: utility
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - ControlNet, parallax, or masking.---
-### Depth Anything V2 / V3(depth/geometry): per-pixel relative depth from one image (V2); V3 adds consistent
+  - "ControlNet, parallax, or masking."
+---
+
+### Depth Anything V2 / V3(depth/geometry)
+per-pixel relative depth from one image (V2); V3 adds consistent
 depth + geometry + camera pose across multi-view/video and can export point clouds. Use to make a depth map to
 drive a depth ControlNet, parallax, or masking. Source: github.com/DepthAnything/Depth-Anything-V2 ;
 github.com/ByteDance-Seed/Depth-Anything-3.
@@ -2189,12 +2398,15 @@ modality: utility
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - Use to transfer style/subject/face from a reference without text; stack with ControlNet.---
-### IP-Adapter(conditioning): ~22M adapter that lets a diffusion model take an IMAGE as a prompt (decoupled
+  - "Use to transfer style/subject/face from a reference without text; stack with ControlNet."
+---
+
+### IP-Adapter(conditioning)
+~22M adapter that lets a diffusion model take an IMAGE as a prompt (decoupled
 cross-attention). Use to transfer style/subject/face from a reference without text; stack with ControlNet.
 Variants base / Plus / Face / FaceID; main knob is conditioning weight. Source: github.com/tencent-ailab/IP-Adapter.
 
@@ -2205,12 +2417,15 @@ modality: utility
 dialect: natural language
 negative_policy: see body
 triggers:
-  - (none)
+  - "(none)"
 license: see body
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - NOT a binary mask or text prompt.---
-### VOID(video inpainting / object removal): Netflix open-source; removes a subject plus its shadows, reflections,
+  - "NOT a binary mask or text prompt."
+---
+
+### VOID(video inpainting / object removal)
+Netflix open-source; removes a subject plus its shadows, reflections,
 and the motion it caused. Control is a 4-value greyscale "quadmask" (remove / overlap / physically-affected / keep),
 NOT a binary mask or text prompt. Two passes: Pass 1 base, Pass 2 optical-flow refinement for longer/textured clips.
 Source: docs.comfy.org/tutorials/utility/void-video-inpainting. **ComfyUI build:** the linked tutorial IS the official Comfy-Org template - open it for the quadmask input node and the two-pass (generate + optical-flow refine) graph.
@@ -2222,13 +2437,16 @@ modality: utility
 dialect: natural language
 negative_policy: see body
 triggers:
-  - llm_qwen3vl_text_gen.json
+  - "llm_qwen3vl_text_gen.json"
 license: Apache-2.0
-source: 'SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)'
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT)
 sample_prompts:
-  - CLIPLoader(qwen3vl_4b_fp8_scaled.safetensors)
-  - 'input. Use it in-graph for captioning, VQA, or prompt generation / rewriting with no API call. Params:'---
-### Qwen3-VL TextGenerate(in-graph local VLM, NOT an image/video model): a `TextGenerate` node fed by `CLIPLoader(qwen3vl_4b_fp8_scaled.safetensors)` runs Qwen3-VL locally to generate text from a prompt + optional `image` / `video` / `audio` input. Use it in-graph for captioning, VQA, or prompt generation / rewriting with no API call. Params: `max_tokens` (def 512), `temperature` 0.7, `top_k` 64, `top_p` 0.95. Template `llm_qwen3vl_text_gen.json`; weights `Comfy-Org/Qwen3-VL` (Apache-2.0). The local, no-cost counterpart to the in-graph Claude / API prompt nodes.
+  - "CLIPLoader(qwen3vl_4b_fp8_scaled.safetensors)"
+  - "input. Use it in-graph for captioning, VQA, or prompt generation / rewriting with no API call. Params:"
+---
+
+### Qwen3-VL TextGenerate(in-graph local VLM, NOT an image/video model)
+a `TextGenerate` node fed by `CLIPLoader(qwen3vl_4b_fp8_scaled.safetensors)` runs Qwen3-VL locally to generate text from a prompt + optional `image` / `video` / `audio` input. Use it in-graph for captioning, VQA, or prompt generation / rewriting with no API call. Params: `max_tokens` (def 512), `temperature` 0.7, `top_k` 64, `top_p` 0.95. Template `llm_qwen3vl_text_gen.json`; weights `Comfy-Org/Qwen3-VL` (Apache-2.0). The local, no-cost counterpart to the in-graph Claude / API prompt nodes.
 
 ## Sources and provenance (preserved from upstream)
 
