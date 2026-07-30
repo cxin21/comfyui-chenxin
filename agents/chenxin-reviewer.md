@@ -7,7 +7,7 @@ description: |
   returns a single PASS/FAIL with blockers and warnings. Triggers on:
   "/chenxin-review", "review the staged diff", "adversarial review",
   "5-dim check", "does this PR pass review".
-tools: Read, Bash, Grep, Glob, Agent
+tools: Read, Bash, Grep, Glob, Task
 model: sonnet
 ---
 

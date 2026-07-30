@@ -44,6 +44,16 @@ fi
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 BRANCH="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
 
+# Defensive: refuse to write if $DST escaped $INBOX via symlink or
+# parent-traversal attempts (post-tr sanitization should already prevent this).
+case "$DST" in
+  "$INBOX"/*) ;;
+  *)
+    warn "destination escaped inbox: $DST (event was: $EVENT_RAW)"
+    exit 0
+    ;;
+esac
+
 cat > "$DST" <<EOF
 # ${EVENT}
 
