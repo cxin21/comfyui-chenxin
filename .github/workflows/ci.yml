@@ -1,0 +1,31 @@
+name: ci
+
+on:
+  push:
+    branches: [main, 'phase/*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  plugin-schema:
+    name: Plugin + marketplace JSON schema
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate plugin.json
+        run: bash scripts/validate-plugin-schema.sh
+      - name: Validate marketplace.json (P2.1)
+        run: bash scripts/validate-marketplace.sh
+  smoke:
+    name: Smoke (existing smoke + obsidian-sync)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Existing CLI smoke (auto_launch/vram_decide/template_get/gui_save)
+        run: bash mcp/extensions/test_smoke.sh
+      - name: Obsidian sync smoke
+        run: bash tests/test_obsidian_sync.sh
