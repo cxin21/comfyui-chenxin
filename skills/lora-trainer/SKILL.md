@@ -11,7 +11,7 @@ triggers:
   - "lora training"
   - "训角色"
   - "训场景"
-allowed-tools: Bash, Read, Write, "mcp__comfyui__*"
+allowed-tools: Bash, Read, Write, "mcp__comfyui-mcp__*"
 ---
 
 # Lora Trainer — Anima LoRA 训练编排 (v2.3, ported)
@@ -168,7 +168,7 @@ test_generations: 02_assets/<target>/05_test_generations/
 | Caption 自动生成 | bash | 缺失时用 trigger word 模板 |
 | Toml 自动生成 | bash | 缺失时生成训练 + 数据集 toml |
 | 训练 | bash | `scripts/train-anima-standalone.sh` → `accelerate-launch` |
-| 测试图 | Agent | `mcp__comfyui__generate_image` × 5 |
+| 测试图 | Agent | `mcp__comfyui-mcp__generate_image` × 5 |
 | 评分 | Agent | `aesthetic-judge` skill |
 | deploy | bash | `scripts/train-anima-standalone.sh --deploy` |
 

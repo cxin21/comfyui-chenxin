@@ -6,7 +6,7 @@ description: |
   reports queue depth + recent errors. Cheap (Haiku) — safe to invoke
   frequently. Triggers on: "/chenxin-doctor", "is comfyui healthy",
   "VRAM check", "what's wrong with my generation", "why is generation slow".
-tools: Read, Bash, Grep, Glob, mcp__comfyui__health_check, mcp__comfyui__list_local_models, mcp__comfyui__get_system_stats, mcp__comfyui__get_logs
+tools: Read, Bash, Grep, Glob, mcp__comfyui-mcp__health_check, mcp__comfyui-mcp__list_local_models, mcp__comfyui-mcp__get_system_stats, mcp__comfyui-mcp__get_logs
 model: haiku
 ---
 
@@ -14,10 +14,10 @@ model: haiku
 
 ## Workflow
 
-1. `mcp__comfyui__health_check` — capture version, GPU/VRAM, queue, models.
+1. `mcp__comfyui-mcp__health_check` — capture version, GPU/VRAM, queue, models.
 2. For each model that appears in the recent history (top 5 by usage):
    - `python mcp/extensions/vram_decide.py --vram <N> --model <id>`
-3. `mcp__comfyui__get_logs --max_lines 50 --keyword "error"` for recent errors.
+3. `mcp__comfyui-mcp__get_logs --max_lines 50 --keyword "error"` for recent errors.
 4. Print a one-screen report:
 
 ```

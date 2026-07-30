@@ -41,7 +41,7 @@
 
 Agent 侧操作：
 ```
-1. mcp__comfyui__query_workflow(filename=workflow, ids=白名单节点IDs, fields="detail")
+1. mcp__comfyui-mcp__query_workflow(filename=workflow, ids=白名单节点IDs, fields="detail")
 2. 将返回的 widget 当前值写入 $BACKUP_DIR/backup_manifest.json
 ```
 
@@ -57,23 +57,23 @@ for each 白名单节点:
         "value": 新值
     })
 
-mcp__comfyui__modify_workflow(workflow=workflow_json, operations=operations)
+mcp__comfyui-mcp__modify_workflow(workflow=workflow_json, operations=operations)
 ```
 
 **修改后立即验证**：
 ```
-mcp__comfyui__query_workflow(ids=修改的节点IDs, fields="detail")
+mcp__comfyui-mcp__query_workflow(ids=修改的节点IDs, fields="detail")
 → 确认 widget 值已更新
 ```
 
 ### Step 3: 执行
 
 ```
-mcp__comfyui__enqueue_workflow(workflow=modified_workflow)
+mcp__comfyui-mcp__enqueue_workflow(workflow=modified_workflow)
 → prompt_id
-mcp__comfyui__get_job_status(prompt_id=prompt_id)
+mcp__comfyui-mcp__get_job_status(prompt_id=prompt_id)
 → 等待完成
-mcp__comfyui__get_image(filename=output_filename)
+mcp__comfyui-mcp__get_image(filename=output_filename)
 → 保存结果
 ```
 
@@ -89,12 +89,12 @@ for each 备份的节点:
         "value": 备份值
     })
 
-mcp__comfyui__modify_workflow(workflow=workflow_json, operations=operations)
+mcp__comfyui-mcp__modify_workflow(workflow=workflow_json, operations=operations)
 ```
 
 **恢复后验证**：
 ```
-mcp__comfyui__query_workflow(ids=恢复的节点IDs, fields="detail")
+mcp__comfyui-mcp__query_workflow(ids=恢复的节点IDs, fields="detail")
 → 确认 widget 值已恢复
 ```
 
@@ -114,8 +114,8 @@ LoraManager 节点（AnimaStandardV7 节点 5）没有可见 widget，LoRA 配�
 
 ### 额外 LoRA（可添加）
 
-1. 查元数据：`mcp__comfyui__model_metadata_read(category="loras", name="<lora名>")`
-2. 如有 CivitAI 数据：`mcp__comfyui__model_metadata_fetch_civitai(category="loras", name="<lora名>")`
+1. 查元数据：`mcp__comfyui-mcp__model_metadata_read(category="loras", name="<lora名>")`
+2. 如有 CivitAI 数据：`mcp__comfyui-mcp__model_metadata_fetch_civitai(category="loras", name="<lora名>")`
 3. 分析最佳权重和触发词
 4. 通过 LoraManager 协议注入（不改固定 LoRA）
 5. 执行后恢复 LoraManager 到原始状态

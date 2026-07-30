@@ -34,7 +34,7 @@ Stage 4 输出
   ├─ 04_outputs/02_micro_motion/scene_NN.mp4
   └─ 03_storyboard/03_prompts/scene_NN.md (含 dialogue)
                 ↓
-        bash bootstrap.sh --project-root <path>
+        bash scripts/bootstrap.sh --project-root <path> --stage manga-stage-3-review
                 ↓
   ┌─────────────────────────────────────────┐
   │ Step 1: concat-list    ← 拼接 scene 列表 │

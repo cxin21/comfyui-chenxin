@@ -7,7 +7,7 @@ argument-hint: (no args)
 
 Runs the haiku-powered `chenxin-doctor` agent:
 
-1. `mcp__comfyui__health_check`  — ComfyUI version, GPU/VRAM, queue depth,
+1. `mcp__comfyui-mcp__health_check`  — ComfyUI version, GPU/VRAM, queue depth,
    per-category model populations, recent errors.
 2. `python mcp/extensions/vram_decide.py --vram <N> --model <name>`  — for
    each recently-used model, re-print the recommended quant + sampler.

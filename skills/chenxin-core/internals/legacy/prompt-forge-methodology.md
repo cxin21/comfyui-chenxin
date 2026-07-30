@@ -259,7 +259,7 @@ obsidian read path="aesthetics/scene-recipes.md" → 匹配场景类型
 
 ### 查询
 
-用户说要 LoRA → `mcp__comfyui__search_civitai_models(query, types=["LORA"], base_models=[按模型族选])`:
+用户说要 LoRA → `mcp__comfyui-mcp__search_civitai_models(query, types=["LORA"], base_models=[按模型族选])`:
 
 | 模型族 | base_models |
 |--------|-------------|

@@ -68,7 +68,7 @@ Stage 2 输出
   ├─ 04_outputs/01_panels/scene_NN.png
   └─ 04_outputs/01_panels/manifest.json
                 ↓
-        bash bootstrap.sh --project-root <path>
+        bash scripts/bootstrap.sh --project-root <path> --stage manga-stage-3-review
                 ↓
   Step 1: 前置检查（Stage 2 完成）
   Step 2: 扫描所有 panels
