@@ -5,7 +5,7 @@
 
 ## Current phase
 
-> **P1.1** — L5 application decoupling (move 6 apps into `skills/` so chenxin-core can route to them; P1.2 self-update dispatched in parallel)
+> **P2.1** — Marketplace publish (validate plugin.json + marketplace.json; consider CI workflow)
 
 ## P0 — Foundation
 
@@ -15,9 +15,9 @@
 
 ## P1 — Application unification
 
-- [ ] P1.1 L5 apps decoupling → PR #TBD → planned phase/P1.1-l5-decoupling
-- [ ] P1.2 Self-update daemon → PR #TBD → planned phase/P1.2-self-update
-- [ ] P1.3 Obsidian sync → PR #TBD → planned phase/P1.3-obsidian-sync
+- [x] P1.1 L5 apps decoupling → merge `8f7fcd1` → main → phase/P1.1-l5-decoupling
+- [x] P1.2 Self-update daemon → merge `2f33a58` → main → phase/P1.2-self-update
+- [x] P1.3 Obsidian sync → commit `e848267` (EVENT sanitization + smoke + contract docs)
 
 ## P2 — Distribution
 
