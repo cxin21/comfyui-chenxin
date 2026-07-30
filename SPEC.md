@@ -5,13 +5,13 @@
 
 ## Current phase
 
-> **P0.3** — L4 mega-skill `chenxin-core` (consolidates 11 prior skills; binds recipes + templates + VRAM into one entry point)
+> **P1.1** — L5 application decoupling (move 6 apps into `skills/` so chenxin-core can route to them; P1.2 self-update dispatched in parallel)
 
 ## P0 — Foundation
 
-- [x] P0.1 Knowledge substrate → merge `TBD-pending-fixup` → main → phase/P0.1-knowledge (YAML deferred to P0.3)
+- [x] P0.1 Knowledge substrate → merge `5d574cb` → main → phase/P0.1-knowledge (YAML added by P0.3 fixup)
 - [x] P0.2 MCP tool enhancements → merge `8715150` → main → phase/P0.2-mcp-tools
-- [/] P0.3 L4 mega-skill `chenxin-core` → PR #TBD → in progress (branch phase/P0.3-mega-skill)
+- [x] P0.3 L4 mega-skill `chenxin-core` → merge `154b1b6` → main → phase/P0.3-mega-skill
 
 ## P1 — Application unification
 
