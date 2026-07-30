@@ -1,0 +1,47 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+.npmrc
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.coverage
+
+# ComfyUI output (download cache)
+output/
+input/*.tmp
+!input/.gitkeep
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Builds
+dist/
+build/
+*.zip
+*.tar.gz
+
+# Secrets / tokens
+.env
+.env.local
+*.pem
+*.key
+.mcp_token
+
+# Plugin cache
+.claude-plugin/cache/
