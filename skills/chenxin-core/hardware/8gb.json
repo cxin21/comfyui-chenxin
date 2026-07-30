@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "vram_gb": 8,
+  "description": "Minimal hardware decision matrix for 8 GB VRAM. Used by chenxin-core to gate model selection, quantization, and sampler choices before instantiating any model loader. Anything not in `allowed_quant` MUST be either downsized to fit or rejected outright; the default sampler pair is the safe default for diffusion-style distilled checkpoints on consumer GPUs.",
+  "blocked_strategies": [
+    "fp16_full",
+    "fp32",
+    "bf16_full"
+  ],
+  "allowed_quant": [
+    "fp8_e4m3fn",
+    "fp8_e4m3fn_scaled",
+    "fp8_e5m2",
+    "q4_0",
+    "q4_k_m",
+    "q5_0",
+    "q5_k_m",
+    "q6_k",
+    "q8_0",
+    "int8mixedrow",
+    "INT8-ConvRot",
+    "mxfp8",
+    "nvfp4",
+    "bnb_4bit",
+    "bnb_8bit"
+  ],
+  "default_swap_blocks": 40,
+  "default_sampler": {
+    "family": "euler",
+    "scheduler": "simple",
+    "steps": 4,
+    "cfg": 1.0
+  },
+  "preference_order": [
+    "lightning_x2v",
+    "lightx2v",
+    "fcn",
+    "native"
+  ],
+  "notes": {
+    "lightning_x2v": "8-step distilled LoRA on top of the native model; smallest VRAM cost at any resolution.",
+    "lightx2v": "Lightricks' distilled checkpoint; same recipe family as lightning_x2v but model-native.",
+    "fcn": "Fully Convolutional Network-style distilled controlnet/path; cheap, deterministic.",
+    "native": "Base model in fp8 or q8_0; always reachable but slower than distilled variants."
+  },
+  "fallback_resolution": {
+    "width": 768,
+    "height": 512,
+    "rationale": "768x512 keeps a 1.5:1 aspect with ~0.39 megapixels; well under the 8GB VRAM ceiling at q8_0 even for ~12B param models."
+  },
+  "memory_budget_mb": {
+    "model_weights": 5500,
+    "vae_unet_buffers": 1200,
+    "sampler_workspace": 600,
+    "headroom": 700
+  },
+  "license": "MIT",
+  "version": "p0.1"
+}
