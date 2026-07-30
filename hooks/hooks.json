@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "command": "bash hooks/scripts/on-session-start.sh",
+        "description": "On session start: cat SPEC.md head + print next-action hint to stderr."
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "command": "bash hooks/scripts/on-write-sync-vault.sh",
+        "description": "After Write/Edit: if SPEC.md / plugin.json / marketplace.json touched, run scripts/obsidian-sync.sh (idempotent)."
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "command": "bash hooks/scripts/on-stop-phase-gate.sh",
+        "description": "On stop: if current branch is phase/PX.Y and dirty, print PR-template-friendly reminder."
+      }
+    ]
+  }
+}
