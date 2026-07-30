@@ -20,7 +20,10 @@
 set -u
 
 VAULT="${OBSIDIAN_VAULT_PATH:-D:/ObsidianWorkSpace/workspace}"
-EVENT="${1:-unknown}"
+EVENT_RAW="${1:-unknown}"
+# Whitelist sanitize EVENT so a hostile caller cannot traverse out of $INBOX.
+EVENT=$(printf '%s' "$EVENT_RAW" | tr -cd 'A-Za-z0-9._-')
+EVENT="${EVENT:-unknown}"
 TODAY="$(date +%Y-%m-%d)"
 
 step() { printf "[obsidian-sync] %s\n" "$*"; }
