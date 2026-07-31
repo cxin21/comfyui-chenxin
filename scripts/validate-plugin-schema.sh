@@ -85,8 +85,8 @@ if not plugins:
     fail("marketplace.plugins is empty", 3)
 
 p0 = plugins[0]
-if (p0.get("source") or {}).get("repo") != "chenxin/comfyui-chenxin":
-    fail(f"marketplace.plugins[0].source.repo must be 'chenxin/comfyui-chenxin', got '{p0.get('source', {}).get('repo')}'", 3)
+if (p0.get("source") or {}).get("repo") != "cxin21/comfyui-chenxin":
+    fail(f"marketplace.plugins[0].source.repo must be 'cxin21/comfyui-chenxin', got '{p0.get('source', {}).get('repo')}'", 3)
 
 print(f"[validate] marketplace.json OK (repo={p0['source']['repo']})")
 print("[validate] DONE.")

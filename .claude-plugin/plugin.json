@@ -3,8 +3,8 @@
   "version": "0.0.0",
   "description": "Local-first ComfyUI mega-skill: 74 model prompt recipes, 578 workflow templates, hardware-aware model selection, self-updating knowledge substrate, and the manga end-to-end pipeline. For Claude Code only.",
   "author": {
-    "name": "chenxin",
-    "url": "https://github.com/chenxin/comfyui-chenxin"
+    "name": "cxin21",
+    "url": "https://github.com/cxin21/comfyui-chenxin"
   },
   "keywords": [
     "comfyui",
@@ -18,8 +18,8 @@
     "ai-image"
   ],
   "license": "MIT",
-  "homepage": "https://github.com/chenxin/comfyui-chenxin",
-  "repository": "https://github.com/chenxin/comfyui-chenxin",
+  "homepage": "https://github.com/cxin21/comfyui-chenxin",
+  "repository": "https://github.com/cxin21/comfyui-chenxin",
   "engines": {
     "claude-code": ">=1.0.0"
   },
