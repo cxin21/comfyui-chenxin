@@ -74,7 +74,7 @@ Stage 2 输出
   Step 2: 扫描所有 panels
   Step 3: 生成 review.md 模板（6 维双层）
   Step 4: 核心循环（每 panel）
-    a. aesthetic-judge 6 维评分
+    a. 内部 6 维算法评分（已 absorbed aesthetic-judge skill）
     b. 写 review.md
     c. mark-redo 标 verified/failed
     d. < 7.0 → Stage 2 重跑 1 次
