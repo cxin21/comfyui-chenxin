@@ -187,17 +187,6 @@ Critical vault decisions are mirrored into `docs/vault-bridge/` in this repo (se
 
 ---
 
-## 🆚 Differences from SlavaSexton/ComfyUI-Agent-Kit
-
-| Concern | SlavaSexton/ComfyUI-Agent-Kit | comfyui-chenxin (this plugin) |
-|---|---|---|
-| Cross-CLI | 4 (Claude/Codex/Gemini/Qwen) | Claude Code **only** (per user directive) |
-| Recipes | 74 (one source) | 80 + idempotent YAML via `recipe_yaml.py` |
-| Templates | 578 | 662 (more current snapshot of `Comfy-Org/workflow_templates`) |
-| MCP enhancements | 0 (used upstream MCP as-is) | 4 standalone Python CLIs (auto_launch / vram_decide / template_get / gui_save) |
-| Workflow safety | Implicit (no SOT) | `internals/workflow-config-guard.md` (4-step backup-modify-execute-restore SOP) + `internals/workflow-resolver.md` (AnimaStandardV7 + ltx23 73/78-node maps) |
-| Obsidian integration | None | Hook + idempotent script + vault bridge |
-
 ---
 
 ## 🤝 Contributing

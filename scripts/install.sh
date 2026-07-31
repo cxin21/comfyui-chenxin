@@ -91,10 +91,26 @@ else
   step "copied $MCP_SRC -> $MCP_DST"
 fi
 
-# ----- 3. Next-action instructions ---------------------------------------- #
+# ----- 3. Install npm MCP driver (comfyui-mcp) ----------------------------- #
+# The mcp/mcp_servers.json references `comfyui-mcp` from npm. We use `npx -y`
+# to fetch on first invocation (no explicit global install needed), but
+# we still try a global install to keep the experience offline-friendly.
+
+if command -v npm >/dev/null 2>&1; then
+  if npm ls -g comfyui-mcp >/dev/null 2>&1; then
+    step "comfyui-mcp already installed globally"
+  else
+    step "installing comfyui-mcp via npm (global, may prompt for sudo)"
+    npm install -g comfyui-mcp 2>&1 | tail -3 || warn "npm install -g comfyui-mcp failed (will fall back to npx on first use)"
+  fi
+else
+  warn "npm not on PATH — the MCP server will still work via npx on first use, but global install skipped"
+fi
+
+# ----- 4. Next-action instructions ---------------------------------------- #
 
 step "next: in Claude Code, run"
-printf "         /plugin marketplace add chenxin/comfyui-chenxin\n"
+printf "         /plugin marketplace add cxin21/comfyui-chenxin\n"
 printf "         /plugin install comfyui@chenxin\n"
 printf "         /chenxin-init\n"
 step "DONE."

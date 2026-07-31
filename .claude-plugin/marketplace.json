@@ -1,15 +1,15 @@
 {
   "name": "comfyui-chenxin",
   "owner": {
-    "name": "chenxin",
-    "url": "https://github.com/chenxin/comfyui-chenxin"
+    "name": "cxin21",
+    "url": "https://github.com/cxin21/comfyui-chenxin"
   },
   "plugins": [
     {
       "name": "comfyui-chenxin",
       "source": {
         "source": "github",
-        "repo": "chenxin/comfyui-chenxin"
+        "repo": "cxin21/comfyui-chenxin"
       },
       "description": "Local-first ComfyUI mega-skill for Claude Code. 74 model prompt recipes, 578 workflow templates, hardware-aware model selection, self-updating knowledge substrate, manga end-to-end pipeline.",
       "version": "0.0.0",
