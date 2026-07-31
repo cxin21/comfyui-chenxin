@@ -186,19 +186,6 @@ bash scripts/validate-marketplace.sh
 
 ---
 
-## 🆚 与 SlavaSexton/ComfyUI-Agent-Kit 的差异
-
-| 维度 | SlavaSexton/ComfyUI-Agent-Kit | comfyui-chenxin(本插件)|
-|---|---|---|
-| 跨 CLI | 4(Claude/Codex/Gemini/Qwen)| **仅 Claude Code**(用户指示)|
-| 配方 | 74(单一来源)| 80 + `recipe_yaml.py` 幂等 YAML 化 |
-| 模板 | 578 | 662(更新快照的 `Comfy-Org/workflow_templates`)|
-| MCP 增强 | 0(直接用上游 MCP)| 4 个独立 Python CLI(auto_launch / vram_decide / template_get / gui_save)|
-| 工作流安全 | 隐式(无 SOT)| `internals/workflow-config-guard.md`(4 步备份-修改-执行-恢复 SOP)+ `internals/workflow-resolver.md`(AnimaStandardV7 + ltx23 73/78 节点映射)|
-| Obsidian 集成 | 无 | Hook + 幂等脚本 + vault 桥 |
-
----
-
 ## 🤝 贡献方式
 
 1. Fork + 新建分支(`phase/PX.Y-task-name`)。

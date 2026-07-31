@@ -54,7 +54,7 @@ if (-not $pluginEntry) {
     $pluginEntry = [pscustomobject]@{
         name = "comfyui-chenxin"
         source = "github"
-        repo  = "chenxin/comfyui-chenxin"
+        repo  = "cxin21/comfyui-chenxin"
         enabled = $true
     }
     $settings.plugins = @($settings.plugins + $pluginEntry)
