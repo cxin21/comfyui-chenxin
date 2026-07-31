@@ -2,20 +2,22 @@
 name: chenxin-core
 description: |
   Use this skill whenever a ComfyUI / generative-model request comes in for
-  Claude Code. Trigger on ANY of: "comfyui", "comfy ui", "workflow", "出图",
-  "跑工作流", "生成图片", "生成视频", "出视频", "manga", "漫画", "anime",
-  "anima", "wan", "ltx", "ltx-2.3", "hunyuan", "flux", "sdxl", "sd 1.5",
-  "sd1.5", "stable diffusion", "krea", "seedream", "nano banana",
-  "Qwen-Image", "ideogram", "Recraft", "Kling", "Seedance", "Veo", "Sora",
-  "Runway", "Luma", "Stable Audio", "ACE-Step", "video", "talking head",
-  "inpaint", "upscale", "controlnet", "IP-Adapter", "refiner", "LoRA",
-  "8 GB VRAM", "8GB", "small VRAM", "low VRAM", "vae", "unload model".
-  This is the L4 mega-skill — it owns the dispatch table from a single Claude
-  Code entry point to L1 (ComfyUI runtime), L2 (MCP driver), L3 (knowledge
-  substrate: 80 recipes + 662 templates + 8 GB hardware matrix), and L5
-  (application skills, future P1.1). For ANY generative-model prompt, read
-  this skill first to find the right tool, recipe, and VRAM-safe defaults
-  before writing the prompt or invoking a workflow.
+  Claude Code. Trigger on ANY of: comfyui, workflow, 出图, 生成视频, manga,
+  漫画, anime, anima, wan, ltx, flux, sdxl, hunyuan, controlnet,
+  IP-Adapter, LoRA. 15 keywords covering: workflow nouns (comfyui,
+  workflow, manga, 漫画, anime), Chinese imperatives (出图, 生成视频),
+  model brands (anima, wan, ltx, flux, sdxl, hunyuan), and feature
+  names (controlnet, IP-Adapter, LoRA). Removed: redundant dupes
+  (sd 1.5/sd1.5, comfyui/comfy ui, 8GB/8 GB VRAM), generic verbs
+  (video, inpaint, upscale — too broad), cloud-vendor names
+  (veo/sora/kling/seedance/runway/luma — not in current recipes).
+  This is the L4 mega-skill — it owns the dispatch table from a single
+  Claude Code entry point to L1 (ComfyUI runtime), L2 (MCP driver), L3
+  (knowledge substrate: 80 recipes + 662 templates + 8 GB hardware
+  matrix), and L5 (application skills, ported in P1.1). For ANY
+  generative-model prompt, read this skill first to find the right tool,
+  recipe, and VRAM-safe defaults before writing the prompt or invoking
+  a workflow.
 ---
 
 # chenxin-core — L4 mega-skill
@@ -84,14 +86,25 @@ When invoked, follow this decision tree:
    - VRAM-safe settings from step 3
    - any user-supplied content (subject, style, mood)
 
-6. Invoke the right L2 tool:
-   - mcp__comfyui-mcp__generate_image            (text-to-image)
-   - mcp__comfyui-mcp__generate_video            (text-to-video)
-   - mcp__comfyui-mcp__generate_audio            (text-to-audio)
-   - mcp__comfyui-mcp__generate_with_controlnet  (controlnet-conditioned)
-   - mcp__comfyui-mcp__generate_with_ip_adapter  (IP-Adapter)
-   - mcp__comfyui-mcp__remove_background         (BiRefNet)
-   - mcp__comfyui-mcp__upscale_image             (ESRGAN upscale)
+6. Invoke the right L2 tool — by intent, not by hardcoded name.
+   L4 does NOT hardcode `mcp__comfyui-mcp__*` tool names because
+   upstream `comfyui-mcp` (npm) renames/adds tools across versions
+   and hardcoded lists go stale immediately. At invocation time:
+     a. Ask: "what is the user trying to do?" (text-to-image,
+        text-to-video, inpaint, upscale, remove-background, etc.)
+     b. List the currently-registered MCP tools via the runtime
+        (Claude Code's MCP discovery surface). Pick the tool whose
+        name + doc string matches the intent. Examples (illustrative,
+        NOT canonical — discover at runtime):
+          - "text-to-image" intent -> look for a `*generate_image*`
+            tool under `mcp__comfyui-mcp__*`
+          - "remove background" intent -> look for a `*remove_background*`
+            or `*bg_*` tool
+          - "upscale" intent -> look for a `*upscale*` tool
+     c. If the matched tool is missing, fail fast with a clear error
+        ("the user's request requires a tool not present in the
+        currently-installed `comfyui-mcp` MCP server; update the
+        package or pick a different workflow").
 
 7. For multi-stage pipelines, hand off to the L5 skill:
    - skills/manga-orchestrator/SKILL.md     (Stage 0–6 coordinator — ported in P1.1)
