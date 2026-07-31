@@ -2,7 +2,7 @@
 
 > **Claude Code 专用的 Local-first ComfyUI 超级技能包。** 80 个模型提示词配方 + 662 个工作流模板 + VRAM 感知模型选择 + 知识自更新 + 漫剧端到端流水线。
 >
-> 英文版请看 → [`README.md`](README.md)。
+> 英文版请看 → [`README.en.md`](README.en.md)。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-FFD27D.svg)](LICENSE)
 [![Claude Code: required](https://img.shields.io/badge/Claude_Code-plugin-5BAEE3.svg)](https://claude.com/claude-code)
