@@ -1,8 +1,8 @@
 # comfyui-chenxin
 
-> **EN**: Local-first ComfyUI mega-skill for Claude Code. 80 model prompt recipes, 662 workflow templates, hardware-aware model selection, self-updating knowledge substrate, manga end-to-end pipeline.
+> **Local-first ComfyUI mega-skill for Claude Code.** 80 model prompt recipes, 662 workflow templates, hardware-aware model selection, self-updating knowledge substrate, manga end-to-end pipeline.
 >
-> **中文**:Local-first(本地优先、零云依赖)ComfyUI 超级技能包,Claude Code 专用。80 个模型提示词配方 + 662 个工作流模板 + VRAM 感知模型选择 + 知识自更新 + 漫剧端到端流水线。
+> Looking for the Chinese version? See [`README.zh.md`](README.zh.md).
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-FFD27D.svg)](LICENSE)
 [![Claude Code: required](https://img.shields.io/badge/Claude_Code-plugin-5BAEE3.svg)](https://claude.com/claude-code)
@@ -11,9 +11,8 @@
 
 ---
 
-## 🚀 Quickstart / 快速开始
+## 🚀 Quickstart
 
-**EN**:
 ```bash
 # 1. Install the plugin in Claude Code
 /plugin marketplace add cxin21/comfyui-chenxin
@@ -23,28 +22,16 @@
 /chenxin-init
 
 # 3. Generate — example: a 5-second Wan 2.2 video of a golden-haired mage
-"用 Wan 2.2 出 5 秒视频:金发精灵女法师释放灭世级魔法"
+"Use Wan 2.2 to render a 5-second video: a golden-haired elf mage
+unleashing world-ending magic, with dialogue + post-audio, 8GB VRAM friendly"
 ```
 
-**中文**:
-```bash
-# 1. 在 Claude Code 中安装插件
-/plugin marketplace add cxin21/comfyui-chenxin
-/plugin install comfyui@chenxin
-
-# 2. (一次性,每台机器) 初始化知识库
-/chenxin-init
-
-# 3. 生成 — 示例:Wan 2.2 出 5 秒金发精灵女法师释放灭世级魔法视频
-"用 Wan 2.2 出 5 秒视频:金发精灵女法师释放灭世级魔法"
-```
-
-**EN Prerequisite** / **前置条件**: local ComfyUI on `http://127.0.0.1:8188` + ≥8 GB VRAM.
+**Prerequisite**: local ComfyUI on `http://127.0.0.1:8188` + ≥ 8 GB VRAM.
 The plugin auto-launches ComfyUI if not running (see [`auto_launch.py`](mcp/extensions/auto_launch.py)).
 
 ---
 
-## 🧭 Architecture / 架构总览
+## 🧭 Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -66,22 +53,22 @@ The plugin auto-launches ComfyUI if not running (see [`auto_launch.py`](mcp/exte
 └─────────────────────────────────────────────────────────────┘
 ```
 
-详见 [`docs/architecture.md`](docs/architecture.md)。
+See [`docs/architecture.md`](docs/architecture.md) for details.
 
 ---
 
-## 📚 完整 Inventory(本仓库所有资源)
+## 📚 Full Inventory
 
-### Skills (11 个) — `skills/`
+### Skills (11 files) — `skills/`
 
-| Skill | Path | Purpose / 用途 | Trigger / 触发词 |
+| Skill | Path | Purpose | Trigger keywords |
 |---|---|---|---|
-| **chenxin-core** | `skills/chenxin-core/SKILL.md` | L4 mega-skill,Routes keywords → tools/recipes/workflows | "comfyui" / "出视频" / "anima" / "wan" / "ltx" etc. |
+| **chenxin-core** | `skills/chenxin-core/SKILL.md` | L4 mega-skill; routes keywords → tools/recipes/workflows | "comfyui" / "出视频" / "anima" / "wan" / "ltx" etc. |
 | **manga-orchestrator** | `skills/manga-orchestrator/SKILL.md` | Stage 0: 6-stage pipeline coordinator | "全自动漫剧" / "auto manga" |
-| **manga-stage-1-lora** | `skills/manga-stage-1-lora/SKILL.md` | LoRA training orchestration(stub, covered by lora-trainer) | "训 LoRA" |
+| **manga-stage-1-lora** | `skills/manga-stage-1-lora/SKILL.md` | LoRA training orchestration (stub, covered by lora-trainer) | "训 LoRA" |
 | **manga-stage-2-panels** | `skills/manga-stage-2-panels/SKILL.md` | Stage 2: Locked `AnimaStandardV7.json` panel generator | "生成分镜" / "stage 2" |
 | **manga-stage-3-review** | `skills/manga-stage-3-review/SKILL.md` | Stage 3: 6-dim aesthetic review (absorbed `aesthetic-judge`) | "审查分镜" / "judge images" |
-| **manga-stage-4-motion** | `skills/manga-stage-4-motion/SKILL.md` | Stage 4: Locked `ltx23AllInOneWorkflowForRTX_v44.json` I2V+talking | "生成分镜视频" / "图生视频" / "talking head" |
+| **manga-stage-4-motion** | `skills/manga-stage-4-motion/SKILL.md` | Stage 4: Locked `ltx23AllInOneWorkflowForRTX_v44.json` I2V + talking | "生成分镜视频" / "图生视频" / "talking head" |
 | **ffmpeg-pipeline** | `skills/ffmpeg-pipeline/SKILL.md` | Stage 5: Concat + SRT + optional burn-in | "加字幕" / "concat" |
 | **lora-trainer** | `skills/lora-trainer/SKILL.md` | Anima Standalone-Trainer wrapper; 8 GB VRAM-friendly | "训 Anima LoRA" / "lora training" |
 | chenxin-core internals (3 files) | `skills/chenxin-core/internals/{recipe_yaml.py,recipe_lookup.py,hardware_decide.py,context_graph.md,workflow-{config-guard,resolver}.md}` | Library helpers | (auto-loaded) |
@@ -89,7 +76,7 @@ The plugin auto-launches ComfyUI if not running (see [`auto_launch.py`](mcp/exte
 
 ### MCP (9 files) — `mcp/`
 
-| File | Purpose / 用途 |
+| File | Purpose |
 |---|---|
 | `mcp/README.md` | Layer-2 driver documentation. Explains 4 CLI extensions + workflow integration. |
 | `mcp/mcp_servers.json` | Registers upstream `comfyui-mcp` (npm, ~108 tools) under `mcpServers.comfyui-mcp` key → agents see `mcp__comfyui-mcp__*`. |
@@ -103,7 +90,7 @@ The plugin auto-launches ComfyUI if not running (see [`auto_launch.py`](mcp/exte
 
 ### Agents (7 files) — `agents/`
 
-| Agent | Purpose / 用途 |
+| Agent | Purpose |
 |---|---|
 | `chenxin-orchestrator.md` | Sonnet, Tool:Read/Bash/Grep/Glob/Task. Reads `SPEC.md`, finds next unchecked phase, spawns builder + reviewer. |
 | `chenxin-builder.md` | Sonnet, Tool:Write/Edit/Read/Bash/Grep/Glob/Skill. Implements one phase scope. |
@@ -158,11 +145,11 @@ Slash commands available once installed:
 
 ---
 
-## 🧪 Tests / 测试(全部 real,**not mock**)
+## 🧪 Tests (all real, not mock)
 
 > Every test in this plugin invokes actual scripts/CLIs/binaries against actual data. **No mocking**. Test suite proves component behavior end-to-end (modulo hardware-dependent ComfyUI server, which the plugin does not require).
 
-| Test | Result | What it actually exercises / 它实际测试什么 |
+| Test | Result | What it actually exercises |
 |---|---|---|
 | `mcp/extensions/test_smoke.sh` | **13/13 PASS** | Calls 4 CLI tools (auto_launch, vram_decide, template_get, gui_save) — verifies CLI surface, JSON-on-stdout, exit-code grammar (0/2/3/4), and that vram_decide returns `blocked=true` for non-existent models. |
 | `tests/test_obsidian_sync.sh` | **4/4 PASS** | Runs `scripts/obsidian-sync.sh` against a real `/tmp/obsidian-sync-sandbox-$$` vault; verifies path-traversal sanitization (hostile EVENT arg → safe filename), event-default-to-unknown, missing-vault non-fatal exit-0. |
@@ -172,6 +159,7 @@ Slash commands available once installed:
 | `scripts/validate-marketplace.sh` | **OK** | Same for `marketplace.json` (cross-checks `plugin.json` name presence + slug regex). |
 
 Run all:
+
 ```bash
 bash mcp/extensions/test_smoke.sh
 bash tests/test_obsidian_sync.sh
@@ -183,40 +171,36 @@ bash scripts/validate-marketplace.sh
 
 ---
 
-## 🔗 Obsidian Vault Integration / Obsidian 集成
+## 🔗 Obsidian Vault Integration
 
-> **EN**: Plugin writes one trace file per material change to the user's Obsidian vault. The contract is enforced via hook + idempotent script.
->
-> **中文**:插件每次写入关键文件(SPEC.md / plugin.json / marketplace.json)时,自动写一条决策笔记到用户的 Obsidian vault,实现双向可追溯。
+The plugin writes one trace file per material change to the user's Obsidian vault. The contract is enforced via hook + idempotent script.
 
-- **Vault default** / 默认路径: `D:/ObsidianWorkSpace/workspace/00-Inbox/processed/`
-- **Override / 可覆盖**: `OBSIDIAN_VAULT_PATH=/path/to/vault bash scripts/obsidian-sync.sh <event>`
-- **Disable / 关闭**: `OBSIDIAN_VAULT_PATH=/dev/null`
+- **Vault default**: `D:/ObsidianWorkSpace/workspace/00-Inbox/processed/`
+- **Override**: `OBSIDIAN_VAULT_PATH=/path/to/vault bash scripts/obsidian-sync.sh <event>`
+- **Disable**: `OBSIDIAN_VAULT_PATH=/dev/null`
 - **Read full contract**: see [`docs/OBSIDIAN_SYNC.md`](docs/OBSIDIAN_SYNC.md)
 - **Troubleshoot**: see [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md)
 
-### Vault-→-Git Sync / 反向同步
+### Vault → Git reverse bridge
 
-> **EN**: Critical vault decisions are mirrored into `docs/vault-bridge/` in this repo (see [`docs/vault-bridge/README.md`](docs/vault-bridge/README.md)), so the team can search them via `git grep` without needing vault access.
->
-> **中文**:关键 vault 决策笔记反向同步到本仓库 `docs/vault-bridge/`(见 [`docs/vault-bridge/README.md`](docs/vault-bridge/README.md)),团队可 `git grep` 检索而无需 vault 访问。
+Critical vault decisions are mirrored into `docs/vault-bridge/` in this repo (see [`docs/vault-bridge/README.md`](docs/vault-bridge/README.md)), so the team can search them via `git grep` without needing vault access.
 
 ---
 
-## 🆚 Differences from SlavaSexton/ComfyUI-Agent-Kit / 与原项目的差异
+## 🆚 Differences from SlavaSexton/ComfyUI-Agent-Kit
 
-| Concern / 维度 | SlavaSexton/ComfyUI-Agent-Kit | comfyui-chenxin (this plugin) |
+| Concern | SlavaSexton/ComfyUI-Agent-Kit | comfyui-chenxin (this plugin) |
 |---|---|---|
-| Cross-CLI / 跨 CLI | 4 (Claude/Codex/Gemini/Qwen) | Claude Code **only** (per user directive) |
-| Recipes / 配方 | 74 (one source) | 80 + idempotent YAML via `recipe_yaml.py` |
-| Templates / 模板 | 578 | 662 (more current snapshot of `Comfy-Org/workflow_templates`) |
-| MCP enhancements / MCP 增强 | 0 (used upstream MCP as-is) | 4 standalone Python CLIs (auto_launch / vram_decide / template_get / gui_save) |
-| Workflow safety / 工作流安全 | Implicit (no SOT) | `internals/workflow-config-guard.md` (4-step backup-modify-execute-restore SOP) + `internals/workflow-resolver.md` (AnimaStandardV7 + ltx23 73/78-node maps) |
-| Obsidian integration / Obsidian 集成 | None | Hook + idempotent script + vault bridge |
+| Cross-CLI | 4 (Claude/Codex/Gemini/Qwen) | Claude Code **only** (per user directive) |
+| Recipes | 74 (one source) | 80 + idempotent YAML via `recipe_yaml.py` |
+| Templates | 578 | 662 (more current snapshot of `Comfy-Org/workflow_templates`) |
+| MCP enhancements | 0 (used upstream MCP as-is) | 4 standalone Python CLIs (auto_launch / vram_decide / template_get / gui_save) |
+| Workflow safety | Implicit (no SOT) | `internals/workflow-config-guard.md` (4-step backup-modify-execute-restore SOP) + `internals/workflow-resolver.md` (AnimaStandardV7 + ltx23 73/78-node maps) |
+| Obsidian integration | None | Hook + idempotent script + vault bridge |
 
 ---
 
-## 🤝 Contributing / 贡献方式
+## 🤝 Contributing
 
 1. Fork + branch (`phase/PX.Y-task-name`).
 2. Implement + commit (`scripts/install.sh`).
@@ -228,7 +212,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for full conventions.
 
 ---
 
-## 📜 License / 许可证
+## 📜 License
 
 MIT — see [`LICENSE`](LICENSE).
 
@@ -236,7 +220,7 @@ Third-party attributions: [`ATTRIBUTION.md`](ATTRIBUTION.md).
 
 ---
 
-## 🔗 Links / 相关链接
+## 🔗 Links
 
 - GitHub: https://github.com/cxin21/comfyui-chenxin
 - Inspiration: [SlavaSexton/ComfyUI-Agent-Kit](https://github.com/SlavaSexton/ComfyUI-Agent-Kit)
