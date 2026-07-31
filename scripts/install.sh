@@ -69,7 +69,7 @@ plugins = [p for p in plugins if not (isinstance(p, dict) and p.get("name") == "
 plugins.append({
     "name": "comfyui-chenxin",
     "source": "github",
-    "repo": "chenxin/comfyui-chenxin",
+    "repo": "cxin21/comfyui-chenxin",
     "enabled": True,
 })
 

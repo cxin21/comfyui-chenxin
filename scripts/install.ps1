@@ -84,7 +84,7 @@ else {
 # ----- 3. Print next-action instructions ----------------------------------- #
 
 Write-Step "next: in Claude Code, run"
-Write-Host "         /plugin marketplace add chenxin/comfyui-chenxin"
+Write-Host "         /plugin marketplace add cxin21/comfyui-chenxin"
 Write-Host "         /plugin install comfyui@chenxin"
 Write-Host "         /chenxin-init"
 Write-Step "DONE."
