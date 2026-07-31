@@ -8,9 +8,21 @@ PLUGIN="${ROOT}/.claude-plugin/plugin.json"
 
 [ -f "$MARKET" ] || { echo "[FAIL] missing $MARKET"; exit 2; }
 [ -f "$PLUGIN" ] || { echo "[FAIL] missing $PLUGIN"; exit 2; }
-command -v python3 >/dev/null || { echo "[FAIL] python3 required"; exit 2; }
 
-python3 "$MARKET" "$PLUGIN" << 'PYEOF'
+# Pick a working Python. Avoid Windows Microsoft-Store python3 stub
+# that exits 49 with no execution. Prefer `python` (if present), then
+# `python3.11`, then fall back to `python3`.
+PY="${PYTHON:-}"
+if [ -z "$PY" ]; then
+    if command -v python >/dev/null 2>&1; then PY=python
+    elif command -v python3.11 >/dev/null 2>&1; then PY=python3.11
+    elif command -v python3 >/dev/null 2>&1; then PY=python3
+    else PY=python
+    fi
+fi
+command -v "$PY" >/dev/null 2>&1 || { echo "[FAIL] python required"; exit 2; }
+
+"$PY" - "$MARKET" "$PLUGIN" << 'PYEOF'
 import json, re, sys
 MARKET, PLUGIN = sys.argv[1], sys.argv[2]
 market = json.load(open(MARKET))
