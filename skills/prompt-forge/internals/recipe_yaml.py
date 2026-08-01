@@ -20,6 +20,8 @@ Stdlib only (Python 3.11+).
 from __future__ import annotations
 
 import argparse
+import ast
+import json
 import re
 import sys
 from pathlib import Path
@@ -308,6 +310,78 @@ def normalize(text: str) -> str:
     return result
 
 
+def _persist_alias_to_file(aliases_path: Path, alias_norm: str, canonicals_list: list[str]) -> None:
+    """Persist `alias_norm` -> `canonicals_list` inside the ALIASES dict of
+    `aliases_path` using stdlib ast (no regex text-marker hacks).
+
+    Locates the ALIASES dict literal via ast.parse, then mutates the source
+    *within the dict's exact line bounds*:
+
+    - If `alias_norm` already exists as a key, the existing entry is replaced
+      in place (idempotent update; multi-line values supported).
+    - Otherwise a new entry is inserted just before the dict's closing `}`.
+
+    Because the modification is bounded by the dict literal's source range,
+    all surrounding code (module docstring, type annotations, helper
+    functions, blank lines, comments) is preserved verbatim.
+
+    Handles both `ALIASES = {...}` (ast.Assign) and
+    `ALIASES: dict[str, list[str]] = {...}` (ast.AnnAssign) forms.
+
+    Raises RuntimeError if the file is not valid Python or the ALIASES
+    dict cannot be located.
+    """
+    text = aliases_path.read_text(encoding="utf-8")
+    try:
+        tree = ast.parse(text)
+    except SyntaxError as exc:
+        raise RuntimeError(f"_aliases.py is not valid Python: {exc}") from exc
+
+    # Find the ALIASES dict literal.
+    dict_node = None
+    for node in ast.walk(tree):
+        value = None
+        if isinstance(node, ast.Assign):
+            if any(isinstance(t, ast.Name) and t.id == "ALIASES" for t in node.targets):
+                value = node.value
+        elif isinstance(node, ast.AnnAssign):
+            if isinstance(node.target, ast.Name) and node.target.id == "ALIASES":
+                value = node.value
+        if isinstance(value, ast.Dict):
+            dict_node = value
+            break
+
+    if dict_node is None:
+        raise RuntimeError("ALIASES dict not found in _aliases.py")
+
+    # Find existing key (if any) for idempotent update.
+    existing_key_node = None
+    existing_value_end_lineno = None
+    for key, val in zip(dict_node.keys, dict_node.values):
+        if isinstance(key, ast.Constant) and key.value == alias_norm:
+            existing_key_node = key
+            existing_value_end_lineno = val.end_lineno
+            break
+
+    new_entry_line = f'    "{alias_norm}": {json.dumps(canonicals_list)},\n'
+    lines = text.splitlines(keepends=True)
+
+    if existing_key_node is not None and existing_value_end_lineno is not None:
+        # Replace existing entry in place (handle multi-line values).
+        start_idx = existing_key_node.lineno - 1
+        end_idx = existing_value_end_lineno - 1
+        lines[start_idx : end_idx + 1] = [new_entry_line]
+    else:
+        # Insert new entry just before the dict's closing `}`.
+        # end_lineno is 1-indexed and points at the `}` line; converting to
+        # 0-indexed gives the position the `}` currently occupies. Inserting
+        # at that index pushes the `}` down by one line.
+        insert_idx = dict_node.end_lineno - 1
+        lines.insert(insert_idx, new_entry_line)
+
+    aliases_path.write_text("".join(lines), encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
     _require_python_311()
     parser = argparse.ArgumentParser(
@@ -325,11 +399,93 @@ def main(argv: list[str] | None = None) -> int:
         default=MODELS_PATH,
         help=f"Path to MODELS.md (default: {MODELS_PATH})",
     )
+    parser.add_argument(
+        "--validate-schema",
+        action="store_true",
+        help="Check that every recipe has required fields (id, dialect). Exits 1 on failure.",
+    )
+    parser.add_argument(
+        "--add-alias",
+        metavar="ALIAS=CANONICAL",
+        help="Append an alias to internals/_aliases.ALIASES.",
+    )
+    parser.add_argument(
+        "--list-aliases",
+        action="store_true",
+        help="Dump alias table as JSON.",
+    )
     args = parser.parse_args(argv)
 
     if not args.path.exists():
         sys.stderr.write(f"[recipe_yaml] file not found: {args.path}\n")
         return 3
+
+    if args.list_aliases:
+        from _aliases import ALIASES
+        json.dump(ALIASES, sys.stdout, indent=2, ensure_ascii=False)
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+        return 0
+
+    if args.add_alias:
+        from _aliases import ALIASES
+        if "=" not in args.add_alias:
+            print("[recipe_yaml] --add-alias requires ALIAS=CANONICAL", file=sys.stderr)
+            return 2
+        alias_key, _, canonicals = args.add_alias.partition("=")
+        alias_norm = alias_key.lower().strip()
+        canonicals_list = [c.strip() for c in canonicals.split(",") if c.strip()]
+        if not canonicals_list:
+            print("[recipe_yaml] --add-alias requires at least one canonical id", file=sys.stderr)
+            return 2
+        ALIASES[alias_norm] = canonicals_list
+        aliases_path = Path(__file__).resolve().parent / "_aliases.py"
+        try:
+            _persist_alias_to_file(aliases_path, alias_norm, canonicals_list)
+        except RuntimeError as exc:
+            print(f"[recipe_yaml] {exc}", file=sys.stderr)
+            return 3
+        print(f"[recipe_yaml] added alias '{alias_norm}' → {canonicals_list}")
+        return 0
+
+    if args.validate_schema:
+        text = args.path.read_text(encoding="utf-8") if args.path.exists() else ""
+        errors: list[str] = []
+        seen_ids: set[str] = set()
+        block_re = re.compile(r"^---\n(.*?)\n---\n", re.M | re.S)
+        recipe_idx = 0
+        for m in block_re.finditer(text):
+            yaml_text = m.group(1)
+            # Only treat as a recipe if the first non-blank line is an `id:` key.
+            # This filters out the file-level frontmatter and markdown sections
+            # that use `---` as horizontal rules (mirrors v4 _detect_recipe_blocks).
+            first_key = None
+            for ln in yaml_text.splitlines():
+                if ln.strip() == "":
+                    continue
+                first_key = ln
+                break
+            if not first_key or not _YAML_KEY_RE.match(first_key) or _YAML_KEY_RE.match(first_key).group(1) != "id":
+                continue
+            m_id = re.search(r"^id:\s*(\S+)", yaml_text, re.M)
+            if not m_id:
+                errors.append(f"recipe #{recipe_idx}: missing 'id' value")
+                recipe_idx += 1
+                continue
+            id_val = m_id.group(1)
+            if not re.match(r"^[a-z0-9_-]+$", id_val):
+                errors.append(f"recipe '{id_val}': id contains invalid chars")
+            if id_val in seen_ids:
+                errors.append(f"recipe '{id_val}': duplicate id")
+            seen_ids.add(id_val)
+            recipe_idx += 1
+        if errors:
+            for e in errors:
+                print(f"[recipe_yaml] {e}", file=sys.stderr)
+            print(f"[recipe_yaml] {len(errors)} schema error(s)", file=sys.stderr)
+            return 1
+        print(f"[recipe_yaml] schema OK ({len(seen_ids)} recipes)")
+        return 0
 
     original = args.path.read_text(encoding="utf-8")
     rewritten = normalize(original)
