@@ -1,121 +1,111 @@
 ---
 name: lora-trainer
-description: "Anima LoRA 训练编排 (v2.2) — 单路径：gazingstars123/Anima-Standalone-Trainer 独立 venv。8GB VRAM 友好，无需 ComfyUI 在线。Also load prompt-forge first for VRAM/recipe context."
+description: "Anima LoRA 璁粌缂栨帓 (v2.2) 鈥?鍗曡矾寰勶細gazingstars123/Anima-Standalone-Trainer 鐙珛 venv銆?GB VRAM 鍙嬪ソ锛屾棤闇€ ComfyUI 鍦ㄧ嚎銆侫lso load prompt-forge first for VRAM/recipe context."
 version: 2.3.0
 author: Claude Code
 triggers:
-  - "训练 LoRA"
-  - "训 LoRA"
-  - "训 Anima LoRA"
+  - "璁粌 LoRA"
+  - "璁?LoRA"
+  - "璁?Anima LoRA"
   - "train LoRA"
   - "lora training"
-  - "训角色"
-  - "训场景"
+  - "璁鑹?
+  - "璁満鏅?
 allowed-tools: Bash, Read, Write, "mcp__comfyui-mcp__*"
 ---
 
-# Lora Trainer — Anima LoRA 训练编排 (v2.3, ported)
+# Lora Trainer 鈥?Anima LoRA 璁粌缂栨帓 (v2.3, ported)
 
 > **Plugin path**: `skills/lora-trainer/SKILL.md`
-> **Upstream**: L5 application skill. Load `prompt-forge` (L4) first for VRAM/recipe context —
-> this skill targets Anima 1.0 (~2B Cosmos DiT) so VRAM/quant choices from
+> **Upstream**: L5 application skill. Load `prompt-forge` (L4) first for VRAM/recipe context 鈥?> this skill targets Anima 1.0 (~2B Cosmos DiT) so VRAM/quant choices from
 > `hardware/8gb.json` directly affect training defaults.
 
-## 1. 工具概览
+## 1. 宸ュ叿姒傝
 
-| 维度 | 值 |
+| 缁村害 | 鍊?|
 |------|-----|
-| **工具** | [gazingstars123/Anima-Standalone-Trainer](https://github.com/gazingstars123/Anima-Standalone-Trainer) |
-| **路径** | `E:/Comfy/Anima-Standalone-Trainer` |
-| **venv** | `E:/Comfy/Anima-Standalone-Trainer/venv`（Python 3.12 + torch 2.7 + CUDA 12.8） |
-| **入口脚本** | `skills/lora-trainer/scripts/train-anima-standalone.sh` |
-| **训练入口** | `accelerate launch anima_train_network.py --config_file <toml>` |
-| **VRAM** | < 6GB（Anima 小模型 + fused QKV + TP/SP 优化） |
-| **ComfyUI 依赖** | **不需要**（独立 venv） |
-| **配置方式** | toml 文件（训练 + 数据集分离） |
-| **Web UI** | `training-ui/start_training_ui_anima.bat` → `http://localhost:3000` |
+| **宸ュ叿** | [gazingstars123/Anima-Standalone-Trainer](https://github.com/gazingstars123/Anima-Standalone-Trainer) |
+| **璺緞** | `E:/Comfy/Anima-Standalone-Trainer` |
+| **venv** | `E:/Comfy/Anima-Standalone-Trainer/venv`锛圥ython 3.12 + torch 2.7 + CUDA 12.8锛?|
+| **鍏ュ彛鑴氭湰** | `skills/lora-trainer/scripts/train-anima-standalone.sh` |
+| **璁粌鍏ュ彛** | `accelerate launch anima_train_network.py --config_file <toml>` |
+| **VRAM** | < 6GB锛圓nima 灏忔ā鍨?+ fused QKV + TP/SP 浼樺寲锛?|
+| **ComfyUI 渚濊禆** | **涓嶉渶瑕?*锛堢嫭绔?venv锛?|
+| **閰嶇疆鏂瑰紡** | toml 鏂囦欢锛堣缁?+ 鏁版嵁闆嗗垎绂伙級 |
+| **Web UI** | `training-ui/start_training_ui_anima.bat` 鈫?`http://localhost:3000` |
 
-## 2. 触发词
-
+## 2. 瑙﹀彂璇?
 ```
-"训练 LoRA" / "训 LoRA" / "train LoRA" / "lora training" / "训 Anima LoRA" / "训角色" / "训场景"
+"璁粌 LoRA" / "璁?LoRA" / "train LoRA" / "lora training" / "璁?Anima LoRA" / "璁鑹? / "璁満鏅?
 ```
 
-## 3. 必需模型
+## 3. 蹇呴渶妯″瀷
 
-| 模型 | 路径 | 大小 |
+| 妯″瀷 | 璺緞 | 澶у皬 |
 |------|------|------|
 | DiT | `E:/Comfy/comfyui-licyk-20260608/core/models/checkpoints/anima_baseV10.safetensors` | 4.18GB |
 | Qwen3 TE | `E:/Comfy/comfyui-licyk-20260608/core/models/text_encoders/qwen_3_06b_base.safetensors` | 1.19GB |
 | VAE | `E:/Comfy/comfyui-licyk-20260608/core/models/vae/qwen_image_vae.safetensors` | 254MB |
 
-## 4. 入口命令
+## 4. 鍏ュ彛鍛戒护
 
 ```bash
-# 最小可用
-bash skills/lora-trainer/scripts/train-anima-standalone.sh \
+# 鏈€灏忓彲鐢?bash skills/lora-trainer/scripts/train-anima-standalone.sh \
   --name <name> --refs "<refs_dir>"
 
-# 自定义参数 + deploy 到 ComfyUI loras/
+# 鑷畾涔夊弬鏁?+ deploy 鍒?ComfyUI loras/
 bash skills/lora-trainer/scripts/train-anima-standalone.sh \
-  --name ninghongye --refs "E:/Comfy/LoRA/永劫-宁红夜" \
+  --name ninghongye --refs "E:/Comfy/LoRA/姘稿姭-瀹佺孩澶? \
   --epochs 10 --lr 3e-5 --resolution 768,768 --deploy
 
-# 复用已有 toml（不覆盖）
-bash skills/lora-trainer/scripts/train-anima-standalone.sh \
+# 澶嶇敤宸叉湁 toml锛堜笉瑕嗙洊锛?bash skills/lora-trainer/scripts/train-anima-standalone.sh \
   --name <name> --refs <dir> --train-toml <path> --no-auto-toml
 ```
 
-完整参数：`--help` 查看（支持 `--name` / `--refs` / `--output` / `--train-toml` / `--dataset-toml` / `--epochs` / `--lr` / `--dim` / `--alpha` / `--resolution` / `--seed` / `--deploy` / `--log-dir` / `--no-auto-toml` / `--dry-run`）。
+瀹屾暣鍙傛暟锛歚--help` 鏌ョ湅锛堟敮鎸?`--name` / `--refs` / `--output` / `--train-toml` / `--dataset-toml` / `--epochs` / `--lr` / `--dim` / `--alpha` / `--resolution` / `--seed` / `--deploy` / `--log-dir` / `--no-auto-toml` / `--dry-run`锛夈€?
+## 5. 杈撳叆鍙傛暟
 
-## 5. 输入参数
-
-| 参数 | 必需 | 默认 | 说明 |
+| 鍙傛暟 | 蹇呴渶 | 榛樿 | 璇存槑 |
 |------|------|------|------|
-| `--name` | ✅ | - | LoRA 名称（用于文件命名 + trigger word） |
-| `--refs` | ✅ | - | 参考图目录 |
-| `--output` | ❌ | `<tool>/output/<name>` | 输出目录 |
-| `--train-toml` | ❌ | `<tool>/train_<name>.toml` | 训练 toml（默认自动生成） |
-| `--dataset-toml` | ❌ | `<tool>/dataset_<name>.toml` | 数据集 toml（默认自动生成） |
-| `--epochs` | ❌ | 5 | 训练轮数 |
-| `--lr` | ❌ | 5e-5 | 学习率 |
-| `--dim` | ❌ | 16 | LoRA dim |
-| `--alpha` | ❌ | 16 | LoRA alpha |
-| `--resolution` | ❌ | 1024,1024 | 分辨率（8GB VRAM 友好降到 768,768） |
-| `--seed` | ❌ | 42 | 随机种子 |
-| `--deploy` | ❌ | false | 训练完后 deploy 到 ComfyUI loras/ |
-| `--log-dir` | ❌ | `<tool>/output/<name>/logs` | 日志目录 |
-| `--no-auto-toml` | ❌ | false | 不自动生成 toml（仅用已有的） |
-| `--dry-run` | ❌ | false | 只显示要跑的命令 |
+| `--name` | 鉁?| - | LoRA 鍚嶇О锛堢敤浜庢枃浠跺懡鍚?+ trigger word锛?|
+| `--refs` | 鉁?| - | 鍙傝€冨浘鐩綍 |
+| `--output` | 鉂?| `<tool>/output/<name>` | 杈撳嚭鐩綍 |
+| `--train-toml` | 鉂?| `<tool>/train_<name>.toml` | 璁粌 toml锛堥粯璁よ嚜鍔ㄧ敓鎴愶級 |
+| `--dataset-toml` | 鉂?| `<tool>/dataset_<name>.toml` | 鏁版嵁闆?toml锛堥粯璁よ嚜鍔ㄧ敓鎴愶級 |
+| `--epochs` | 鉂?| 5 | 璁粌杞暟 |
+| `--lr` | 鉂?| 5e-5 | 瀛︿範鐜?|
+| `--dim` | 鉂?| 16 | LoRA dim |
+| `--alpha` | 鉂?| 16 | LoRA alpha |
+| `--resolution` | 鉂?| 1024,1024 | 鍒嗚鲸鐜囷紙8GB VRAM 鍙嬪ソ闄嶅埌 768,768锛?|
+| `--seed` | 鉂?| 42 | 闅忔満绉嶅瓙 |
+| `--deploy` | 鉂?| false | 璁粌瀹屽悗 deploy 鍒?ComfyUI loras/ |
+| `--log-dir` | 鉂?| `<tool>/output/<name>/logs` | 鏃ュ織鐩綍 |
+| `--no-auto-toml` | 鉂?| false | 涓嶈嚜鍔ㄧ敓鎴?toml锛堜粎鐢ㄥ凡鏈夌殑锛?|
+| `--dry-run` | 鉂?| false | 鍙樉绀鸿璺戠殑鍛戒护 |
 
-## 6. 前置检查
+## 6. 鍓嶇疆妫€鏌?
+- 鍙傝€冨浘 鈮?5 寮狅紙**瀹炴祴 2 寮犱篃鑳借窇锛屼粎渚涙祦绋嬮獙璇?*锛?0+ 寮犳墠鏄敓浜ц川閲忛棬妲涳級
+- venv 瀹屾暣锛坄E:/Comfy/Anima-Standalone-Trainer/venv/Scripts/python.exe` + `accelerate.exe`锛?- 涓変釜妯″瀷鏂囦欢瀛樺湪锛圖iT + Qwen3 + VAE锛?
+## 7. 鑷姩 caption
 
-- 参考图 ≥ 5 张（**实测 2 张也能跑，仅供流程验证**；30+ 张才是生产质量门槛）
-- venv 完整（`E:/Comfy/Anima-Standalone-Trainer/venv/Scripts/python.exe` + `accelerate.exe`）
-- 三个模型文件存在（DiT + Qwen3 + VAE）
-
-## 7. 自动 caption
-
-缺失 `.txt` 时自动用模板生成（trigger word + 通用描述）：
+缂哄け `.txt` 鏃惰嚜鍔ㄧ敤妯℃澘鐢熸垚锛坱rigger word + 閫氱敤鎻忚堪锛夛細
 
 ```bash
 "{name}, 1girl, detailed face, high quality, intricate detail"
 ```
 
-可手动编辑 `<image_basename>.txt` 自定义。
+鍙墜鍔ㄧ紪杈?`<image_basename>.txt` 鑷畾涔夈€?
+## 8. 鑷姩 toml
 
-## 8. 自动 toml
+缂哄け `train_<name>.toml` + `dataset_<name>.toml` 鏃惰嚜鍔ㄧ敓鎴愶細
 
-缺失 `train_<name>.toml` + `dataset_<name>.toml` 时自动生成：
+- `train_<name>.toml`锛歚[model_arguments]` + `[dataset_arguments]` + `[training_arguments]` + `[anima_arguments]` + `[network_arguments]`
+- `dataset_<name>.toml`锛歚[general]` (enable_bucket, min/max_bucket_reso) + `[[datasets]]` subsets (image_dir, num_repeats=10, caption_extension=".txt")
 
-- `train_<name>.toml`：`[model_arguments]` + `[dataset_arguments]` + `[training_arguments]` + `[anima_arguments]` + `[network_arguments]`
-- `dataset_<name>.toml`：`[general]` (enable_bucket, min/max_bucket_reso) + `[[datasets]]` subsets (image_dir, num_repeats=10, caption_extension=".txt")
+## 9. 娴嬭瘯鍥剧敓鎴?
+5 涓満鏅紙鑷姩鐢?`templates/test-prompts.yaml`锛夛細
 
-## 9. 测试图生成
-
-5 个场景（自动用 `templates/test-prompts.yaml`）：
-
-| 序号 | 风格 | filename_prefix |
+| 搴忓彿 | 椋庢牸 | filename_prefix |
 |------|------|----------------|
 | 001 | realistic | `<name>_test_001_realistic` |
 | 002 | anime | `<name>_test_002_anime` |
@@ -123,20 +113,15 @@ bash skills/lora-trainer/scripts/train-anima-standalone.sh \
 | 004 | oilpaint | `<name>_test_004_oilpaint` |
 | 005 | digitalart | `<name>_test_005_digitalart` |
 
-每个 prompt 替换 `{trigger_word}` 占位符。
-
-## 10. 评分与验证
-
+姣忎釜 prompt 鏇挎崲 `{trigger_word}` 鍗犱綅绗︺€?
+## 10. 璇勫垎涓庨獙璇?
 ```bash
-# 用 manga-stage-3-review 内部 6 维算法评分
-# 5 张图：
-#   总分 ≥ 7/10 → lora_verified: true
-#   总分 < 7/10 → 调整 LoRA 强度/重训/换 trigger_word
+# 鐢?manga-stage-3-review 鍐呴儴 6 缁寸畻娉曡瘎鍒?# 5 寮犲浘锛?#   鎬诲垎 鈮?7/10 鈫?lora_verified: true
+#   鎬诲垎 < 7/10 鈫?璋冩暣 LoRA 寮哄害/閲嶈/鎹?trigger_word
 ```
 
-**lora_verified** 必须写入 `02_assets/<target>/04_metadata.yaml.lora_verified`。
-
-## 11. 输出 metadata 示例
+**lora_verified** 蹇呴』鍐欏叆 `02_assets/<target>/04_metadata.yaml.lora_verified`銆?
+## 11. 杈撳嚭 metadata 绀轰緥
 
 ```yaml
 # 02_assets/<target>/04_metadata.yaml
@@ -160,38 +145,33 @@ test_generations: 02_assets/<target>/05_test_generations/
     verified: true
 ```
 
-## 12. 架构
+## 12. 鏋舵瀯
 
-| 阶段 | 谁做 | 工具 |
+| 闃舵 | 璋佸仛 | 宸ュ叿 |
 |------|------|------|
-| 检查参考图 | bash | `scripts/validate-refs.sh` |
-| Caption 自动生成 | bash | 缺失时用 trigger word 模板 |
-| Toml 自动生成 | bash | 缺失时生成训练 + 数据集 toml |
-| 训练 | bash | `scripts/train-anima-standalone.sh` → `accelerate-launch` |
-| 测试图 | Agent | `mcp__comfyui-mcp__generate_image` × 5 |
-| 评分 | Agent | manga-stage-3-review 内部 6 维算法 skill |
-| deploy | bash | `scripts/train-anima-standalone.sh --deploy` |
+| 妫€鏌ュ弬鑰冨浘 | bash | `scripts/validate-refs.sh` |
+| Caption 鑷姩鐢熸垚 | bash | 缂哄け鏃剁敤 trigger word 妯℃澘 |
+| Toml 鑷姩鐢熸垚 | bash | 缂哄け鏃剁敓鎴愯缁?+ 鏁版嵁闆?toml |
+| 璁粌 | bash | `scripts/train-anima-standalone.sh` 鈫?`accelerate-launch` |
+| 娴嬭瘯鍥?| Agent | `mcp__comfyui-mcp__generate_image` 脳 5 |
+| 璇勫垎 | Agent | manga-stage-3-review 鍐呴儴 6 缁寸畻娉?skill |
+| deploy | bash | ⚠ TODO(P3.x) `scripts/train-anima-standalone.sh --deploy`（脚本未补） |
 
-## 13. 已知 Caveats
+## 13. 宸茬煡 Caveats
 
-1. **数据量影响质量**：< 5 张图训练效果弱（仅供流程验证）；30+ 张图才能产出可用 LoRA
-2. **Web UI 与 ComfyUI 不冲突**：Web UI (3000) vs ComfyUI (8188) 端口独立
-3. **VRAM 共享**：独立 venv，但 ComfyUI 在线时仍共享 GPU（8GB 限制下需注意）
-4. **lora_verified 必要**：未通过评分不能进入 Stage 2
-5. **caption 模板可改**：自动生成的 .txt 是模板，复杂场景应手动编辑或用 WD14 Tagger
+1. **鏁版嵁閲忓奖鍝嶈川閲?*锛? 5 寮犲浘璁粌鏁堟灉寮憋紙浠呬緵娴佺▼楠岃瘉锛夛紱30+ 寮犲浘鎵嶈兘浜у嚭鍙敤 LoRA
+2. **Web UI 涓?ComfyUI 涓嶅啿绐?*锛歐eb UI (3000) vs ComfyUI (8188) 绔彛鐙珛
+3. **VRAM 鍏变韩**锛氱嫭绔?venv锛屼絾 ComfyUI 鍦ㄧ嚎鏃朵粛鍏变韩 GPU锛?GB 闄愬埗涓嬮渶娉ㄦ剰锛?4. **lora_verified 蹇呰**锛氭湭閫氳繃璇勫垎涓嶈兘杩涘叆 Stage 2
+5. **caption 妯℃澘鍙敼**锛氳嚜鍔ㄧ敓鎴愮殑 .txt 鏄ā鏉匡紝澶嶆潅鍦烘櫙搴旀墜鍔ㄧ紪杈戞垨鐢?WD14 Tagger
 
-## 14. 版本
+## 14. 鐗堟湰
 
-- **v2.3.0**（2026-07-30）：P1.1 ported — frontmatter 声明 prompt-forge 上游；路径全部改为 plugin 内
-- v2.2.0（2026-07-28）：单路径（Anima Standalone Trainer only）；删除路径 A/B/C 相关 helper（`train-sd.sh`、`train-anima.sh`、`convert-anima.sh`、`deploy-lora.sh`、`path-detector.sh`）；SKILL.md 大幅简化
-- v2.1.0（2026-07-27）：新增路径 D（4 路径并行）；默认推荐从 B 改 D
-- v2.0.0（2026-07-27）：3 路径并行（lora-scripts / anima-lora-trainer / ai-toolkit-trainer）
-- v1.0.0（旧）：仅 lora-scripts（kohya-ss）单路径
+- **v2.3.0**锛?026-07-30锛夛細P1.1 ported 鈥?frontmatter 澹版槑 prompt-forge 涓婃父锛涜矾寰勫叏閮ㄦ敼涓?plugin 鍐?- v2.2.0锛?026-07-28锛夛細鍗曡矾寰勶紙Anima Standalone Trainer only锛夛紱鍒犻櫎璺緞 A/B/C 鐩稿叧 helper锛坄train-sd.sh`銆乣train-anima.sh`銆乣convert-anima.sh`銆乣deploy-lora.sh`銆乣path-detector.sh`锛夛紱SKILL.md 澶у箙绠€鍖?- v2.1.0锛?026-07-27锛夛細鏂板璺緞 D锛? 璺緞骞惰锛夛紱榛樿鎺ㄨ崘浠?B 鏀?D
+- v2.0.0锛?026-07-27锛夛細3 璺緞骞惰锛坙ora-scripts / anima-lora-trainer / ai-toolkit-trainer锛?- v1.0.0锛堟棫锛夛細浠?lora-scripts锛坘ohya-ss锛夊崟璺緞
 
-## 15. 相关引用
+## 15. 鐩稿叧寮曠敤
 
-- **上游**: `skills/prompt-forge/SKILL.md`（L4 — 必须先加载 for VRAM/recipe）
-- 工具：[gazingstars123/Anima-Standalone-Trainer](https://github.com/gazingstars123/Anima-Standalone-Trainer)
-- 上游: `skills/manga-orchestrator/SKILL.md` (Stage 0)
-- 下游: `skills/manga-stage-2-panels/SKILL.md` (Stage 2)
-- 评分器: manga-stage-3-review 内部 6 维算法 skill
+- **涓婃父**: `skills/prompt-forge/SKILL.md`锛圠4 鈥?蹇呴』鍏堝姞杞?for VRAM/recipe锛?- 宸ュ叿锛歔gazingstars123/Anima-Standalone-Trainer](https://github.com/gazingstars123/Anima-Standalone-Trainer)
+- 涓婃父: `skills/manga-orchestrator/SKILL.md` (Stage 0)
+- 涓嬫父: `skills/manga-stage-2-panels/SKILL.md` (Stage 2)
+- 璇勫垎鍣? manga-stage-3-review 鍐呴儴 6 缁寸畻娉?skill

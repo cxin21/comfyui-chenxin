@@ -25,7 +25,7 @@
 "用 ComfyUI 自带 text-to-image 模板生成一张金发精灵女法师在樱花树下释放魔法的图, 1024x1024"
 ```
 
-**前置条件**:本地 ComfyUI 服务于 `http://127.0.0.1:8188` + ≥ 8 GB 显存。插件未检测到 ComfyUI 运行时会自动拉起(见 [`auto_launch.py`](mcp/extensions/auto_launch.py))。
+**前置条件**:本地 ComfyUI 服务于 `http://127.0.0.1:8188` + ≥ 8 GB 显存。插件未检测到 ComfyUI 运行时会自动拉起(由 `scripts/bootstrap.sh` 完成)。
 
 ---
 
@@ -76,15 +76,8 @@
 
 | 文件 | 用途 |
 |---|---|
-| `mcp/README.md` | Layer-2 驱动文档。说明 4 个 CLI 增强 + 工作流集成。 |
-| `mcp/mcp_servers.json` | 注册上游 `comfyui-mcp`(npm,~108 工具)key 为 `comfyui-mcp` → 智能体可见为 `mcp__comfyui-mcp__*`。 |
-| `mcp/extensions/_shared.py` | 辅助函数:`wait_for_port`、`wait_for_http`、`load_hardware`(支持 `8.json` 或 `8gb.json` 回退)、`load_templates_index`、`resolve_comfyui_path`,JSON 标准输出契约。 |
-| `mcp/extensions/auto_launch.py` | 按需拉起 ComfyUI;轮询 `/system_stats` 直至 200。 |
-| `mcp/extensions/vram_decide.py` | 读 `hardware/<vram>.json`;输出 quant + 采样器默认值 + 阻塞标记。 |
-| `mcp/extensions/template_get.py` | 按 use_case / modality / category 过滤 `templates_index.json`。 |
-| `mcp/extensions/gui_save.py` | 将工作流 JSON 保存到 ComfyUI `user/default/workflows/`,带 `_manifest.json` 附属。 |
-| `mcp/extensions/test_smoke.sh` | 4 个 CLI 冒烟测试(13/13 通过)。 |
-| `mcp/extensions/__init__.py` | 包标记。 |
+| `mcp/README.md` | Layer-2 驱动文档。仅注册上游 npm MCP server。 |
+| `mcp/mcp_servers.json` | 注册上游 `comfyui-mcp`(npm,~108 工具)key 为 `comfyui-mcp` → 智能体可见为 `mcp__comfyui-mcp__*`。本仓库不再维护 stdlib CLI 层。 |
 
 ### Agents(7 个) — `agents/`
 
@@ -149,7 +142,6 @@
 
 | 测试 | 结果 | 实际测试内容 |
 |---|---|---|
-| `mcp/extensions/test_smoke.sh` | **13/13 PASS** | 调 4 个 CLI 工具(auto_launch、vram_decide、template_get、gui_save)— 校验 CLI 表面、stdout JSON 契约、退出码语法(0/2/3/4),以及 vram_decide 对不存在模型返回 `blocked=true`。 |
 | `tests/test_obsidian_sync.sh` | **4/4 PASS** | 对真实 `/tmp/obsidian-sync-sandbox-$$` vault 跑 `scripts/obsidian-sync.sh`;校验路径穿越白名单(敌意 EVENT 参数 → 安全文件名)、event 默认 unknown、vault 缺失时非致命退出 0。 |
 | `tests/test_check_updates.sh` | **17/17 PASS** | 对实际 `~/.cache` 和 `git ls-remote` 调 `check_updates.py` 和 `diff_recipes.py`;校验 JSON 封装、--help 退出 0、幂等自 diff(找出 13 个未变配方)。 |
 | `tests/test_applications.sh` | **7/7 PASS** | 通过 `awk` 读每个 SKILL.md;校验 YAML frontmatter 分隔符、`name:` 和 `description:` 存在、`description` 字面含 "prompt-forge"。 |
@@ -159,7 +151,6 @@
 跑全部:
 
 ```bash
-bash mcp/extensions/test_smoke.sh
 bash tests/test_obsidian_sync.sh
 bash tests/test_check_updates.sh
 bash tests/test_applications.sh

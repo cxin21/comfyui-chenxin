@@ -24,7 +24,7 @@ Either the vault doesn't exist (idempotent non-fatal skip) or `EVENT` was empty 
 
 ## Symptom: ComfyUI workflow fails with "VRAM exceeded"
 
-`mcp/extensions/vram_decide.py` reads `skills/prompt-forge/hardware/<vram_gb>.json` (or `<vram_gb>gb.json` — both conventions are honored). If neither file exists for your VRAM, the script returns `sampler_defaults` from the conservative SDXL-style defaults rather than refuse. Update the `hardware/XX.json` profile (or copy `8gb.json` to your actual VRAM tier) to gate correctly.
+The inline hardware probe in `scripts/bootstrap.sh` (formerly `mcp/extensions/vram_decide.py`, inlined 2026-08) reads `skills/prompt-forge/hardware/<vram_gb>.json` (or `<vram_gb>gb.json` — both conventions are honored). If neither file exists for your VRAM, the probe returns `sampler_defaults` from the conservative SDXL-style defaults rather than refuse. Update the `hardware/XX.json` profile (or copy `8gb.json` to your actual VRAM tier) to gate correctly.
 
 ## Symptom: recipe_yaml.py modified a recipe's body, not just added YAML frontmatter
 

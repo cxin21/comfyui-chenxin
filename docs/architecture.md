@@ -43,7 +43,7 @@ L4 pick L3 dialect
     ↓
 L3 ask L2 which template + which model
     ↓
-L2 vram_decide (L3 hardware matrix)
+L2 bootstrap.sh inline probe (L3 hardware matrix)
     ↓
 L2 enqueue workflow (comfyui-mcp)
     ↓

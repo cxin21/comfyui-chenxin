@@ -1,7 +1,7 @@
 {
   "name": "comfyui-chenxin",
   "version": "0.0.0",
-  "description": "Local-first ComfyUI mega-skill: 74 model prompt recipes, 578 workflow templates, hardware-aware model selection, self-updating knowledge substrate, and the manga end-to-end pipeline. For Claude Code only.",
+  "description": "Local-first ComfyUI mega-skill: 80 model prompt recipes, hardware-aware model selection via VRAM decision matrix, prompt orchestration, and the manga end-to-end pipeline. For Claude Code only.",
   "author": {
     "name": "cxin21",
     "url": "https://github.com/cxin21/comfyui-chenxin"
@@ -23,8 +23,5 @@
   "engines": {
     "claude-code": ">=1.0.0"
   },
-  "commands": "./commands",
-  "agents": "./agents",
-  "hooks": "./hooks/hooks.json",
   "mcpServers": "./mcp/mcp_servers.json"
 }

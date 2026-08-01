@@ -63,7 +63,7 @@ t=0      L4 routes to:
          - templates_index.json: img2vid matches → ltx23AllInOneWorkflowForRTX_v44
          - hardware_decide.py: 8GB profile → defaults
 
-t=1s     Agent invokes mcp/extensions/vram_decide.py --vram 8 --model wan
+t=1s     bootstrap.sh inline probe (--vram 8 --model wan)
          → may recommend lowering longer_edge to 1024 if LTX GGUF Q4
 
 t=3s     L2 loads ltx23 workflow + 5-step backup-modify-execute-restore per workflow-config-guard.md

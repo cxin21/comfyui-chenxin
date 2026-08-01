@@ -81,7 +81,30 @@ else {
     Write-Step "copied $mcpSrc -> $mcpDst"
 }
 
-# ----- 3. Print next-action instructions ----------------------------------- #
+# ----- 3. Install npm MCP driver (comfyui-mcp) ----------------------------- #
+# Mirrors scripts/install.sh step 3: ensures the upstream `comfyui-mcp`
+# package is on PATH so mcp/mcp_servers.json's `command: comfyui-mcp` resolves.
+# `npm install -g` may prompt for elevation on Windows; failure is non-fatal
+# because Claude Code falls back to `npx -y comfyui-mcp` on first invocation.
+
+if (Get-Command npm -ErrorAction SilentlyContinue) {
+    $null = npm ls -g comfyui-mcp 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Step "comfyui-mcp already installed globally"
+    }
+    else {
+        Write-Step "installing comfyui-mcp via npm (global; may prompt for elevation)"
+        npm install -g comfyui-mcp 2>&1 | Select-Object -Last 3
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warn "npm install -g comfyui-mcp failed (Claude Code will fall back to npx on first use)"
+        }
+    }
+}
+else {
+    Write-Warn "npm not on PATH — the MCP server will still work via npx on first use, but global install skipped"
+}
+
+# ----- 4. Print next-action instructions ----------------------------------- #
 
 Write-Step "next: in Claude Code, run"
 Write-Host "         /plugin marketplace add cxin21/comfyui-chenxin"

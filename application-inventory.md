@@ -45,7 +45,7 @@ Prior to `531dd62`, the plugin's documentation files used `mcp__comfyui-mcp-serv
 - `agents/comfyui-director.md` — frontmatter `tools:` + entire body references
 - `skills/prompt-forge/SKILL.md` — lines 51 + 88-95 (L4 routing)
 - `skills/prompt-forge/internals/context_graph.md` — lines 12 + 32 (L2 layer description + flow example)
-- `mcp/README.md` — "Boundary with the upstream `comfyui-mcp` driver" section
+- `mcp/README.md` — "Boundary with the rest of the plugin" section
 
 **Verification**: `grep -r "mcp__comfyui-mcp-server" .` returns only `agents/comfyui-director.md:304` — which is the **version-history section explicitly stating** that v3 used this namespace and v4 corrected it. That historical mention is intentionally retained.
 

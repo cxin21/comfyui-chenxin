@@ -27,7 +27,7 @@ unleashing world-ending magic, with dialogue + post-audio, 8GB VRAM friendly"
 ```
 
 **Prerequisite**: local ComfyUI on `http://127.0.0.1:8188` + ≥ 8 GB VRAM.
-The plugin auto-launches ComfyUI if not running (see [`auto_launch.py`](mcp/extensions/auto_launch.py)).
+The plugin auto-launches ComfyUI if not running (handled by `scripts/bootstrap.sh`).
 
 ---
 
@@ -80,13 +80,7 @@ See [`docs/architecture.md`](docs/architecture.md) for details.
 |---|---|
 | `mcp/README.md` | Layer-2 driver documentation. Explains 4 CLI extensions + workflow integration. |
 | `mcp/mcp_servers.json` | Registers upstream `comfyui-mcp` (npm, ~108 tools) under `mcpServers.comfyui-mcp` key → agents see `mcp__comfyui-mcp__*`. |
-| `mcp/extensions/_shared.py` | Helpers: `wait_for_port`, `wait_for_http`, `load_hardware` (with `8.json` OR `8gb.json` fallback), `load_templates_index`, `resolve_comfyui_path`, JSON-on-stdout contract. |
-| `mcp/extensions/auto_launch.py` | Bring up ComfyUI on demand; polls `/system_stats` until 200. |
-| `mcp/extensions/vram_decide.py` | Read `hardware/<vram>.json`; emit quant + sampler defaults + block flag. |
-| `mcp/extensions/template_get.py` | Filter `templates_index.json` by use_case / modality / category. |
-| `mcp/extensions/gui_save.py` | Save workflow JSON to ComfyUI `user/default/workflows/` with `_manifest.json` sidecar. |
-| `mcp/extensions/test_smoke.sh` | Smoke test all 4 CLIs (13/13 pass). |
-| `mcp/extensions/__init__.py` | Package marker. |
+| `mcp/mcp_servers.json` | Registers upstream `comfyui-mcp` (npm, ~108 tools) under `mcpServers.comfyui-mcp` key → agents see `mcp__comfyui-mcp__*`. The repo no longer maintains a stdlib CLI layer. |
 
 ### Agents (7 files) — `agents/`
 
@@ -151,7 +145,6 @@ Slash commands available once installed:
 
 | Test | Result | What it actually exercises |
 |---|---|---|
-| `mcp/extensions/test_smoke.sh` | **13/13 PASS** | Calls 4 CLI tools (auto_launch, vram_decide, template_get, gui_save) — verifies CLI surface, JSON-on-stdout, exit-code grammar (0/2/3/4), and that vram_decide returns `blocked=true` for non-existent models. |
 | `tests/test_obsidian_sync.sh` | **4/4 PASS** | Runs `scripts/obsidian-sync.sh` against a real `/tmp/obsidian-sync-sandbox-$$` vault; verifies path-traversal sanitization (hostile EVENT arg → safe filename), event-default-to-unknown, missing-vault non-fatal exit-0. |
 | `tests/test_check_updates.sh` | **17/17 PASS** | Calls `check_updates.py` and `diff_recipes.py` against actual `~/.cache` and `git ls-remote`; verifies JSON envelope shape, --help exit-0, idempotent self-diff (finds 13 unchanged recipes). |
 | `tests/test_applications.sh` | **7/7 PASS** | Reads each SKILL.md from disk via `awk`; verifies YAML frontmatter delimiter, presence of `name:` and `description:`, `description` contains literal substring `prompt-forge`. |
@@ -161,7 +154,6 @@ Slash commands available once installed:
 Run all:
 
 ```bash
-bash mcp/extensions/test_smoke.sh
 bash tests/test_obsidian_sync.sh
 bash tests/test_check_updates.sh
 bash tests/test_applications.sh
