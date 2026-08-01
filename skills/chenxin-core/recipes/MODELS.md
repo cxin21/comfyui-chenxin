@@ -138,7 +138,6 @@ sample_prompts:
   - "InpaintStitchImproved"
   - "ComfyUI-Flux2Klein-Enhancer"
 ---
-
 ### FLUX.2 (Black Forest Labs)
 - **Prompt style:** natural language OR JSON structured (natural for iteration, JSON for precise production control).
 - **Structure:** main subject -> key action -> critical style -> essential context -> secondary details.
@@ -183,6 +182,30 @@ sample_prompts:
   above. Source: github.com/nomadoor/ComfyUI-Panorama-Stickers ; comfyui.nomadoor.net/en/notes/panorama-stickers ;
   huggingface.co/nomadoor/flux-2-klein-9B-360-erp-outpaint-lora.
 - **Source:** docs.bfl.ml/guides/prompting_guide_flux2 ; github.com/black-forest-labs/skills ; github.com/capitan01R/ComfyUI-Flux2Klein-Enhancer (Klein enhancer suite, PolyForm NC).
+---
+id: anima
+family: anime-foundation
+modality: image
+dialect: Danbooru-style comma-separated tags, score prefix required (score_9, score_8_up, score_7_up)
+negative_policy: supported (worst quality,low quality,score_1,score_2,score_3,artist name,blurry,jpeg artifacts,lowres,censor)
+triggers:
+  - "miaomiaoHarem_anima15"
+  - "anima_baseV10"
+  - "AnimaStandardV7"
+license: non-commercial (Anima base weights)
+source: SlavaSexton/ComfyUI-Agent-Kit MODELS.md (adapted, MIT) + plugin workflow-resolver.md
+sample_prompts:
+  - "score_9, score_8_up, 1girl, golden hair, elf ears, casting fireball, [character tags], [scene tags], [style tags]"
+---
+
+### Anima (miaomiaoHarem / AnimaStandardV7)
+- **Prompt style:** tag-based (Danbooru-style comma-separated tags), score-prefixed. Strong prompt adherence; works best with `score_9, score_8_up, score_7_up` quality prefixes + specific character/scene tags.
+- **Structure:** score prefix -> character tags -> appearance tags -> clothing -> action -> scene -> lighting -> style/artist. Weighted tokens `(tag:1.2)` supported.
+- **Strengths:** anime/manga illustration, strong character consistency via LoRA stack, Chinese-preferring name canon. Default flow in this plugin = AnimaStandardV7.json (73 nodes).
+- **Avoid:** natural-language sentences (it's a tag model, not FLUX); over-long prompts (>256 tokens degrade); missing score prefix (quality drops).
+- **Settings (AnimaStandardV7 default):** 30 steps / CFG 4.5 / dpmpp_2m / karras / 832x1216. Fixed LoRA stack: `gpt-image-2_anima-base1_v1-1`, `anima-base-1-masterpiece-v51`, `细节调整`. Text encoder: `qwen_3_06b_base.safetensors`. VAE: `qwen_image_vae.safetensors`. Negative prompts SUPPORTED (unlike FLUX): `worst quality,low quality,score_1,score_2,score_3,artist name,blurry,jpeg artifacts,lowres,censor`.
+- **Detailer:** AnimaStandardV7 has built-in DetailerForEach + HandDetailer + NSFWDetailer + FaceDetailer + hiresFix (4x_foolhardy_Remacri) — no separate upscale pass needed.
+- **Source:** this plugin's manga-stage-2-panels SKILL + workflow-resolver.md (AnimaStandardV7.json).
 
 ---
 id: flux_1_kontext

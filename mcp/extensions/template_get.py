@@ -37,12 +37,22 @@ def _norm(s: str) -> str:
 
 
 def _matches(entry: dict, use_case: str, modality: str, category: str | None) -> bool:
-    """Return True if an index entry matches the requested filters."""
+    """Return True if an index entry matches the requested filters.
+
+    NOTE: templates_index.json entries do NOT carry a `use_case` field
+    (they have id/name/category/subcategory/modality/path/sha/size_kb).
+    So `--use-case` is treated as a SOFT filter: if the entry HAS a
+    use_case field it must match; if the entry lacks it, use_case is
+    ignored and we fall through to modality/category (the real filters).
+    This prevents `--use-case txt2img` from returning empty because
+    every entry's use_case is the empty string.
+    """
     eu = _norm(entry.get("use_case", ""))
     em = _norm(entry.get("modality", ""))
     ec = _norm(entry.get("category", ""))
 
-    if use_case and eu != use_case:
+    # Soft use_case: only enforce when the entry actually declares one.
+    if use_case and eu and eu != use_case:
         return False
     if modality and em != modality:
         return False

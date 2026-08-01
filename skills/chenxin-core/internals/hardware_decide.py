@@ -38,6 +38,10 @@ import sys
 from pathlib import Path
 
 # recipe_lookup is a sibling module.
+import sys
+from pathlib import Path as _P
+sys.path.insert(0, str(_P(__file__).resolve().parent))
+
 import recipe_lookup as _lookup
 
 _THIS = Path(__file__).resolve()

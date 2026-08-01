@@ -34,6 +34,10 @@ import re
 import sys
 from pathlib import Path
 
+import sys
+from pathlib import Path as _P
+sys.path.insert(0, str(_P(__file__).resolve().parent))
+
 import recipe_yaml as _yaml  # sibling module; shares the parser
 
 _THIS = Path(__file__).resolve()
