@@ -1,6 +1,6 @@
 ---
 name: manga-stage-3-review
-description: "AI 漫剧 Stage 3 — 像素级审查。对 Stage 2 的 panels 调 aesthetic-judge 逐张评分（6 维），生成双层 review.md 报告，< 7.0 自动 re-do 1 次，标 failed + redo_list。Also load chenxin-core first for VRAM/recipe context."
+description: "AI 漫剧 Stage 3 — 像素级审查。对 Stage 2 的 panels 调 aesthetic-judge 逐张评分（6 维），生成双层 review.md 报告，< 7.0 自动 re-do 1 次，标 failed + redo_list。Also load prompt-forge first for VRAM/recipe context."
 version: 2.1.0
 author: Claude Code
 triggers:
@@ -16,8 +16,8 @@ allowed-tools: Bash, Read, Write, "mcp__comfyui-mcp__*"
 # Manga Stage 3 — 像素级审查 (v2.1, ported — 6 维)
 
 > **Plugin path**: `skills/manga-stage-3-review/SKILL.md`
-> **Upstream**: L5 application skill. Load `chenxin-core` (L4) first for VRAM/recipe context
-> before scoring — `chenxin-core/SKILL.md` step 7 routes here for stage 3 of manga pipeline.
+> **Upstream**: L5 application skill. Load `prompt-forge` (L4) first for VRAM/recipe context
+> before scoring — `prompt-forge/SKILL.md` step 7 routes here for stage 3 of manga pipeline.
 
 ## 1. 概述
 
@@ -266,7 +266,7 @@ status: active
 
 ## 14. 相关引用
 
-- **上游**: `skills/chenxin-core/SKILL.md`（L4 — 必须先加载 for VRAM/recipe）
+- **上游**: `skills/prompt-forge/SKILL.md`（L4 — 必须先加载 for VRAM/recipe）
 - 上游: `skills/manga-stage-2-panels/SKILL.md` (Stage 2 panels)
 - 下游: `skills/manga-stage-4-motion/SKILL.md` (Stage 4 视频)
 - 评分器: manga-stage-3-review 内部 6 维算法 skill
@@ -274,6 +274,6 @@ status: active
 
 ## 15. 版本
 
-- v2.1.0（2026-07-30）：P1.1 ported — frontmatter 声明 chenxin-core 上游；路径全部改为 plugin 内
+- v2.1.0（2026-07-30）：P1.1 ported — frontmatter 声明 prompt-forge 上游；路径全部改为 plugin 内
 - v2.0.0（2026-07-27）：评分维度 5→6（加 atmosphere）；review.md 模板增列；schema 增字段；与 aesthetic-judge 对齐
 - v1.0.0（旧）：5 维评分

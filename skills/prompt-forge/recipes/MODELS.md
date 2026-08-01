@@ -138,6 +138,7 @@ sample_prompts:
   - "InpaintStitchImproved"
   - "ComfyUI-Flux2Klein-Enhancer"
 ---
+
 ### FLUX.2 (Black Forest Labs)
 - **Prompt style:** natural language OR JSON structured (natural for iteration, JSON for precise production control).
 - **Structure:** main subject -> key action -> critical style -> essential context -> secondary details.

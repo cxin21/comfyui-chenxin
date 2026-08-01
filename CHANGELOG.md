@@ -12,7 +12,7 @@ All notable changes to comfyui-chenxin are documented here. Format follows [Keep
 - MCP driver extensions: auto-launch, vram-decide, template-get, gui-save
 
 ### Planned — P0.3
-- `chenxin-core` mega-skill (L4)
+- `prompt-forge` mega-skill (L4)
 - Sun-setting of 11 prior local skills in favor of plugin-shipped skills
 
 ### Planned — P1.1

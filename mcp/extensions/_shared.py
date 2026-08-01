@@ -29,8 +29,8 @@ _THIS = Path(__file__).resolve()
 MCP_DIR = _THIS.parent
 REPO_ROOT = MCP_DIR.parent.parent  # mcp/extensions/_shared.py -> repo root
 
-HARDWARE_DIR = REPO_ROOT / "skills" / "chenxin-core" / "hardware"
-TEMPLATES_INDEX = REPO_ROOT / "skills" / "chenxin-core" / "templates_index.json"
+HARDWARE_DIR = REPO_ROOT / "skills" / "prompt-forge" / "hardware"
+TEMPLATES_INDEX = REPO_ROOT / "skills" / "prompt-forge" / "templates_index.json"
 
 # ----- I/O helpers ---------------------------------------------------------- #
 
@@ -120,7 +120,7 @@ def compute_sha256(data: bytes) -> str:
 
 
 def load_hardware(vram_gb: int) -> dict:
-    """Load skills/chenxin-core/hardware/<vram_gb>.json. Returns {} if missing.
+    """Load skills/prompt-forge/hardware/<vram_gb>.json. Returns {} if missing.
 
     The hardware JSON layout is owned by the P0.1 worker; we only consume it.
 
@@ -147,7 +147,7 @@ def load_hardware(vram_gb: int) -> dict:
 
 
 def load_templates_index() -> dict:
-    """Load skills/chenxin-core/templates_index.json. Returns {} if missing.
+    """Load skills/prompt-forge/templates_index.json. Returns {} if missing.
 
     P0.1 builds this file; if it does not yet exist when this CLI runs, we
     fall back to an empty index so callers do not have to handle the missing

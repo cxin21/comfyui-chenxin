@@ -1,6 +1,6 @@
 ---
 name: manga-stage-4-motion
-description: "AI 漫剧 Stage 4 — 视频生成（含说话场景）。主路锁定 ltx23AllInOneWorkflowForRTX_v44 工作流，统一处理所有视频：微动作、说话、环境音。备选 I2V_InfiniteTalk_Wan21（唇型驱动）。Also load chenxin-core first for VRAM/recipe context."
+description: "AI 漫剧 Stage 4 — 视频生成（含说话场景）。主路锁定 ltx23AllInOneWorkflowForRTX_v44 工作流，统一处理所有视频：微动作、说话、环境音。备选 I2V_InfiniteTalk_Wan21（唇型驱动）。Also load prompt-forge first for VRAM/recipe context."
 version: 3.1.0
 author: Claude Code
 triggers:
@@ -18,8 +18,8 @@ allowed-tools: Bash, Read, Write, "mcp__comfyui-mcp__*"
 # Manga Stage 4 — 视频生成（含说话场景）v3.1, ported
 
 > **Plugin path**: `skills/manga-stage-4-motion/SKILL.md`
-> **Upstream**: L5 application skill. Load `chenxin-core` (L4) first for VRAM/recipe context
-> before wiring the LTX workflow — `chenxin-core/SKILL.md` step 7 routes here for stage 4.
+> **Upstream**: L5 application skill. Load `prompt-forge` (L4) first for VRAM/recipe context
+> before wiring the LTX workflow — `prompt-forge/SKILL.md` step 7 routes here for stage 4.
 
 ## 1. 概述
 
@@ -234,7 +234,7 @@ P1.4 升级路径：
 
 ## 12. 相关引用
 
-- **上游**: `skills/chenxin-core/SKILL.md`（L4 — 必须先加载 for VRAM/recipe）
+- **上游**: `skills/prompt-forge/SKILL.md`（L4 — 必须先加载 for VRAM/recipe）
 - 上游: `skills/manga-stage-3-review/SKILL.md` (Stage 3 审查)
 - 下游: `skills/ffmpeg-pipeline/SKILL.md` (Stage 5 字幕)
 - 工作流: `_shared/workflow_resolver.md` §3
@@ -244,7 +244,7 @@ P1.4 升级路径：
 
 ## 13. 版本
 
-- v3.1.0（2026-07-30）：P1.1 ported — frontmatter 声明 chenxin-core 上游；路径全部改为 plugin 内
+- v3.1.0（2026-07-30）：P1.1 ported — frontmatter 声明 prompt-forge 上游；路径全部改为 plugin 内
 - v3.0.0（2026-07-27）：新增 I2V_InfiniteTalk_Wan21 备选工作流（唇型同步）；`--lip-sync` / `--audio-path` 参数；输出 schema 增 `lip_sync_used` 字段
 - v2.0.0（旧）：单一 LTX 一体方案
 - v1.0.0：原 Stage 5 独立 skill

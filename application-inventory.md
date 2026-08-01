@@ -2,7 +2,7 @@
 
 > **Phase**: P1.1 + P3-replacement migration status (committed across `531dd62` and `fa5f503`)
 > **Date**: 2026-07-30
-> **Reason**: chenxin-core (L4, P0.3) routes multi-stage pipelines to L5 application skills. Originally those 7 skills lived at `~/.claude/skills/<name>/` outside the plugin's discoverable surface — so `chenxin-core` step 7 silently fell through. P1.1 brought them in. The 2026-07-30 cleanup (commit `531dd62`) **hard-deleted** the original `~/.claude/skills/<name>/` directories because: (a) every functional capability was duplicated inside the plugin, (b) the plugin's loader now resolves `skills/<name>/SKILL.md` reliably, (c) confusion between old and new paths was producing silent-fall-through bugs.
+> **Reason**: prompt-forge (L4, P0.3) routes multi-stage pipelines to L5 application skills. Originally those 7 skills lived at `~/.claude/skills/<name>/` outside the plugin's discoverable surface — so `prompt-forge` step 7 silently fell through. P1.1 brought them in. The 2026-07-30 cleanup (commit `531dd62`) **hard-deleted** the original `~/.claude/skills/<name>/` directories because: (a) every functional capability was duplicated inside the plugin, (b) the plugin's loader now resolves `skills/<name>/SKILL.md` reliably, (c) confusion between old and new paths was producing silent-fall-through bugs.
 
 ## 1. Skills in plugin (P1.1 + post-cleanup)
 
@@ -29,9 +29,9 @@ The 2026-07-30 cleanup (commit `531dd62`) **hard-deleted** all `~/.claude/skills
 | `manga-bootstrap/bootstrap.sh` | `scripts/bootstrap.sh` (P0.3) |
 | `aesthetic-judge/` (6-dim scoring) | absorbed into `skills/manga-stage-3-review/SKILL.md` (internal algorithm) |
 | `manga-stage-5-talking-head/` | absorbed into `skills/manga-stage-4-motion/SKILL.md` (unified video/audio/lip) |
-| `prompt-forge/SKILL.md` | preserved as `skills/chenxin-core/internals/legacy/prompt-forge-methodology.md` (methodology kept, recipe data already in `recipes/MODELS.md`) |
-| `_shared/workflow_config_guard.md` | `skills/chenxin-core/internals/workflow-config-guard.md` |
-| `_shared/workflow_resolver.md` | `skills/chenxin-core/internals/workflow-resolver.md` |
+| `prompt-forge/SKILL.md` | preserved as `skills/prompt-forge/internals/legacy/prompt-forge-methodology.md` (methodology kept, recipe data already in `recipes/MODELS.md`) |
+| `_shared/workflow_config_guard.md` | `skills/prompt-forge/internals/workflow-config-guard.md` |
+| `_shared/workflow_resolver.md` | `skills/prompt-forge/internals/workflow-resolver.md` |
 | `agents/comfyui-director.md` | `agents/comfyui-director.md` (v3 → v4, post-plugin-integration rewrite; CLI-edges `mcp__comfyui-mcp-server__*` fixed to `mcp__comfyui-mcp__*`) |
 
 **When a hard deprecation is safe:** only after the plugin's loader has been observed to win for at least one full session. That gate has now been reached — the user's 2026-07-30 cleanup command explicitly authorized hard deletion of all 12 paths after functional verification.
@@ -43,8 +43,8 @@ Prior to `531dd62`, the plugin's documentation files used `mcp__comfyui-mcp-serv
 **Files updated in `fa5f503`**:
 
 - `agents/comfyui-director.md` — frontmatter `tools:` + entire body references
-- `skills/chenxin-core/SKILL.md` — lines 51 + 88-95 (L4 routing)
-- `skills/chenxin-core/internals/context_graph.md` — lines 12 + 32 (L2 layer description + flow example)
+- `skills/prompt-forge/SKILL.md` — lines 51 + 88-95 (L4 routing)
+- `skills/prompt-forge/internals/context_graph.md` — lines 12 + 32 (L2 layer description + flow example)
 - `mcp/README.md` — "Boundary with the upstream `comfyui-mcp` driver" section
 
 **Verification**: `grep -r "mcp__comfyui-mcp-server" .` returns only `agents/comfyui-director.md:304` — which is the **version-history section explicitly stating** that v3 used this namespace and v4 corrected it. That historical mention is intentionally retained.
@@ -68,7 +68,7 @@ Prior to `531dd62`, the plugin's documentation files used `mcp__comfyui-mcp-serv
 1. The file exists at `skills/<name>/SKILL.md`.
 2. The file has YAML frontmatter delimited by `---`.
 3. The frontmatter has both `name:` and `description:` keys.
-4. The `description:` value contains the literal substring `chenxin-core` so L4 routing metadata is present.
+4. The `description:` value contains the literal substring `prompt-forge` so L4 routing metadata is present.
 
 Run: `bash tests/test_applications.sh`
 

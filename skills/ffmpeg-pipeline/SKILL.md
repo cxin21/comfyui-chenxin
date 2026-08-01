@@ -1,6 +1,6 @@
 ---
 name: ffmpeg-pipeline
-description: "AI 漫剧 Stage 5 — 字幕 + 视频拼接。Bash + ffmpeg CLI，零 MCP 依赖。从 Stage 4 mp4 + 对话文本生成 final.mp4。Also load chenxin-core first for VRAM/recipe context."
+description: "AI 漫剧 Stage 5 — 字幕 + 视频拼接。Bash + ffmpeg CLI，零 MCP 依赖。从 Stage 4 mp4 + 对话文本生成 final.mp4。Also load prompt-forge first for VRAM/recipe context."
 version: 1.1.0
 author: Claude Code
 triggers:
@@ -17,7 +17,7 @@ allowed-tools: Bash, Read, Write
 
 > **Plugin path**: `skills/ffmpeg-pipeline/SKILL.md`
 > **Upstream**: L5 application skill. Stage 5 of the manga pipeline. Although ffmpeg itself
-> is model-agnostic (no ComfyUI involved), the `chenxin-core` L4 mega-skill should still be
+> is model-agnostic (no ComfyUI involved), the `prompt-forge` L4 mega-skill should still be
 > consulted upstream so the final output preserves any VRAM-tier codec choices made in
 > Stage 4 (e.g. Q4 GGUF outputs may need re-encode before concat).
 
@@ -206,12 +206,12 @@ Shadow: 2
 
 ## 11. 版本
 
-- v1.1.0（2026-07-30）：P1.1 ported — frontmatter 声明 chenxin-core 上游；路径全部改为 plugin 内
+- v1.1.0（2026-07-30）：P1.1 ported — frontmatter 声明 prompt-forge 上游；路径全部改为 plugin 内
 - v1.0.0（2026-07-27）：MVP — concat + SRT + 字幕烧入，可选风格
 
 ## 12. 相关引用
 
-- **上游**: `skills/chenxin-core/SKILL.md`（L4 — 路由提示，ffmpeg 阶段无 ComfyUI 调用但要保持 codec 一致）
+- **上游**: `skills/prompt-forge/SKILL.md`（L4 — 路由提示，ffmpeg 阶段无 ComfyUI 调用但要保持 codec 一致）
 - 上游: `skills/manga-stage-4-motion/SKILL.md` (Stage 4 视频)
 - 下游: 交付（用户观看）
 - orchestrator: `skills/manga-orchestrator/SKILL.md` §4 Stage 5

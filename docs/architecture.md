@@ -12,7 +12,7 @@
 ├─────────────────────────────────────────────────────────────┤
 │ L5  Application Layer (manga-orchestrator + 6 sibling apps)│
 ├─────────────────────────────────────────────────────────────┤
-│ L4  Skill Orchestrator (chenxin-core — mega-skill)         │
+│ L4  Skill Orchestrator (prompt-forge — mega-skill)         │
 ├─────────────────────────────────────────────────────────────┤
 │ L3  Knowledge Substrate (74 recipes + 578 templates + hw)  │
 ├─────────────────────────────────────────────────────────────┤
@@ -29,7 +29,7 @@
 | L1 | user's local install | HTTP at `127.0.0.1:8188` | health_check |
 | L2 | this repo (mcp/) | MCP tools | integration |
 | L3 | this repo (recipes/) | YAML + JSON files | unit |
-| L4 | this repo (skills/chenxin-core/) | SKILL.md | e2e |
+| L4 | this repo (skills/prompt-forge/) | SKILL.md | e2e |
 | L5 | this repo (skills/manga-*/) | SKILL.md | e2e |
 | L6 | this repo (agents/chenxin-doctor.md) | slash + agent | unit |
 | L8 | this repo (.claude-plugin/) | plugin.json | schema |

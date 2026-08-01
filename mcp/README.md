@@ -68,7 +68,7 @@ python mcp/extensions/auto_launch.py --no-launch        # probe only
 
 ### 2. `vram_decide.py` — hardware-aware model recommendation
 
-Reads `skills/chenxin-core/hardware/<vram_gb>.json` (built by the P0.1
+Reads `skills/prompt-forge/hardware/<vram_gb>.json` (built by the P0.1
 worker) and emits a JSON recommendation: quant, swap-block count, sampler
 defaults, and a `blocked` flag. Tolerates a missing hardware file by emitting
 an empty recommendation; tolerates a model not listed by emitting
@@ -95,7 +95,7 @@ python mcp/extensions/vram_decide.py --vram 16 --model flux --seed 42
 
 ### 3. `template_get.py` — workflow template lookup
 
-Reads `skills/chenxin-core/templates_index.json` (also built by P0.1; if it
+Reads `skills/prompt-forge/templates_index.json` (also built by P0.1; if it
 does not exist when this CLI runs, the tool degrades gracefully to
 `matches: []` and `index_present: false`). Filters by `--use-case`,
 `--modality`, and optional `--category`.

@@ -41,7 +41,7 @@
 ├─────────────────────────────────────────────────────────────┤
 │ L5  应用层(漫剧编排 + 6 个兄弟 Skill)                      │
 ├─────────────────────────────────────────────────────────────┤
-│ L4  Skill 编排器(chenxin-core 超级 Skill)                  │
+│ L4  Skill 编排器(prompt-forge 超级 Skill)                  │
 ├─────────────────────────────────────────────────────────────┤
 │ L3  知识底座(80 recipes + 662 templates + hw 配置文件)     │
 ├─────────────────────────────────────────────────────────────┤
@@ -61,7 +61,7 @@
 
 | Skill | 路径 | 用途 | 触发词 |
 |---|---|---|---|
-| **chenxin-core** | `skills/chenxin-core/SKILL.md` | L4 超级 Skill,关键词 → 工具/配方/工作流 路由 | "comfyui" / "出视频" / "anima" / "wan" / "ltx" 等 |
+| **prompt-forge** | `skills/prompt-forge/SKILL.md` | L4 超级 Skill,关键词 → 工具/配方/工作流 路由 | "comfyui" / "出视频" / "anima" / "wan" / "ltx" 等 |
 | **manga-orchestrator** | `skills/manga-orchestrator/SKILL.md` | Stage 0:6 阶段流水线编排 | "全自动漫剧" / "auto manga" |
 | **manga-stage-1-lora** | `skills/manga-stage-1-lora/SKILL.md` | LoRA 训练编排(占位,实际由 lora-trainer 覆盖)| "训 LoRA" |
 | **manga-stage-2-panels** | `skills/manga-stage-2-panels/SKILL.md` | Stage 2:锁定 `AnimaStandardV7.json` 生成分镜 | "生成分镜" / "stage 2" |
@@ -69,8 +69,8 @@
 | **manga-stage-4-motion** | `skills/manga-stage-4-motion/SKILL.md` | Stage 4:锁定 `ltx23AllInOneWorkflowForRTX_v44.json` 图生视频 + 说话 | "生成分镜视频" / "图生视频" / "talking head" |
 | **ffmpeg-pipeline** | `skills/ffmpeg-pipeline/SKILL.md` | Stage 5:拼接 + SRT 字幕 + 可选烧入 | "加字幕" / "concat" |
 | **lora-trainer** | `skills/lora-trainer/SKILL.md` | Anima Standalone-Trainer 封装;8 GB 显存友好 | "训 Anima LoRA" / "lora training" |
-| chenxin-core internals(3 文件)| `skills/chenxin-core/internals/{recipe_yaml.py,recipe_lookup.py,hardware_decide.py,context_graph.md,workflow-{config-guard,resolver}.md}` | 库函数 | (自动加载)|
-| chenxin-core internals/legacy(1 文件)| `internals/legacy/prompt-forge-methodology.md` | 保留的 v3.1 提示词工程方法学(2026-07-30 硬删除 `~/.claude/skills/prompt-forge/` 后保留)| (只读)|
+| prompt-forge internals(3 文件)| `skills/prompt-forge/internals/{recipe_yaml.py,recipe_lookup.py,hardware_decide.py,context_graph.md,workflow-{config-guard,resolver}.md}` | 库函数 | (自动加载)|
+| prompt-forge internals/legacy(1 文件)| `internals/legacy/prompt-forge-methodology.md` | 保留的 v3.1 提示词工程方法学(2026-07-30 硬删除 `~/.claude/skills/prompt-forge/` 后保留)| (只读)|
 
 ### MCP(9 个) — `mcp/`
 
@@ -133,7 +133,7 @@
 | `self-update.sh` | 自更新节奏驱动。 |
 | `validate-plugin-schema.sh` / `validate-marketplace.sh` | JSON 架构校验器(在 CI + pre-publish 跑)。 |
 
-### 知识底座(L3) — `skills/chenxin-core/`
+### 知识底座(L3) — `skills/prompt-forge/`
 
 | 文件 | 行数 | 用途 |
 |---|---|---|
@@ -152,7 +152,7 @@
 | `mcp/extensions/test_smoke.sh` | **13/13 PASS** | 调 4 个 CLI 工具(auto_launch、vram_decide、template_get、gui_save)— 校验 CLI 表面、stdout JSON 契约、退出码语法(0/2/3/4),以及 vram_decide 对不存在模型返回 `blocked=true`。 |
 | `tests/test_obsidian_sync.sh` | **4/4 PASS** | 对真实 `/tmp/obsidian-sync-sandbox-$$` vault 跑 `scripts/obsidian-sync.sh`;校验路径穿越白名单(敌意 EVENT 参数 → 安全文件名)、event 默认 unknown、vault 缺失时非致命退出 0。 |
 | `tests/test_check_updates.sh` | **17/17 PASS** | 对实际 `~/.cache` 和 `git ls-remote` 调 `check_updates.py` 和 `diff_recipes.py`;校验 JSON 封装、--help 退出 0、幂等自 diff(找出 13 个未变配方)。 |
-| `tests/test_applications.sh` | **7/7 PASS** | 通过 `awk` 读每个 SKILL.md;校验 YAML frontmatter 分隔符、`name:` 和 `description:` 存在、`description` 字面含 "chenxin-core"。 |
+| `tests/test_applications.sh` | **7/7 PASS** | 通过 `awk` 读每个 SKILL.md;校验 YAML frontmatter 分隔符、`name:` 和 `description:` 存在、`description` 字面含 "prompt-forge"。 |
 | `scripts/validate-plugin-schema.sh` | **OK** | 解析 `.claude-plugin/plugin.json` 和 `marketplace.json`;校验 name 匹配 slug + dependencies path 存在。 |
 | `scripts/validate-marketplace.sh` | **OK** | 同上,针对 `marketplace.json`(交叉校验 `plugin.json` name 存在 + slug 正则)。 |
 

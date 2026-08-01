@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """vram_decide — hardware-aware model + quant + sampler recommendation.
 
-Reads `skills/chenxin-core/hardware/<vram_gb>.json` and emits a JSON
+Reads `skills/prompt-forge/hardware/<vram_gb>.json` and emits a JSON
 recommendation. Stdlib only.
 
 Usage:

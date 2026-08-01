@@ -175,7 +175,7 @@ To disable vault sync: `OBSIDIAN_VAULT_PATH=/dev/null`.
 | Symptom | Read first |
 |---|---|
 | "ComfyUI service unreachable" | [docs/TROUBLESHOOTING.md](TROUBLESHOOTING.md) — section "Symptom: `bash scripts/obsidian-sync.sh` exits 0 but writes nothing" / "ComfyUI workflow fails with VRAM exceeded" |
-| "Where do I get the recipes from?" | `skills/chenxin-core/recipes/MODELS.md` — 80 entries with YAML frontmatter |
+| "Where do I get the recipes from?" | `skills/prompt-forge/recipes/MODELS.md` — 80 entries with YAML frontmatter |
 | "How do the workflow stages hang together?" | `skills/manga-orchestrator/SKILL.md` — the 6-stage flowchart |
 | "Why was the architecture decided that way?" | [`docs/vault-bridge/decision-v1-close.md`](vault-bridge/decision-v1-close.md) — full 8-phase close-out notes |
 | "What changed in the latest release?" | `CHANGELOG.md` |

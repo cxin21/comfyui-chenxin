@@ -1,6 +1,6 @@
 ---
 name: manga-orchestrator
-description: "AI 漫剧自驱动 orchestrator — 6 阶段流水线自动串联。从用户触发（'全自动生成漫剧 [书名]'）到最终视频，全程零人工干预。Also load chenxin-core first for VRAM/recipe context."
+description: "AI 漫剧自驱动 orchestrator — 6 阶段流水线自动串联。从用户触发（'全自动生成漫剧 [书名]'）到最终视频，全程零人工干预。Also load prompt-forge first for VRAM/recipe context."
 version: 1.1.0
 author: Claude Code
 triggers:
@@ -16,8 +16,8 @@ allowed-tools: Bash, Read, Write, "mcp__comfyui-mcp__*"
 # Manga Orchestrator — AI 漫剧自驱动编排 (v1.1, ported)
 
 > **Plugin path**: `skills/manga-orchestrator/SKILL.md`
-> **Upstream**: This is an L5 application skill. Load `chenxin-core` (L4 mega-skill) FIRST
-> for VRAM/recipe context — `chenxin-core/SKILL.md` step 7 routes here for multi-stage pipelines.
+> **Upstream**: This is an L5 application skill. Load `prompt-forge` (L4 mega-skill) FIRST
+> for VRAM/recipe context — `prompt-forge/SKILL.md` step 7 routes here for multi-stage pipelines.
 
 ## 1. 任务
 
@@ -195,12 +195,12 @@ bash skills/ffmpeg-pipeline/bootstrap.sh --project-root ...
 
 ## 11. 版本
 
-- v1.1.0（2026-07-30）：P1.1 ported — frontmatter 声明 chenxin-core 上游；路径全部改为 plugin 内
+- v1.1.0（2026-07-30）：P1.1 ported — frontmatter 声明 prompt-forge 上游；路径全部改为 plugin 内
 - v1.0.0（2026-07-27）：MVP 版本 — Stage 0-4 + vault 同步；Stage 5 用 ffmpeg 临时脚本；前置检查 ComfyUI 服务
 
 ## 12. 相关引用
 
-- **上游**: `skills/chenxin-core/SKILL.md`（L4 mega-skill — 必须先加载）
+- **上游**: `skills/prompt-forge/SKILL.md`（L4 mega-skill — 必须先加载）
 - 6 个依赖 skills: `skills/manga-orchestrator/`（自含 bootstrap）/ `skills/lora-trainer/` / `skills/manga-stage-2-panels/` / `skills/manga-stage-3-review/` / `skills/manga-stage-4-motion/` / `skills/ffmpeg-pipeline/`
 - 外部依赖: manga-stage-3-review 内部 6 维算法 skill / `obsidian-suite:writing` skill
 - ComfyUI: MCP server 必需在线（Stage 2/4）

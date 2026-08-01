@@ -43,7 +43,7 @@ The plugin auto-launches ComfyUI if not running (see [`auto_launch.py`](mcp/exte
 ├─────────────────────────────────────────────────────────────┤
 │ L5  Application Layer (manga orchestrator + 6 siblings)    │
 ├─────────────────────────────────────────────────────────────┤
-│ L4  Skill Orchestrator (chenxin-core — mega-skill)         │
+│ L4  Skill Orchestrator (prompt-forge — mega-skill)         │
 ├─────────────────────────────────────────────────────────────┤
 │ L3  Knowledge Substrate (80 recipes + 662 templates + hw)  │
 ├─────────────────────────────────────────────────────────────┤
@@ -63,7 +63,7 @@ See [`docs/architecture.md`](docs/architecture.md) for details.
 
 | Skill | Path | Purpose | Trigger keywords |
 |---|---|---|---|
-| **chenxin-core** | `skills/chenxin-core/SKILL.md` | L4 mega-skill; routes keywords → tools/recipes/workflows | "comfyui" / "出视频" / "anima" / "wan" / "ltx" etc. |
+| **prompt-forge** | `skills/prompt-forge/SKILL.md` | L4 mega-skill; routes keywords → tools/recipes/workflows | "comfyui" / "出视频" / "anima" / "wan" / "ltx" etc. |
 | **manga-orchestrator** | `skills/manga-orchestrator/SKILL.md` | Stage 0: 6-stage pipeline coordinator | "全自动漫剧" / "auto manga" |
 | **manga-stage-1-lora** | `skills/manga-stage-1-lora/SKILL.md` | LoRA training orchestration (stub, covered by lora-trainer) | "训 LoRA" |
 | **manga-stage-2-panels** | `skills/manga-stage-2-panels/SKILL.md` | Stage 2: Locked `AnimaStandardV7.json` panel generator | "生成分镜" / "stage 2" |
@@ -71,8 +71,8 @@ See [`docs/architecture.md`](docs/architecture.md) for details.
 | **manga-stage-4-motion** | `skills/manga-stage-4-motion/SKILL.md` | Stage 4: Locked `ltx23AllInOneWorkflowForRTX_v44.json` I2V + talking | "生成分镜视频" / "图生视频" / "talking head" |
 | **ffmpeg-pipeline** | `skills/ffmpeg-pipeline/SKILL.md` | Stage 5: Concat + SRT + optional burn-in | "加字幕" / "concat" |
 | **lora-trainer** | `skills/lora-trainer/SKILL.md` | Anima Standalone-Trainer wrapper; 8 GB VRAM-friendly | "训 Anima LoRA" / "lora training" |
-| chenxin-core internals (3 files) | `skills/chenxin-core/internals/{recipe_yaml.py,recipe_lookup.py,hardware_decide.py,context_graph.md,workflow-{config-guard,resolver}.md}` | Library helpers | (auto-loaded) |
-| chenxin-core internals/legacy (1 file) | `internals/legacy/prompt-forge-methodology.md` | Preserved v3.1 prompt engineering methodology (preserved post hard-delete of `~/.claude/skills/prompt-forge/`) | (read-only) |
+| prompt-forge internals (3 files) | `skills/prompt-forge/internals/{recipe_yaml.py,recipe_lookup.py,hardware_decide.py,context_graph.md,workflow-{config-guard,resolver}.md}` | Library helpers | (auto-loaded) |
+| prompt-forge internals/legacy (1 file) | `internals/legacy/prompt-forge-methodology.md` | Preserved v3.1 prompt engineering methodology (preserved post hard-delete of `~/.claude/skills/prompt-forge/`) | (read-only) |
 
 ### MCP (9 files) — `mcp/`
 
@@ -135,7 +135,7 @@ Slash commands available once installed:
 | `self-update.sh` | Self-update cadence driver. |
 | `validate-plugin-schema.sh` / `validate-marketplace.sh` | JSON schema validators (run in CI + pre-publish). |
 
-### Knowledge Substrate (L3) — `skills/chenxin-core/`
+### Knowledge Substrate (L3) — `skills/prompt-forge/`
 
 | File | Lines | Purpose |
 |---|---|---|
@@ -154,7 +154,7 @@ Slash commands available once installed:
 | `mcp/extensions/test_smoke.sh` | **13/13 PASS** | Calls 4 CLI tools (auto_launch, vram_decide, template_get, gui_save) — verifies CLI surface, JSON-on-stdout, exit-code grammar (0/2/3/4), and that vram_decide returns `blocked=true` for non-existent models. |
 | `tests/test_obsidian_sync.sh` | **4/4 PASS** | Runs `scripts/obsidian-sync.sh` against a real `/tmp/obsidian-sync-sandbox-$$` vault; verifies path-traversal sanitization (hostile EVENT arg → safe filename), event-default-to-unknown, missing-vault non-fatal exit-0. |
 | `tests/test_check_updates.sh` | **17/17 PASS** | Calls `check_updates.py` and `diff_recipes.py` against actual `~/.cache` and `git ls-remote`; verifies JSON envelope shape, --help exit-0, idempotent self-diff (finds 13 unchanged recipes). |
-| `tests/test_applications.sh` | **7/7 PASS** | Reads each SKILL.md from disk via `awk`; verifies YAML frontmatter delimiter, presence of `name:` and `description:`, `description` contains literal substring `chenxin-core`. |
+| `tests/test_applications.sh` | **7/7 PASS** | Reads each SKILL.md from disk via `awk`; verifies YAML frontmatter delimiter, presence of `name:` and `description:`, `description` contains literal substring `prompt-forge`. |
 | `scripts/validate-plugin-schema.sh` | **OK** | Parses `.claude-plugin/plugin.json` and `marketplace.json`; verifies name matches slug + dependencies path exist. |
 | `scripts/validate-marketplace.sh` | **OK** | Same for `marketplace.json` (cross-checks `plugin.json` name presence + slug regex). |
 

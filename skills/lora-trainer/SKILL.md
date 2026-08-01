@@ -1,6 +1,6 @@
 ---
 name: lora-trainer
-description: "Anima LoRA 训练编排 (v2.2) — 单路径：gazingstars123/Anima-Standalone-Trainer 独立 venv。8GB VRAM 友好，无需 ComfyUI 在线。Also load chenxin-core first for VRAM/recipe context."
+description: "Anima LoRA 训练编排 (v2.2) — 单路径：gazingstars123/Anima-Standalone-Trainer 独立 venv。8GB VRAM 友好，无需 ComfyUI 在线。Also load prompt-forge first for VRAM/recipe context."
 version: 2.3.0
 author: Claude Code
 triggers:
@@ -17,7 +17,7 @@ allowed-tools: Bash, Read, Write, "mcp__comfyui-mcp__*"
 # Lora Trainer — Anima LoRA 训练编排 (v2.3, ported)
 
 > **Plugin path**: `skills/lora-trainer/SKILL.md`
-> **Upstream**: L5 application skill. Load `chenxin-core` (L4) first for VRAM/recipe context —
+> **Upstream**: L5 application skill. Load `prompt-forge` (L4) first for VRAM/recipe context —
 > this skill targets Anima 1.0 (~2B Cosmos DiT) so VRAM/quant choices from
 > `hardware/8gb.json` directly affect training defaults.
 
@@ -182,7 +182,7 @@ test_generations: 02_assets/<target>/05_test_generations/
 
 ## 14. 版本
 
-- **v2.3.0**（2026-07-30）：P1.1 ported — frontmatter 声明 chenxin-core 上游；路径全部改为 plugin 内
+- **v2.3.0**（2026-07-30）：P1.1 ported — frontmatter 声明 prompt-forge 上游；路径全部改为 plugin 内
 - v2.2.0（2026-07-28）：单路径（Anima Standalone Trainer only）；删除路径 A/B/C 相关 helper（`train-sd.sh`、`train-anima.sh`、`convert-anima.sh`、`deploy-lora.sh`、`path-detector.sh`）；SKILL.md 大幅简化
 - v2.1.0（2026-07-27）：新增路径 D（4 路径并行）；默认推荐从 B 改 D
 - v2.0.0（2026-07-27）：3 路径并行（lora-scripts / anima-lora-trainer / ai-toolkit-trainer）
@@ -190,7 +190,7 @@ test_generations: 02_assets/<target>/05_test_generations/
 
 ## 15. 相关引用
 
-- **上游**: `skills/chenxin-core/SKILL.md`（L4 — 必须先加载 for VRAM/recipe）
+- **上游**: `skills/prompt-forge/SKILL.md`（L4 — 必须先加载 for VRAM/recipe）
 - 工具：[gazingstars123/Anima-Standalone-Trainer](https://github.com/gazingstars123/Anima-Standalone-Trainer)
 - 上游: `skills/manga-orchestrator/SKILL.md` (Stage 0)
 - 下游: `skills/manga-stage-2-panels/SKILL.md` (Stage 2)

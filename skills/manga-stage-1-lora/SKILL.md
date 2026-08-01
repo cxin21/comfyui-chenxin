@@ -19,7 +19,7 @@ allowed-tools: Bash, Read
 
 ## 1. Why this skill slot exists
 
-The chenxin-core L4 routing recipe (P0.3 SKILL.md step 7) names `manga-stage-1-lora`
+The prompt-forge L4 routing recipe (P0.3 SKILL.md step 7) names `manga-stage-1-lora`
 as one of the manga pipeline entry points. For symmetry with the 7-slot inventory
 declared in P1.1, this directory + stub SKILL.md is shipped — but contains **no
 ported content**. Do NOT route traffic through it until the source materializes.
@@ -39,7 +39,7 @@ should be filled with a fresh port — not aliased to `lora-trainer`.
 
 - [ ] Run `ls ~/.claude/skills/manga-stage-1-lora/` in a future session.
 - [ ] If the directory now exists, port its SKILL.md into this slot with the
-      standard P1.1 adapter (add `chenxin-core` upstream pointer to description,
+      standard P1.1 adapter (add `prompt-forge` upstream pointer to description,
       normalize paths to plugin-relative form).
 - [ ] Update `application-inventory.md` to flip this row from `skipped` → `ported`.
 - [ ] Re-run `tests/test_applications.sh` and confirm 7/7 pass.

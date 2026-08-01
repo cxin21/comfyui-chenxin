@@ -1,6 +1,6 @@
 ---
 name: manga-stage-2-panels
-description: "AI 漫剧 Stage 2 — 分镜面板自动生成。锁定 AnimaStandardV7 工作流，仅修改 prompt + LoRA 配置，自动生成 PNG 面板。可选 IP-Adapter / ControlNet 增强（v2.0）。Also load chenxin-core first for VRAM/recipe context."
+description: "AI 漫剧 Stage 2 — 分镜面板自动生成。锁定 AnimaStandardV7 工作流，仅修改 prompt + LoRA 配置，自动生成 PNG 面板。可选 IP-Adapter / ControlNet 增强（v2.0）。Also load prompt-forge first for VRAM/recipe context."
 version: 2.1.0
 author: Claude Code
 triggers:
@@ -16,8 +16,8 @@ allowed-tools: Bash, Read, Write, "mcp__comfyui-mcp__*"
 # Manga Stage 2 — 分镜面板生成 (v2.1, ported)
 
 > **Plugin path**: `skills/manga-stage-2-panels/SKILL.md`
-> **Upstream**: L5 application skill. Load `chenxin-core` (L4) first for VRAM/recipe context
-> before wiring the AnimaStandardV7 workflow — `chenxin-core/SKILL.md` step 7 routes here.
+> **Upstream**: L5 application skill. Load `prompt-forge` (L4) first for VRAM/recipe context
+> before wiring the AnimaStandardV7 workflow — `prompt-forge/SKILL.md` step 7 routes here.
 
 ## 1. 任务
 
@@ -83,7 +83,7 @@ Stage 0 输出                              Stage 1 输出
 |------|------|------|
 | 解析 01_plan.md | bash | `scripts/parse-plan.sh` |
 | 验证前置 | bash | `scripts/validate-preconditions.sh` |
-| 推断镜头表（如空） | **Agent** | chenxin-core recipe auto-pull (via `skills/chenxin-core/internals/recipe_lookup.py`) |
+| 推断镜头表（如空） | **Agent** | prompt-forge recipe auto-pull (via `skills/prompt-forge/internals/recipe_lookup.py`) |
 | 备份工作流配置 | **Agent** | `mcp__comfyui-mcp__query_workflow` |
 | 修改 prompt 节点 | **Agent** | `mcp__comfyui-mcp__modify_workflow`（仅节点 3、4） |
 | 提交生成 | **Agent** | `mcp__comfyui-mcp__enqueue_workflow` |
@@ -136,15 +136,15 @@ Stage 0 输出                              Stage 1 输出
 | Width | 832 | 39 |
 | Height | 1216 | 47 |
 
-## 6. Prompt 构造(chenxin-core recipes — 与 Stage 4 说话场景对齐)
+## 6. Prompt 构造(prompt-forge recipes — 与 Stage 4 说话场景对齐)
 
 > Plugin `prompt-forge` skill 在 2026-07-30 hard-delete(commit 531dd62)。
-> 方法学保留于 `skills/chenxin-core/internals/legacy/prompt-forge-methodology.md`,
-> 但运行时 recipe dialect 通过 `skills/chenxin-core/internals/recipe_lookup.py --model anima` 拉。
+> 方法学保留于 `skills/prompt-forge/internals/legacy/prompt-forge-methodology.md`,
+> 但运行时 recipe dialect 通过 `skills/prompt-forge/internals/recipe_lookup.py --model anima` 拉。
 
 ### 正向 prompt
 
-使用 chenxin-core `recipes/MODELS.md` 的 Anima 预设（§B2）：
+使用 prompt-forge `recipes/MODELS.md` 的 Anima 预设（§B2）：
 
 ```
 score_9, score_8_up, score_7_up,
@@ -221,7 +221,7 @@ Step 4: modify_workflow(ops=[恢复节点3,恢复节点4]) → query_workflow �
 
 ## 10. 相关引用
 
-- **上游**: `skills/chenxin-core/SKILL.md`（L4 — 必须先加载 for VRAM/recipe）
+- **上游**: `skills/prompt-forge/SKILL.md`（L4 — 必须先加载 for VRAM/recipe）
 - 上游: `skills/manga-orchestrator/SKILL.md` (Stage 0) / `skills/lora-trainer/SKILL.md` (Stage 1)
 - 下游: manga-stage-3-review 内部 6 维算法 (Stage 3) / `skills/manga-stage-3-review/SKILL.md` (Stage 4)
 - 工作流: `_shared/workflow_resolver.md` §2
@@ -230,6 +230,6 @@ Step 4: modify_workflow(ops=[恢复节点3,恢复节点4]) → query_workflow �
 
 ## 11. 版本
 
-- v2.1.0（2026-07-30）：P1.1 ported — frontmatter 声明 chenxin-core 上游；路径全部改为 plugin 内
+- v2.1.0（2026-07-30）：P1.1 ported — frontmatter 声明 prompt-forge 上游；路径全部改为 plugin 内
 - v2.0.0（2026-07-27）：6 维评分对齐；schema 增 stage4_scene_type；预留嘴型描述位给 Stage 4 说话场景
 - v1.1.0（旧）：5 维评分
