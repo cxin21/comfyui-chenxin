@@ -1,0 +1,24 @@
+{"case_id":"trigger-01","label":"should_trigger","prompt":"Flux 文生图：帮我写一个提示词","expected_skill":"prompt-forge"}
+{"case_id":"trigger-02","label":"should_trigger","prompt":"把这段中文改成 Anima 能吃的 Danbooru tags","expected_skill":"prompt-forge"}
+{"case_id":"trigger-03","label":"should_trigger","prompt":"给 Wan 2.2 写一段五秒文生视频运镜 prompt","expected_skill":"prompt-forge"}
+{"case_id":"trigger-04","label":"should_trigger","prompt":"优化这个 SDXL positive 和 negative prompt","expected_skill":"prompt-forge"}
+{"case_id":"trigger-05","label":"should_trigger","prompt":"Sora 分镜：写一个有时间推进的提示词","expected_skill":"prompt-forge"}
+{"case_id":"trigger-06","label":"should_trigger","prompt":"参考图人物不变，帮我写 Qwen Image Edit 指令","expected_skill":"prompt-forge"}
+{"case_id":"trigger-07","label":"should_trigger","prompt":"给 Seedance 2.0 写 reference-to-video 提示词","expected_skill":"prompt-forge"}
+{"case_id":"trigger-08","label":"should_trigger","prompt":"审查这段视频 prompt 是否有冲突的镜头运动","expected_skill":"prompt-forge"}
+{"case_id":"trigger-09","label":"should_trigger","prompt":"生成一张赛博朋克女法师，先给我最终 prompt 再运行","expected_skill":"prompt-forge"}
+{"case_id":"trigger-10","label":"should_trigger","prompt":"写一个适合产品摄影的 GPT Image prompt","expected_skill":"prompt-forge"}
+{"case_id":"trigger-11","label":"should_trigger","prompt":"LTX 转换：把图像提示词改成视频时序描述","expected_skill":"prompt-forge"}
+{"case_id":"trigger-12","label":"should_trigger","prompt":"首尾帧过渡，镜头语言","expected_skill":"prompt-forge"}
+{"case_id":"trigger-13","label":"should_not_trigger","prompt":"ComfyUI 怎么安装 Manager","expected_skill":"prompt-forge"}
+{"case_id":"trigger-14","label":"should_not_trigger","prompt":"KSampler 节点为什么报 shape mismatch","expected_skill":"prompt-forge"}
+{"case_id":"trigger-15","label":"should_not_trigger","prompt":"Flux 模型文件应该放在哪个目录","expected_skill":"prompt-forge"}
+{"case_id":"trigger-16","label":"should_not_trigger","prompt":"帮我下载 Wan 2.2 权重","expected_skill":"prompt-forge"}
+{"case_id":"trigger-17","label":"should_not_trigger","prompt":"比较 4090 和 5090 跑 ComfyUI 的速度","expected_skill":"prompt-forge"}
+{"case_id":"trigger-18","label":"should_not_trigger","prompt":"修复这个 ComfyUI workflow JSON 的断线节点","expected_skill":"prompt-forge"}
+{"case_id":"trigger-19","label":"should_not_trigger","prompt":"解释 CFG 和采样步数有什么区别","expected_skill":"prompt-forge"}
+{"case_id":"trigger-20","label":"should_not_trigger","prompt":"列出我本地安装的所有 checkpoint","expected_skill":"prompt-forge"}
+{"case_id":"trigger-21","label":"should_not_trigger","prompt":"为什么显存溢出了","expected_skill":"prompt-forge"}
+{"case_id":"trigger-22","label":"should_not_trigger","prompt":"给 ComfyUI 写一个自定义节点","expected_skill":"prompt-forge"}
+{"case_id":"trigger-23","label":"should_not_trigger","prompt":"介绍一下 Sora 2 的价格","expected_skill":"prompt-forge"}
+{"case_id":"trigger-24","label":"should_not_trigger","prompt":"今天有哪些新的文生视频模型发布","expected_skill":"prompt-forge"}

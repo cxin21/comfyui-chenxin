@@ -1,0 +1,29 @@
+{
+  "schema_version": "6.1",
+  "original_query": "电影感中景，一名红衣剑客在雨夜巷道里拔剑，镜头缓慢向前推进，雨水连续落下",
+  "target": "video",
+  "mode": "compile",
+  "generation_mode": "text-to-video",
+  "model_id": "wan_2_1_2_2",
+  "dialect": "natural-language",
+  "negative_constraints": ["jittery motion", "morphing", "watermark"],
+  "output_constraints": {"aspect_ratio": "16:9", "duration_seconds": 5, "fps": 16},
+  "references": [],
+  "locked_facts": ["a swordsman in a red robe", "draws his sword", "a rain-soaked alley at night"],
+  "dimensions": {
+    "subject": [{"value": "a swordsman in a red robe", "origin": "explicit", "locked": true, "source_text": "一名红衣剑客"}],
+    "action": [{"value": "draws his sword", "origin": "explicit", "locked": true, "source_text": "拔剑"}],
+    "scene": [{"value": "a rain-soaked alley at night", "origin": "explicit", "locked": true, "source_text": "雨夜巷道"}],
+    "lighting": [{"value": "wet neon reflections with cinematic rim light", "origin": "recipe"}],
+    "composition": [{"value": "cinematic medium shot", "origin": "explicit", "locked": true, "source_text": "电影感中景"}],
+    "camera": [{"value": "the camera slowly dollies forward", "origin": "explicit", "locked": true, "source_text": "镜头缓慢向前推进"}],
+    "motion": [{"value": "controlled sword motion with cloth responding naturally", "origin": "inferred"}],
+    "timeline": [{"value": "rain falls continuously throughout the shot", "origin": "explicit", "locked": true, "source_text": "雨水连续落下"}],
+    "audio": [],
+    "color": [{"value": "deep blue shadows and restrained red accents", "origin": "recipe"}],
+    "style": [{"value": "grounded wuxia realism", "origin": "inferred"}],
+    "mood": [{"value": "tense and restrained", "origin": "inferred"}],
+    "medium": [],
+    "quality": []
+  }
+}

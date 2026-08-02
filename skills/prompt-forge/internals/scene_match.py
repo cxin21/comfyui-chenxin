@@ -26,7 +26,7 @@ SKILL_DIR = INTERNALS_DIR.parent
 INDEX_MD = SKILL_DIR / "aesthetics" / "INDEX.md"
 PRESETS_MD = SKILL_DIR / "aesthetics" / "style-presets.md"
 
-THRESHOLD = 0.2
+THRESHOLD = 0.45
 
 
 def _tokenize(text: str) -> set[str]:
@@ -51,11 +51,15 @@ def _tokenize(text: str) -> set[str]:
 
 
 def load_index(path: Path = INDEX_MD) -> list[dict]:
-    """Parse INDEX.md markdown table into list of scene dicts."""
+    """Parse the scene table; non-table frontmatter is ignored by construction."""
     if not path.exists():
         return []
     text = path.read_text(encoding="utf-8")
-    lines = [l.strip() for l in text.splitlines() if l.strip().startswith("|") and not l.startswith("|---")]
+    lines = [
+        line.strip()
+        for line in text.splitlines()
+        if line.strip().startswith("|") and not line.strip().startswith("|---")
+    ]
     if len(lines) < 2:
         return []
     header = [c.strip() for c in lines[0].strip("|").split("|")]
@@ -75,6 +79,7 @@ def load_index(path: Path = INDEX_MD) -> list[dict]:
         entries.append({
             "scene": row.get("scene", ""),
             "keywords": keywords,
+            "keyword_phrases": set(kw_parts),
             "lighting": row.get("lighting", ""),
             "composition": row.get("composition", ""),
             "color": row.get("color", ""),
@@ -84,20 +89,37 @@ def load_index(path: Path = INDEX_MD) -> list[dict]:
 
 def match(scenes: list[dict], query: str, top: int = 3,
          presets_path: Path | None = PRESETS_MD) -> list[dict]:
-    """Match query tokens against scene keyword sets. Returns top-N, or presets fallback."""
-    q_tokens = _tokenize(query)
-    if not q_tokens:
+    """Match exact phrases/tokens using specificity-weighted evidence."""
+    q_tokens = set(re.findall(r"[a-z0-9_]+", query.lower()))
+    q_text = query.lower().strip()
+    if not q_text:
         return _presets_fallback(presets_path, top)
 
     scored: list[dict] = []
     for s in scenes:
-        scene_tokens: set[str] = s["keywords"]
-        if not scene_tokens:
+        phrases: set[str] = s.get("keyword_phrases", set())
+        if not phrases:
             continue
-        overlap = q_tokens & scene_tokens
-        if not overlap:
+        evidence: list[tuple[str, float]] = []
+        for phrase in phrases:
+            has_cjk = bool(re.search(r"[\u4e00-\u9fff]", phrase))
+            if has_cjk:
+                if len(phrase) == 1 and q_text != phrase:
+                    continue
+                if phrase in q_text:
+                    evidence.append((phrase, min(1.0, 0.35 + 0.15 * len(phrase))))
+                continue
+            words = re.findall(r"[a-z0-9_]+", phrase)
+            if len(words) > 1 and phrase in q_text:
+                evidence.append((phrase, min(1.0, 0.55 + 0.1 * len(words))))
+            elif len(words) == 1 and words[0] in q_tokens:
+                # Single generic English adjectives are weak evidence; two or
+                # more independent hits can still form a confident match.
+                evidence.append((phrase, 0.35))
+        if not evidence:
             continue
-        score = len(overlap) / len(q_tokens)
+        overlap = {phrase for phrase, _ in evidence}
+        score = min(1.0, sum(weight for _, weight in evidence))
         if score < THRESHOLD:
             continue
         scored.append({
@@ -119,12 +141,47 @@ def match(scenes: list[dict], query: str, top: int = 3,
 
 
 def _presets_fallback(path: Path | None, top: int) -> list[dict]:
-    """Read style-presets.md and return top-N preset names as fallback."""
+    """Return explicit choices; never silently select a biased first preset."""
     if path is None or not path.exists():
         return [{"scene": "_no_fallback", "score": 0}]
     text = path.read_text(encoding="utf-8")
-    headings = [l.strip().lstrip("#").strip() for l in text.splitlines() if l.strip().startswith("#")]
-    return [{"scene": h, "score": 0, "fallback": True} for h in headings[:top]]
+    rows: list[dict] = []
+    in_presets = False
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if line.startswith("| 预设 |"):
+            in_presets = True
+            continue
+        if not in_presets:
+            continue
+        if not line.startswith("|"):
+            if rows:
+                break
+            continue
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        if not cells or all(set(cell) <= {"-", ":"} for cell in cells):
+            continue
+        if len(cells) < 4:
+            break
+        name, lighting, color, mood = cells[:4]
+        rows.append({
+            "scene": f"_preset:{name}",
+            "preset": name,
+            "recipes": {"lighting": lighting, "composition": "", "color": color},
+            "mood": mood,
+            "score": 0,
+            "fallback": True,
+        })
+    choices = rows[:top]
+    if not choices:
+        return [{"scene": "_no_scene_match", "score": 0, "fallback": True, "choices": []}]
+    return [{
+        "scene": "_no_scene_match",
+        "score": 0,
+        "fallback": True,
+        "requires_selection": True,
+        "choices": choices,
+    }]
 
 
 def main(argv: list[str] | None = None) -> int:

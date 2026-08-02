@@ -24,6 +24,15 @@ is visible.
 
 ### Refactors
 
+- **prompt-forge v6.1 (2026-08-02)** — replace the draft translation pipeline with
+  a provenance-preserving image/video intent compiler. Add PromptIntent 6.1 and
+  PromptBuild 1.0 contracts, locked facts, reference/output constraints, video
+  camera-motion-timeline dimensions, side-effect-free final compilation, exact tag
+  validation, specificity-weighted scene matching, explicit preset choices, and
+  balanced trigger/build evaluation corpora. Compilation is now the default;
+  generation requires an explicit user request and a ready build. Preserve the v5
+  single-query recipe/tag/scene CLI surfaces.
+
 - **Remove `mcp/extensions/` (2026-08)** — The 5-file stdlib-only Python CLI layer (`__init__.py`, `_shared.py`, `auto_launch.py`, `vram_decide.py`, `test_smoke.sh`) is gone. `auto_launch`'s ComfyUI bring-up and `vram_decide`'s hardware-aware recommendation are inlined into `scripts/bootstrap.sh`. `mcp/` now ships only `mcp_servers.json` and a slimmer `README.md`. The test suite's `mcp/extensions/test_smoke.sh` entry was also removed (it referenced two never-shipped CLIs and would have failed on a fresh clone).
 
 ### Shipped — tests

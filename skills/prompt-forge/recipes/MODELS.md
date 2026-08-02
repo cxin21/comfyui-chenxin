@@ -1084,8 +1084,8 @@ sample_prompts:
 
 ---
 id: wan_2_1_2_2
-family: image
-modality: image
+family: wan-video
+modality: video
 dialect: natural language
 negative_policy: supported
 triggers:
@@ -1110,8 +1110,8 @@ sample_prompts:
 
 ---
 id: wan_2_5_2_6
-family: image
-modality: image
+family: wan-video
+modality: video
 dialect: natural language
 negative_policy: supported
 triggers:
@@ -1133,8 +1133,8 @@ sample_prompts:
 
 ---
 id: wan_2_7
-family: image
-modality: image
+family: wan-video
+modality: video
 dialect: natural language
 negative_policy: supported
 triggers:
@@ -1156,8 +1156,8 @@ sample_prompts:
 
 ---
 id: ltx_2_3
-family: image
-modality: image
+family: ltx-video
+modality: video
 dialect: natural language
 negative_policy: see body
 triggers:
@@ -1299,8 +1299,8 @@ sample_prompts:
 
 ---
 id: ltx_2_pro
-family: image
-modality: image
+family: ltx-video
+modality: video
 dialect: natural language
 negative_policy: see body
 triggers:
@@ -1369,8 +1369,8 @@ sample_prompts:
 
 ---
 id: kling_kuaishou
-family: image
-modality: image
+family: kling-video
+modality: video
 dialect: natural language
 negative_policy: supported
 triggers:
@@ -1392,8 +1392,8 @@ sample_prompts:
 
 ---
 id: veo_3_3_1
-family: image
-modality: image
+family: veo-video
+modality: video
 dialect: natural language
 negative_policy: see body
 triggers:
@@ -1414,8 +1414,8 @@ sample_prompts:
 
 ---
 id: gemini_omni_flash
-family: image
-modality: image
+family: gemini-video
+modality: video
 dialect: natural language
 negative_policy: see body
 triggers:
@@ -1439,8 +1439,8 @@ sample_prompts:
 
 ---
 id: sora_2_sora_2_pro
-family: image
-modality: image
+family: sora-video
+modality: video
 dialect: natural language
 negative_policy: see body
 triggers:
@@ -1461,8 +1461,8 @@ sample_prompts:
 
 ---
 id: seedance_1_0_and_2_0
-family: image
-modality: image
+family: seedance-video
+modality: video
 dialect: natural language
 negative_policy: see body
 triggers:
@@ -1485,8 +1485,8 @@ sample_prompts:
 
 ---
 id: luma_ray_2_ray_3
-family: image
-modality: image
+family: luma-video
+modality: video
 dialect: natural language
 negative_policy: see body
 triggers:
@@ -1509,8 +1509,8 @@ sample_prompts:
 
 ---
 id: runway_gen_4_gen_4_5
-family: image
-modality: image
+family: runway-video
+modality: video
 dialect: natural language
 negative_policy: see body
 triggers:
@@ -1531,8 +1531,8 @@ sample_prompts:
 
 ---
 id: minimax_hailuo
-family: image
-modality: image
+family: minimax-video
+modality: video
 dialect: natural language
 negative_policy: see body
 triggers:
@@ -1554,8 +1554,8 @@ sample_prompts:
 
 ---
 id: pixverse
-family: image
-modality: image
+family: pixverse-video
+modality: video
 dialect: natural language
 negative_policy: supported
 triggers:
@@ -1576,8 +1576,8 @@ sample_prompts:
 
 ---
 id: vidu
-family: image
-modality: image
+family: vidu-video
+modality: video
 dialect: natural language
 negative_policy: see body
 triggers:
@@ -1598,8 +1598,8 @@ sample_prompts:
 
 ---
 id: pika_2_2_2_5
-family: image
-modality: image
+family: pika-video
+modality: video
 dialect: natural language
 negative_policy: supported
 triggers:
@@ -1620,8 +1620,8 @@ sample_prompts:
 
 ---
 id: sync_3_lip_sync_talking_image
-family: image
-modality: image
+family: sync-video
+modality: video
 dialect: natural language
 negative_policy: see body
 triggers:

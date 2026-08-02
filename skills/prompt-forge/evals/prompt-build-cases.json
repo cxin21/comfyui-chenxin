@@ -1,0 +1,120 @@
+[
+  {
+    "case_id": "image-anima-tags",
+    "query": "金发精灵女法师在樱花树下施法",
+    "target": "image", "generation_mode": "text-to-image", "model_id": "anima", "dialect": "danbooru",
+    "locked_facts": ["blonde-haired elf", "casting magic"],
+    "dimensions": {
+      "subject": [{"value": "blonde-haired elf", "origin": "explicit", "locked": true, "tag_candidates": ["blonde_hair", "elf"]}],
+      "action": [{"value": "casting magic", "origin": "explicit", "locked": true, "tag_candidates": ["casting_spell", "magic"]}],
+      "scene": [{"value": "under cherry blossoms", "origin": "explicit", "locked": true, "tag_candidates": ["cherry_blossoms"]}],
+      "quality": [{"value": "score_9, score_8_up", "origin": "recipe"}]
+    },
+    "expect": {"ready": true, "dialect": "tags", "contains": ["score_9", "blonde_hair", "casting_spell"], "absent": ["long_hair"]}
+  },
+  {
+    "case_id": "image-flux-prose",
+    "query": "赛博朋克夜街中的女法师",
+    "target": "image", "generation_mode": "text-to-image", "model_id": "flux", "dialect": "natural-language",
+    "locked_facts": ["a female mage", "a neon night street"],
+    "dimensions": {"subject": ["a female mage"], "scene": ["a neon night street"], "lighting": ["neon reflections"]},
+    "draft": {"prompt": "A female mage stands in a neon night street, lit by neon reflections."},
+    "expect": {"ready": true, "dialect": "natural-language", "contains": ["female mage", "neon night street"]}
+  },
+  {
+    "case_id": "image-sdxl-negative",
+    "query": "雪山营地的写实探险家",
+    "target": "image", "generation_mode": "text-to-image", "model_id": "sdxl", "dialect": "natural-language",
+    "locked_facts": ["a realistic explorer", "a snowy mountain camp"],
+    "negative_constraints": ["watermark", "extra limbs"],
+    "dimensions": {"subject": ["a realistic explorer"], "scene": ["a snowy mountain camp"]},
+    "draft": {"prompt": "A realistic explorer stands at a snowy mountain camp under crisp dawn light."},
+    "expect": {"ready": true, "dialect": "natural-language", "contains": ["realistic explorer"], "negative_empty": false}
+  },
+  {
+    "case_id": "image-gpt-brief",
+    "query": "极简护肤品广告，米白背景",
+    "target": "image", "generation_mode": "text-to-image", "model_id": "gpt_image", "dialect": "natural-language",
+    "locked_facts": ["a skincare bottle", "a warm ivory background"],
+    "dimensions": {"subject": ["a skincare bottle"], "scene": ["a warm ivory background"], "style": ["minimal premium product photography"]},
+    "draft": {"prompt": "A skincare bottle centered against a warm ivory background, minimal premium product photography with soft controlled highlights."},
+    "expect": {"ready": true, "dialect": "natural-language", "contains": ["skincare bottle", "warm ivory background"]}
+  },
+  {
+    "case_id": "image-seedream-positive-only",
+    "query": "保留人物身份，把背景改成安静的图书馆",
+    "target": "image", "generation_mode": "image-edit", "model_id": "seedream_4_0_4_5", "dialect": "natural-language",
+    "locked_facts": ["preserve the person's identity", "a quiet library"],
+    "negative_constraints": ["identity drift"],
+    "references": [{"kind": "image", "source": "reference-1", "purpose": "edit-source"}],
+    "dimensions": {"subject": ["preserve the person's identity"], "scene": ["a quiet library"]},
+    "draft": {"prompt": "Preserve the person's identity and pose while replacing only the background with a quiet library."},
+    "expect": {"ready": true, "dialect": "natural-language", "contains": ["preserve the person's identity"], "negative_empty": true}
+  },
+  {
+    "case_id": "image-qwen-edit-reference",
+    "query": "把参考图服装改成深蓝西装，其他不变",
+    "target": "image", "generation_mode": "image-edit", "model_id": "qwen_image_edit", "dialect": "natural-language",
+    "locked_facts": ["change the clothing to a navy suit", "preserve identity, pose, framing, and background"],
+    "references": [{"kind": "image", "source": "reference-1", "purpose": "edit-source"}],
+    "dimensions": {"subject": ["change the clothing to a navy suit"], "composition": ["preserve identity, pose, framing, and background"]},
+    "draft": {"prompt": "Change the clothing to a navy suit; preserve identity, pose, framing, and background."},
+    "expect": {"ready": true, "dialect": "natural-language", "contains": ["navy suit", "preserve identity"]}
+  },
+  {
+    "case_id": "video-wan-rain-alley",
+    "query": "红衣剑客在雨巷拔剑，镜头慢推",
+    "target": "video", "generation_mode": "text-to-video", "model_id": "wan_2_1_2_2", "dialect": "natural-language",
+    "locked_facts": ["a swordsman in a red robe", "draws his sword"],
+    "negative_constraints": ["jittery motion", "watermark"],
+    "dimensions": {"subject": ["a swordsman in a red robe"], "action": ["draws his sword"], "scene": ["a rain-soaked alley"], "motion": ["controlled sword motion"], "camera": ["the camera slowly dollies forward"], "timeline": ["rain continues throughout"]},
+    "draft": {"prompt": "A swordsman in a red robe draws his sword in a rain-soaked alley. Controlled sword motion; the camera slowly dollies forward while rain continues throughout."},
+    "expect": {"ready": true, "dialect": "video-timeline", "contains": ["slowly dollies forward", "rain continues"]}
+  },
+  {
+    "case_id": "video-ltx-audio",
+    "query": "咖啡师拉花，手持跟拍，咖啡机蒸汽声",
+    "target": "video", "generation_mode": "text-to-video", "model_id": "ltx_2_3", "dialect": "natural-language",
+    "locked_facts": ["a barista pours latte art", "espresso machine steam hisses"],
+    "dimensions": {"subject": ["a barista"], "action": ["a barista pours latte art"], "motion": ["a steady circular pour ends in a heart"], "camera": ["a gentle handheld tracking move"], "audio": ["espresso machine steam hisses"]},
+    "draft": {"prompt": "A barista pours latte art as a steady circular pour ends in a heart. A gentle handheld tracking move follows the cup. Audio: espresso machine steam hisses."},
+    "expect": {"ready": true, "dialect": "video-timeline", "contains": ["ends in a heart", "steam hisses"]}
+  },
+  {
+    "case_id": "video-sora-timeline",
+    "query": "纸飞机先飞过教室，再落到课桌上",
+    "target": "video", "generation_mode": "text-to-video", "model_id": "sora_2_sora_2_pro", "dialect": "natural-language",
+    "locked_facts": ["a paper airplane", "lands on a classroom desk"],
+    "dimensions": {"subject": ["a paper airplane"], "action": ["lands on a classroom desk"], "motion": ["glides smoothly and loses speed"], "camera": ["one lateral tracking shot"], "timeline": ["first crosses the classroom, then lands on the desk"]},
+    "draft": {"prompt": "A paper airplane glides smoothly and loses speed. In one lateral tracking shot, it first crosses the classroom, then lands on the desk and lands on a classroom desk."},
+    "expect": {"ready": true, "dialect": "video-timeline", "contains": ["first crosses", "then lands"]}
+  },
+  {
+    "case_id": "video-seedance-reference",
+    "query": "用参考图人物奔向海边，环绕镜头",
+    "target": "video", "generation_mode": "reference-to-video", "model_id": "seedance_1_0_and_2_0", "dialect": "natural-language",
+    "locked_facts": ["the referenced character runs toward the sea"],
+    "references": [{"kind": "image", "source": "Image1", "purpose": "identity"}],
+    "dimensions": {"subject": ["the referenced character"], "action": ["the referenced character runs toward the sea"], "motion": ["natural running motion ends at the shoreline"], "camera": ["one smooth orbiting camera move"]},
+    "draft": {"prompt": "@Image1 as the main character. The referenced character runs toward the sea; natural running motion ends at the shoreline, captured in one smooth orbiting camera move."},
+    "expect": {"ready": true, "dialect": "video-timeline", "contains": ["@Image1", "ends at the shoreline"]}
+  },
+  {
+    "case_id": "video-kling-single-move",
+    "query": "舞者旋转停下，镜头缓慢拉远",
+    "target": "video", "generation_mode": "text-to-video", "model_id": "kling_kuaishou", "dialect": "natural-language",
+    "locked_facts": ["a dancer spins once and stops"],
+    "dimensions": {"subject": ["a dancer"], "action": ["a dancer spins once and stops"], "motion": ["the costume settles naturally after the turn"], "camera": ["the camera slowly pulls back"]},
+    "draft": {"prompt": "A dancer spins once and stops; the costume settles naturally after the turn while the camera slowly pulls back."},
+    "expect": {"ready": true, "dialect": "video-timeline", "contains": ["spins once and stops", "slowly pulls back"]}
+  },
+  {
+    "case_id": "video-missing-camera-fails",
+    "query": "一只狗奔跑",
+    "target": "video", "generation_mode": "text-to-video", "model_id": "wan_2_1_2_2", "dialect": "natural-language",
+    "locked_facts": ["a dog runs"],
+    "dimensions": {"subject": ["a dog"], "action": ["a dog runs"], "motion": ["fast forward motion"]},
+    "draft": {"prompt": "A dog runs with fast forward motion."},
+    "expect": {"ready": false, "dialect": "video-timeline", "contains": ["a dog runs"], "error_contains": ["camera"]}
+  }
+]

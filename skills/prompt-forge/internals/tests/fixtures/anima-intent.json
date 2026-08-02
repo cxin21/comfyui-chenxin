@@ -1,0 +1,32 @@
+{
+  "schema_version": "6.1",
+  "original_query": "金发精灵女法师在樱花树下释放魔法",
+  "target": "image",
+  "mode": "compile",
+  "generation_mode": "text-to-image",
+  "model_id": "anima",
+  "dialect": "danbooru",
+  "negative_constraints": ["watermark", "deformed hands"],
+  "output_constraints": {"aspect_ratio": "2:3"},
+  "references": [],
+  "locked_facts": ["blonde hair", "female elf mage", "casting magic"],
+  "dimensions": {
+    "subject": [
+      {"value": "female elf mage", "origin": "explicit", "locked": true, "source_text": "精灵女法师", "tag_candidates": ["1girl", "elf"]},
+      {"value": "blonde hair", "origin": "explicit", "locked": true, "source_text": "金发", "tag_candidates": ["blonde_hair"]}
+    ],
+    "action": [{"value": "casting magic", "origin": "explicit", "tag_candidates": ["casting_spell", "magic"]}],
+    "scene": [{"value": "under cherry blossoms", "origin": "explicit", "tag_candidates": ["cherry_blossoms"]}],
+    "lighting": [{"value": "soft afternoon light", "origin": "recipe"}],
+    "composition": [{"value": "medium shot", "origin": "inferred"}],
+    "camera": [],
+    "motion": [],
+    "timeline": [],
+    "audio": [],
+    "color": [],
+    "style": [{"value": "anime illustration", "origin": "recipe", "tag_candidates": ["anime_coloring"]}],
+    "mood": [],
+    "medium": [],
+    "quality": [{"value": "score_9, score_8_up", "origin": "recipe"}]
+  }
+}

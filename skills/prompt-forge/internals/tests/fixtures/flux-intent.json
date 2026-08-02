@@ -1,0 +1,29 @@
+{
+  "schema_version": "6.1",
+  "original_query": "赛博朋克夜景中的女法师",
+  "target": "image",
+  "mode": "compile",
+  "generation_mode": "text-to-image",
+  "model_id": "flux",
+  "dialect": "natural-language",
+  "negative_constraints": [],
+  "output_constraints": {"aspect_ratio": "16:9"},
+  "references": [],
+  "locked_facts": ["a female mage", "a neon night street", "cyberpunk cinematic photography"],
+  "dimensions": {
+    "subject": [{"value": "a female mage", "origin": "explicit"}],
+    "action": [],
+    "scene": [{"value": "a neon night street", "origin": "explicit"}],
+    "lighting": [{"value": "neon reflections and cinematic rim light", "origin": "recipe"}],
+    "composition": [{"value": "medium shot at eye level", "origin": "inferred"}],
+    "camera": [],
+    "motion": [],
+    "timeline": [],
+    "audio": [],
+    "color": [{"value": "teal and magenta", "origin": "recipe"}],
+    "style": [{"value": "cyberpunk cinematic photography", "origin": "explicit"}],
+    "mood": [{"value": "mysterious and tense", "origin": "inferred"}],
+    "medium": [{"value": "digital photography", "origin": "recipe"}],
+    "quality": []
+  }
+}

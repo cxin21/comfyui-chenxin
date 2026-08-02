@@ -18,7 +18,10 @@ import re
 import sys
 from pathlib import Path
 
-from _aliases import ALIASES, resolve_alias, all_aliases
+try:  # package import in tests / library callers
+    from ._aliases import ALIASES, resolve_alias, all_aliases
+except ImportError:  # direct script execution
+    from _aliases import ALIASES, resolve_alias, all_aliases
 
 _THIS = Path(__file__).resolve()
 INTERNALS_DIR = _THIS.parent
@@ -204,6 +207,21 @@ def _match_recipe(recipes: list[dict], query: str, dialect_n: int = 30) -> tuple
     return None, 0.0, "none"
 
 
+def lookup_recipe(
+    query: str,
+    path: Path = RECIPES_PATH,
+    dialect_n: int = 30,
+) -> dict | None:
+    """Return one canonical recipe payload for library callers.
+
+    The CLI and the prompt compiler share this function so recipe matching has
+    one contract and one alias policy.
+    """
+    recipes = _parse_recipes(path.read_text(encoding="utf-8"))
+    matched, _, _ = _match_recipe(recipes, query, dialect_n=dialect_n)
+    return matched
+
+
 def main(argv: list[str] | None = None) -> int:
     _require_python_311()
     parser = argparse.ArgumentParser(prog="recipe_lookup")
@@ -234,12 +252,10 @@ def main(argv: list[str] | None = None) -> int:
     if not args.model:
         parser.error("--model is required (or use --check-alias / --list-aliases)")
 
-    text = args.path.read_text(encoding="utf-8")
-    recipes = _parse_recipes(text)
-    matched, score, path = _match_recipe(recipes, args.model, dialect_n=args.n)
+    matched = lookup_recipe(args.model, path=args.path, dialect_n=args.n)
 
     if matched is None:
-        json.dump({"matched": False, "query": args.model, "score": 0.0, "match_path": path}, sys.stdout, indent=2, ensure_ascii=False)
+        json.dump({"matched": False, "query": args.model, "score": 0.0, "match_path": "none"}, sys.stdout, indent=2, ensure_ascii=False)
         sys.stdout.write("\n")
         sys.stdout.flush()
         return 0

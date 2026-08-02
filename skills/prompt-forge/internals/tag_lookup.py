@@ -6,6 +6,7 @@ a 3-pass lookup: exact canonical → alias → substring.
 
 Usage:
     python tag_lookup.py --query "long_hair"
+    python tag_lookup.py --queries blonde_hair elf cherry_blossoms --exact
     python tag_lookup.py --query "elf" --limit 5
     python tag_lookup.py --query "1girl" --category 0
     python tag_lookup.py --exact "long_hair"
@@ -91,9 +92,23 @@ def lookup(idx: dict, query: str, limit: int | None = None,
     return results[:limit] if limit else results
 
 
+def lookup_many(idx: dict, queries: list[str], limit: int | None = None,
+                category: int | None = None, exact: bool = False) -> list[dict]:
+    """Validate multiple independent candidates without joining them into one query."""
+    return [
+        {
+            "query": query,
+            "results": lookup(idx, query, limit=limit, category=category, exact=exact),
+        }
+        for query in queries
+    ]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="tag_lookup")
-    parser.add_argument("--query", required=True, help="Token to search (substring or exact)")
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--query", help="One token to search; preserves the v5 output shape")
+    source.add_argument("--queries", nargs="+", help="Validate multiple independent tokens")
     parser.add_argument("--limit", type=int, default=None, help="Max results")
     parser.add_argument("--category", type=int, default=None, help="Filter by category")
     parser.add_argument("--exact", action="store_true", help="Strict canonical match only")
@@ -101,7 +116,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     idx = load_index(args.index)
-    results = lookup(idx, args.query, limit=args.limit, category=args.category, exact=args.exact)
+    results = (
+        lookup(idx, args.query, limit=args.limit, category=args.category, exact=args.exact)
+        if args.query is not None
+        else lookup_many(idx, args.queries, limit=args.limit, category=args.category, exact=args.exact)
+    )
     json.dump(results, sys.stdout, indent=2, ensure_ascii=False)
     sys.stdout.write("\n")
     sys.stdout.flush()
