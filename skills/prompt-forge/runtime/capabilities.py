@@ -80,14 +80,24 @@ def report_is_fresh(report: dict, now: datetime) -> bool:
     if not isinstance(report, dict):
         return False
     try:
+        generated_at = datetime.fromisoformat(report["generated_at"].replace("Z", "+00:00"))
         valid_until = datetime.fromisoformat(report["valid_until"].replace("Z", "+00:00"))
-        if valid_until.tzinfo is None:
+        if generated_at.tzinfo is None or valid_until.tzinfo is None:
             return False
         if now.tzinfo is None:
             return False
     except (AttributeError, KeyError, TypeError, ValueError):
         return False
-    return now.astimezone(timezone.utc) < valid_until.astimezone(timezone.utc)
+    if any(
+        value.utcoffset() != timedelta(0)
+        for value in (generated_at, valid_until, now)
+    ):
+        return False
+    validity_window = valid_until - generated_at
+    return (
+        timedelta(0) < validity_window <= timedelta(seconds=REPORT_TTL_SECONDS)
+        and generated_at <= now < valid_until
+    )
 
 
 def require_adapter_tools(report: dict, required) -> None:

@@ -66,6 +66,18 @@ def test_patch_rejects_missing_invalid_or_out_of_allowlist_slots(slots, match):
         patch_character_base(load_graph(), ready_build(), slots)
 
 
+@pytest.mark.parametrize(
+    "slots",
+    [
+        {"positive_prompt": 25, "negative_prompt": 24},
+        {"positive_prompt": 24, "negative_prompt": 24},
+    ],
+)
+def test_character_base_rejects_noncanonical_or_aliased_slots(slots):
+    with pytest.raises(ExecutionError, match="fixed.*slot"):
+        patch_character_base(load_graph(), ready_build(), slots)
+
+
 def test_patch_rejects_missing_or_wrong_typed_allowlisted_inputs():
     missing = load_graph()
     del missing["24"]["inputs"]["populated_text"]

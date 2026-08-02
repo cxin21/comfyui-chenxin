@@ -72,6 +72,29 @@ def test_report_expires_at_exactly_600_seconds():
 
 
 @pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda report: report.pop("generated_at"),
+        lambda report: report.update(generated_at="invalid"),
+        lambda report: report.update(generated_at="2026-08-03T00:01:00Z"),
+        lambda report: report.update(valid_until="2026-08-03T00:10:01Z"),
+        lambda report: report.update(generated_at="2026-08-03T08:00:00+08:00"),
+    ],
+)
+def test_report_rejects_invalid_future_non_utc_or_overlong_validity(mutate):
+    now = datetime(2026, 8, 3, tzinfo=timezone.utc)
+    report = build_capability_report(FakeApi(), local_adapter(), now)
+    mutate(report)
+    assert not report_is_fresh(report, now)
+
+
+def test_report_rejects_naive_current_time():
+    now = datetime(2026, 8, 3, tzinfo=timezone.utc)
+    report = build_capability_report(FakeApi(), local_adapter(), now)
+    assert not report_is_fresh(report, now.replace(tzinfo=None))
+
+
+@pytest.mark.parametrize(
     "stats",
     [
         {"system": [], "devices": [{"name": "RTX 4060"}]},

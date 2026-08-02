@@ -66,6 +66,8 @@ def patch_character_base(graph: dict, prompt_build: dict, slots: dict[str, int])
 
     _node_for_slot(graph, "positive_prompt", slots["positive_prompt"])
     _node_for_slot(graph, "negative_prompt", slots["negative_prompt"])
+    if slots != {"positive_prompt": 24, "negative_prompt": 25}:
+        raise ExecutionError("character-base requires fixed positive/negative prompt slots")
     patched = copy.deepcopy(graph)
     positive = _node_for_slot(patched, "positive_prompt", slots["positive_prompt"])
     negative = _node_for_slot(patched, "negative_prompt", slots["negative_prompt"])
