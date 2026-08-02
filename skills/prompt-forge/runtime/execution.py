@@ -43,7 +43,8 @@ _PLAN_KEYS = frozenset(
         "workflow_profile_id",
         "profile_hash",
         "workflow_fingerprint",
-        "api_graph_hash",
+        "source_api_graph_hash",
+        "executable_api_graph_hash",
         "patches",
         "immutable_inputs",
         "local_only",
@@ -130,7 +131,8 @@ def _require_idle_local_capability(report: object, now: datetime) -> None:
 
 def _derived_preflight(
     workflow_fingerprint: str,
-    api_graph_hash: str,
+    source_api_graph_hash: str,
+    executable_api_graph_hash: str,
     capability_report_hash: str,
     profile_hash: str,
     slots: dict[str, int],
@@ -141,7 +143,11 @@ def _derived_preflight(
             "fingerprint": workflow_fingerprint,
             "slots": copy.deepcopy(slots),
         },
-        "api_graph": {"verified": True, "hash": api_graph_hash},
+        "api_graph": {
+            "verified": True,
+            "source_hash": source_api_graph_hash,
+            "executable_hash": executable_api_graph_hash,
+        },
         "capability": {"verified": True, "report_hash": capability_report_hash},
         "profile": {"verified": True, "hash": profile_hash},
     }
@@ -186,7 +192,7 @@ def build_execution_plan(
     try:
         resolved_slots = resolve_slots(actual_ui_workflow, profile)
         actual_fingerprint = structure_fingerprint(actual_ui_workflow)
-        graph_hash = content_hash(api_graph)
+        source_graph_hash = content_hash(api_graph)
         report_hash = content_hash(capability_report)
         profile_hash = content_hash(profile)
     except (ProfileError, TypeError, ValueError) as exc:
@@ -212,9 +218,15 @@ def build_execution_plan(
     # nodes 24/25, their class types and all four prompt inputs exist.
     from .adapters.camera import patch_character_base
 
-    patch_character_base(api_graph, prompt_build, prompt_slots)
+    patched_graph = patch_character_base(api_graph, prompt_build, prompt_slots)
+    executable_graph_hash = content_hash(patched_graph)
     derived_preflight = _derived_preflight(
-        actual_fingerprint, graph_hash, report_hash, profile_hash, prompt_slots
+        actual_fingerprint,
+        source_graph_hash,
+        executable_graph_hash,
+        report_hash,
+        profile_hash,
+        prompt_slots,
     )
 
     plan = {
@@ -225,7 +237,8 @@ def build_execution_plan(
         "workflow_profile_id": _CHARACTER_BASE_PROFILE_ID,
         "profile_hash": profile_hash,
         "workflow_fingerprint": actual_fingerprint,
-        "api_graph_hash": graph_hash,
+        "source_api_graph_hash": source_graph_hash,
+        "executable_api_graph_hash": executable_graph_hash,
         "patches": copy.deepcopy(expected_patches),
         "immutable_inputs": [],
         "local_only": True,
@@ -265,25 +278,29 @@ def _validate_plan_lineage(plan: object, prompt_build: dict, api_graph: dict) ->
         raise ExecutionError("ExecutionPlan immutable_inputs contract is invalid")
     if plan["prompt_build_id"] != content_hash(prompt_build):
         raise ExecutionError("ExecutionPlan prompt_build_id does not match PromptBuild")
-    if plan["api_graph_hash"] != content_hash(api_graph):
-        raise ExecutionError("ExecutionPlan api_graph_hash does not match API graph")
+    if plan["source_api_graph_hash"] != content_hash(api_graph):
+        raise ExecutionError("ExecutionPlan source_api_graph_hash does not match API graph")
     if plan.get("patches") != _character_base_patches(prompt_build):
         raise ExecutionError("ExecutionPlan exact four patches do not match PromptBuild")
     from .adapters.camera import patch_character_base
 
-    patch_character_base(api_graph, prompt_build, _CHARACTER_BASE_SLOTS)
+    patched_graph = patch_character_base(api_graph, prompt_build, _CHARACTER_BASE_SLOTS)
+    if plan["executable_api_graph_hash"] != content_hash(patched_graph):
+        raise ExecutionError("ExecutionPlan executable_api_graph_hash does not match patched graph")
     for field in (
         "profile_hash",
         "workflow_fingerprint",
         "capability_report_hash",
-        "api_graph_hash",
+        "source_api_graph_hash",
+        "executable_api_graph_hash",
         "prompt_build_id",
     ):
         if not isinstance(plan[field], str) or not _SHA256_RE.fullmatch(plan[field]):
             raise ExecutionError("ExecutionPlan lineage hashes must be lowercase SHA-256 digests")
     expected_preflight = _derived_preflight(
         plan["workflow_fingerprint"],
-        plan["api_graph_hash"],
+        plan["source_api_graph_hash"],
+        plan["executable_api_graph_hash"],
         plan["capability_report_hash"],
         plan["profile_hash"],
         _CHARACTER_BASE_SLOTS,
@@ -334,7 +351,7 @@ def _parse_history(
     history: object,
     prompt_id: str,
     terminal_status: str,
-    api_graph: dict,
+    executable_api_graph: dict,
 ) -> tuple[dict, list[dict]]:
     if not isinstance(history, dict) or not isinstance(history.get(prompt_id), dict):
         raise ExecutionError("raw ComfyUI history is missing the prompt_id entry")
@@ -343,11 +360,11 @@ def _parse_history(
     if not isinstance(prompt, list) or len(prompt) < 3 or prompt[1] != prompt_id:
         raise ExecutionError("raw ComfyUI history prompt tuple is invalid")
     try:
-        graph_matches = canonical_json(prompt[2]) == canonical_json(api_graph)
+        graph_matches = canonical_json(prompt[2]) == canonical_json(executable_api_graph)
     except (TypeError, ValueError) as exc:
         raise ExecutionError(f"raw ComfyUI history prompt graph is invalid: {exc}") from exc
     if not graph_matches:
-        raise ExecutionError("raw ComfyUI history prompt graph does not match API graph")
+        raise ExecutionError("raw ComfyUI history prompt graph does not match executable API graph")
 
     status = entry.get("status")
     if not isinstance(status, dict):
@@ -400,8 +417,13 @@ def build_run_record(
     safe_outputs = _validated_hashes(output_hashes, "output")
     if terminal_status == "succeeded" and not safe_outputs:
         raise ExecutionError("succeeded RunRecord requires output hashes")
+    from .adapters.camera import patch_character_base
+
+    executable_graph = patch_character_base(
+        api_graph, prompt_build, _CHARACTER_BASE_SLOTS
+    )
     history_status, history_outputs = _parse_history(
-        history, prompt_id, terminal_status, api_graph
+        history, prompt_id, terminal_status, executable_graph
     )
     history_filenames = {item["filename"] for item in history_outputs}
     if set(safe_outputs) != history_filenames:
@@ -412,7 +434,8 @@ def build_run_record(
         "task_context_hash": content_hash(safe_context),
         "prompt_build_hash": content_hash(prompt_build),
         "prompt_build": copy.deepcopy(prompt_build),
-        "api_graph_hash": execution_plan["api_graph_hash"],
+        "source_api_graph_hash": execution_plan["source_api_graph_hash"],
+        "executable_api_graph_hash": execution_plan["executable_api_graph_hash"],
         "execution_plan_hash": content_hash(execution_plan),
         "execution_plan": copy.deepcopy(execution_plan),
         "prompt_id": prompt_id,

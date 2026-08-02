@@ -79,6 +79,16 @@ def api_graph():
     return json.loads((FIXTURES / "camera-api-minimal.json").read_text(encoding="utf-8"))
 
 
+def executable_graph(build=None, graph=None):
+    build = build or ready_build()
+    graph = copy.deepcopy(api_graph() if graph is None else graph)
+    graph["24"]["inputs"]["wildcard_text"] = build["prompt"]
+    graph["24"]["inputs"]["populated_text"] = build["prompt"]
+    graph["25"]["inputs"]["wildcard_text"] = build["negative_prompt"]
+    graph["25"]["inputs"]["populated_text"] = build["negative_prompt"]
+    return graph
+
+
 def exact_patches(build=None):
     build = build or ready_build()
     return [
@@ -140,7 +150,7 @@ def task_context():
 
 
 def history_response(graph=None, *, prompt_id="prompt-123", status="succeeded"):
-    graph = api_graph() if graph is None else graph
+    graph = executable_graph() if graph is None else graph
     if status == "succeeded":
         raw_status = {"status_str": "success", "completed": True, "messages": []}
         outputs = {
@@ -236,7 +246,8 @@ def test_plan_records_complete_lineage_and_self_hash_without_mutating_inputs():
     )
     assert (build, patch_values, kwargs) == before
     assert result["prompt_build_id"] == content_hash(build)
-    assert result["api_graph_hash"] == API_GRAPH_HASH
+    assert result["source_api_graph_hash"] == API_GRAPH_HASH
+    assert result["executable_api_graph_hash"] == content_hash(executable_graph(build))
     assert result["capability_report_hash"] == content_hash(kwargs["capability_report"])
     assert result["profile_hash"] == content_hash(kwargs["profile"])
     assert result["preflight"] == {
@@ -245,7 +256,11 @@ def test_plan_records_complete_lineage_and_self_hash_without_mutating_inputs():
             "fingerprint": UI_FINGERPRINT,
             "slots": {"positive_prompt": 24, "negative_prompt": 25},
         },
-        "api_graph": {"verified": True, "hash": API_GRAPH_HASH},
+        "api_graph": {
+            "verified": True,
+            "source_hash": API_GRAPH_HASH,
+            "executable_hash": content_hash(executable_graph(build)),
+        },
         "capability": {
             "verified": True,
             "report_hash": content_hash(kwargs["capability_report"]),
@@ -268,7 +283,8 @@ def test_run_record_requires_valid_task_context_before_lineage_checks():
 
 @pytest.mark.parametrize("mutation, match", [
     (lambda p: p.update(prompt_build_id="0" * 64), "prompt_build_id"),
-    (lambda p: p.update(api_graph_hash="0" * 64), "api_graph_hash"),
+    (lambda p: p.update(source_api_graph_hash="0" * 64), "source_api_graph_hash"),
+    (lambda p: p.update(executable_api_graph_hash="0" * 64), "executable_api_graph_hash"),
     (lambda p: p.pop("profile_hash"), "lineage"),
     (lambda p: p.update(plan_hash="0" * 64), "plan_hash"),
 ])
@@ -310,7 +326,7 @@ def test_run_record_derives_performed_from_matching_history_and_hashes_record():
     outputs = {"character.png": content_hash("png")}
     record = build_run_record(
         task_context(), build, graph, plan, "prompt-123", "succeeded", {}, outputs,
-        history=history_response(graph),
+        history=history_response(),
     )
     assert record["history_verified"] is True
     assert record["artifact_hashes_verified"] is False
@@ -335,7 +351,7 @@ def test_comfy_history_error_status_characterizes_failed_terminal_record():
     plan = build_valid_plan(build)
     record = build_run_record(
         task_context(), build, graph, plan, "prompt-123", "failed", {}, {},
-        history=history_response(graph, status="failed"),
+        history=history_response(status="failed"),
     )
     assert record["history_status"] == {"status_str": "error", "completed": False}
     assert record["history_verified"] is True
@@ -348,7 +364,7 @@ def test_cancelled_is_rejected_without_a_distinct_comfy_history_status():
     with pytest.raises(ExecutionError, match="cancel"):
         build_run_record(
             task_context(), build, graph, plan, "prompt-123", "cancelled", {}, {},
-            history=history_response(graph, status="cancelled"),
+            history=history_response(status="cancelled"),
         )
 
 
@@ -419,7 +435,8 @@ def test_run_record_rejects_from_scratch_self_hashed_attacker_profile_plan():
         "workflow_profile_id": "attacker-profile",
         "profile_hash": "2" * 64,
         "workflow_fingerprint": "3" * 64,
-        "api_graph_hash": content_hash(graph),
+        "source_api_graph_hash": content_hash(graph),
+        "executable_api_graph_hash": content_hash(executable_graph(build, graph)),
         "patches": exact_patches(build),
         "immutable_inputs": [],
         "local_only": True,
@@ -429,7 +446,11 @@ def test_run_record_rejects_from_scratch_self_hashed_attacker_profile_plan():
                 "fingerprint": "3" * 64,
                 "slots": {"positive_prompt": 24, "negative_prompt": 25},
             },
-            "api_graph": {"verified": True, "hash": content_hash(graph)},
+            "api_graph": {
+                "verified": True,
+                "source_hash": content_hash(graph),
+                "executable_hash": content_hash(executable_graph(build, graph)),
+            },
             "capability": {"verified": True, "report_hash": "1" * 64},
             "profile": {"verified": True, "hash": "2" * 64},
         },
@@ -440,7 +461,7 @@ def test_run_record_rejects_from_scratch_self_hashed_attacker_profile_plan():
     with pytest.raises(ExecutionError, match="profile"):
         build_run_record(
             task_context(), build, graph, attacker_plan, "prompt-123", "failed", {}, {},
-            history=history_response(graph, status="failed"),
+            history=history_response(status="failed"),
         )
 
 
@@ -448,8 +469,10 @@ def test_run_record_rejects_self_hashed_plan_over_empty_api_graph():
     build = ready_build()
     empty_graph = {}
     plan = build_valid_plan(build)
-    plan["api_graph_hash"] = content_hash(empty_graph)
-    plan["preflight"]["api_graph"]["hash"] = content_hash(empty_graph)
+    plan["source_api_graph_hash"] = content_hash(empty_graph)
+    plan["executable_api_graph_hash"] = content_hash(empty_graph)
+    plan["preflight"]["api_graph"]["source_hash"] = content_hash(empty_graph)
+    plan["preflight"]["api_graph"]["executable_hash"] = content_hash(empty_graph)
     unsigned = dict(plan)
     unsigned.pop("plan_hash")
     plan["plan_hash"] = content_hash(unsigned)
@@ -457,4 +480,16 @@ def test_run_record_rejects_self_hashed_plan_over_empty_api_graph():
         build_run_record(
             task_context(), build, empty_graph, plan, "prompt-123", "failed", {}, {},
             history=history_response(empty_graph, status="failed"),
+        )
+
+
+def test_run_record_rejects_unpatched_source_graph_in_history():
+    build = ready_build()
+    source_graph = api_graph()
+    plan = build_valid_plan(build)
+    outputs = {"character.png": content_hash("png")}
+    with pytest.raises(ExecutionError, match="executable|history.*graph"):
+        build_run_record(
+            task_context(), build, source_graph, plan, "prompt-123", "succeeded", {}, outputs,
+            history=history_response(source_graph),
         )
