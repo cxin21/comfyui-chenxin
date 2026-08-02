@@ -29,6 +29,15 @@ def test_anima_rejects_unverified_tags_and_positive_negative_conflict():
     assert any("contradicts" in item for item in errors)
 
 
+def test_anima_rejects_positive_tokens_not_verified_by_build_metadata():
+    build = valid_anima_build()
+    build["prompt"] = "score_9, 1girl, red_hair, unknown_tag"
+
+    errors = validate_anima_prompt_build(build, {"locked_facts": ["red hair"]})
+
+    assert any("unverified" in item for item in errors)
+
+
 def test_anima_rejects_missing_required_quality_signals_fail_closed():
     build = valid_anima_build()
     build.update(

@@ -5,6 +5,22 @@ import pytest
 from runtime.errors import FaultError, make_fault
 
 
+@pytest.mark.parametrize(
+    "category",
+    [
+        "CAPABILITY_ERROR",
+        "WORKFLOW_ERROR",
+        "RESOURCE_ERROR",
+        "POLICY_ERROR",
+        "EXECUTION_ERROR",
+    ],
+)
+def test_fault_accepts_each_supported_category(category):
+    fault = make_fault(category, "preflight", "blocked", False, "stop", {})
+
+    assert fault["category"] == category
+
+
 def test_fault_has_a_complete_json_safe_contract():
     fault = make_fault(
         "WORKFLOW_ERROR",

@@ -66,6 +66,18 @@ def validate_anima_prompt_build(build: object, intent: object) -> list[str]:
     if validated_tags is None:
         errors.append("validated tags must be a string list")
 
+    if controls is not None and validated_tags is not None:
+        verified_tokens = {
+            _normalized(token)
+            for token in controls + validated_tags
+            if _normalized(token)
+        }
+        unverified_tokens = sorted(set(positive_tokens).difference(verified_tokens))
+        if unverified_tokens:
+            errors.append(
+                "unverified positive prompt tokens: " + ", ".join(unverified_tokens)
+            )
+
     if isinstance(prompt, str) and _PLACEHOLDER_RE.search(prompt):
         errors.append("positive prompt contains a placeholder")
     if isinstance(negative_prompt, str) and _PLACEHOLDER_RE.search(negative_prompt):
