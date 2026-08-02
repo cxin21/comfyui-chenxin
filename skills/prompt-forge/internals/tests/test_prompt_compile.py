@@ -45,6 +45,9 @@ def test_video_build_requires_motion_and_camera_contract():
     assert build["dialect"] == "video-timeline"
     assert "the camera slowly dollies forward" in build["prompt"]
     assert build["negative_prompt"] == "jittery motion, morphing, watermark"
+    assert build["execution"]["tool"] is None
+    assert build["execution"]["capability"] == "video-generation"
+    assert build["execution"]["performed"] is False
 
 
 def test_compile_mode_never_performs_generation():
@@ -55,7 +58,8 @@ def test_compile_mode_never_performs_generation():
         "mode": "execute",
         "requested": True,
         "performed": False,
-        "tool": "mcp__comfyui-mcp__generate_image",
+        "tool": None,
+        "capability": "image-generation",
     }
 
 

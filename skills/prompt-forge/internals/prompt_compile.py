@@ -215,10 +215,10 @@ def compile_prompt(intent: dict, draft: dict | None = None) -> dict:
     if re.search(r"\[(?:unset)?\]", prompt, flags=re.I):
         errors.append("compiled prompt contains an internal placeholder")
 
-    requested_tool = (
-        "mcp__comfyui-mcp__generate_video"
+    requested_capability = (
+        "video-generation"
         if canonical_intent["target"] == "video"
-        else "mcp__comfyui-mcp__generate_image"
+        else "image-generation"
     )
     return {
         "schema_version": BUILD_SCHEMA_VERSION,
@@ -243,7 +243,8 @@ def compile_prompt(intent: dict, draft: dict | None = None) -> dict:
             "mode": canonical_intent["mode"],
             "requested": canonical_intent["mode"] == "execute",
             "performed": False,
-            "tool": requested_tool if canonical_intent["mode"] == "execute" else None,
+            "tool": None,
+            "capability": requested_capability,
         },
         "recipe": {
             "match_path": recipe["match_path"],

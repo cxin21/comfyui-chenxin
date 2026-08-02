@@ -77,7 +77,7 @@
 | 文件 | 用途 |
 |---|---|
 | `mcp/README.md` | Layer-2 驱动文档。仅注册上游 npm MCP server。 |
-| `mcp/mcp_servers.json` | 注册上游 `comfyui-mcp`(npm,~108 工具)key 为 `comfyui-mcp` → 智能体可见为 `mcp__comfyui-mcp__*`。本仓库不再维护 stdlib CLI 层。 |
+| `mcp/mcp_servers.json` | 注册上游 `comfyui-mcp`；Prompt Forge 会先协商当前实际工具能力，不依赖写死的 MCP 工具名。 |
 
 ### Agents(7 个) — `agents/`
 
@@ -133,6 +133,18 @@
 | `recipes/MODELS.md` | 2462 | 80 个模型提示词配方,带 YAML frontmatter(每个配方含 id/family/modality/dialect/license/triggers)。 |
 | `templates_index.json` | 6651 | 662 个工作流模板,按类别(3d=11 api=242 archived=23 audio=22 conditioning=26 get_started=5 image=92 upscale=22 utility=138 video=81)和模态(3d=36 image=435 video=152 audio=32 vector=2 mixed=5)分类。 |
 | `hardware/8gb.json` | 58 | VRAM 决策矩阵:15 个 allowed_quant,swap_blocks=40,sampler_defaults=euler/4/1.0,preference=[lightning_x2v, lightx2v, fcn, native]。 |
+| `runtime/` | — | v7 本地执行合同：TaskContext、CapabilityReport、workflow fingerprint、ExecutionPlan、camera allowlist patch、RunRecord 与 JSON CLI。编译默认无副作用，enqueue 需展示后的明确审批。 |
+
+Prompt Forge v7 deterministic gate（live 测试默认跳过）：
+
+```powershell
+$env:PYTHONPATH='skills/prompt-forge'
+Remove-Item Env:PROMPT_FORGE_LIVE -ErrorAction SilentlyContinue
+python -m pytest skills/prompt-forge/runtime/tests skills/prompt-forge/internals/tests -q
+python skills/prompt-forge/internals/evaluate.py
+```
+
+真实 ComfyUI Experiment A/B 仅在显式设置 `PROMPT_FORGE_LIVE=1` 后运行；它只访问 `http://127.0.0.1:8188`、串行 enqueue，并保留 history、output 和 RunRecord。
 
 ---
 
