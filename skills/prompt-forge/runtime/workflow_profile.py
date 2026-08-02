@@ -38,11 +38,19 @@ def structure_fingerprint(workflow: dict) -> str:
             "type": node.get("type", ""),
             "title": node.get("title", ""),
             "inputs": [
-                {"name": item.get("name"), "link": item.get("link")}
+                {
+                    "name": item.get("name"),
+                    "type": item.get("type"),
+                    "link": item.get("link"),
+                }
                 for item in node.get("inputs", [])
             ],
             "outputs": [
-                {"name": item.get("name"), "links": item.get("links") or []}
+                {
+                    "name": item.get("name"),
+                    "type": item.get("type"),
+                    "links": item.get("links") or [],
+                }
                 for item in node.get("outputs", [])
             ],
         }

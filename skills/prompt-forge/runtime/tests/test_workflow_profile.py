@@ -34,6 +34,24 @@ def test_node_type_change_changes_structure():
     assert structure_fingerprint(workflow) != structure_fingerprint(changed)
 
 
+def test_port_types_change_structure():
+    workflow = load_workflow()
+    workflow["nodes"][0]["inputs"] = [{"name": "text", "type": "STRING", "link": None}]
+    workflow["nodes"][0]["outputs"] = [{"name": "text", "type": "STRING", "links": []}]
+    changed = copy.deepcopy(workflow)
+    changed["nodes"][0]["inputs"][0]["type"] = "IMAGE"
+    changed["nodes"][0]["outputs"][0]["type"] = "IMAGE"
+    assert structure_fingerprint(workflow) != structure_fingerprint(changed)
+
+
+def test_graph_links_change_structure():
+    workflow = load_workflow()
+    workflow["links"] = [[1, 24, 0, 25, 0, "STRING"]]
+    changed = copy.deepcopy(workflow)
+    changed["links"] = []
+    assert structure_fingerprint(workflow) != structure_fingerprint(changed)
+
+
 def test_slots_resolve_by_type_and_title():
     workflow = load_workflow()
     profile = {"slots": {
