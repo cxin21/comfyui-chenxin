@@ -2,7 +2,19 @@ import json
 
 import pytest
 
-from runtime.errors import FaultError, make_fault
+from runtime.errors import FAULT_CATEGORIES, FaultError, make_fault
+
+
+def test_fault_categories_are_exactly_the_public_contract():
+    assert FAULT_CATEGORIES == frozenset(
+        {
+            "CAPABILITY_ERROR",
+            "WORKFLOW_ERROR",
+            "RESOURCE_ERROR",
+            "POLICY_ERROR",
+            "EXECUTION_ERROR",
+        }
+    )
 
 
 @pytest.mark.parametrize(
