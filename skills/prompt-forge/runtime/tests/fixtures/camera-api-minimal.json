@@ -1,0 +1,29 @@
+{
+  "24": {
+    "class_type": "ImpactWildcardProcessor",
+    "inputs": {
+      "wildcard_text": "original positive",
+      "populated_text": "original positive",
+      "seed": 101
+    }
+  },
+  "25": {
+    "class_type": "ImpactWildcardProcessor",
+    "inputs": {
+      "wildcard_text": "original negative",
+      "populated_text": "original negative"
+    }
+  },
+  "583": {
+    "class_type": "CameraAngleNode",
+    "inputs": {"direction": "front", "elevation": "eye_level"}
+  },
+  "585": {
+    "class_type": "CameraExtraConfigNode",
+    "inputs": {"lens": "50mm", "depth_of_field": "medium"}
+  },
+  "900": {
+    "class_type": "SaveImage",
+    "inputs": {"filename_prefix": "PromptForge"}
+  }
+}
