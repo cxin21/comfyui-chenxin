@@ -5,8 +5,10 @@ from pathlib import Path
 
 import pytest
 
+import runtime.execution as execution_module
 from runtime.contracts import content_hash
 from runtime.execution import ExecutionError, build_execution_plan, build_run_record
+from runtime.workflow_profile import structure_fingerprint
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -40,8 +42,16 @@ def profile():
         "runtime_classification": "local",
         "allowed_mutations": ["untrusted.profile.value"],
         "slots": {
-            "positive_prompt": {"id": 24},
-            "negative_prompt": {"id": 25},
+            "positive_prompt": {
+                "id": 24,
+                "type": "ImpactWildcardProcessor",
+                "title": "POSITIVE",
+            },
+            "negative_prompt": {
+                "id": 25,
+                "type": "ImpactWildcardProcessor",
+                "title": "NEGATIVE",
+            },
             "camera_angle": {"id": 583},
         },
         "expected_outputs": ["image/png"],
@@ -79,30 +89,22 @@ def exact_patches(build=None):
     ]
 
 
-def preflight(report=None, selected_profile=None):
-    report = report or capability_report()
-    selected_profile = selected_profile or profile()
-    return {
-        "nodes": {"status": "pass", "workflow_fingerprint": UI_FINGERPRINT},
-        "models": {"status": "pass", "api_graph_hash": API_GRAPH_HASH},
-        "resources": {"status": "pass", "capability_report_hash": content_hash(report)},
-        "policy": {"status": "pass", "profile_hash": content_hash(selected_profile)},
-    }
-
-
 def plan_kwargs(**overrides):
     report = overrides.pop("capability_report", capability_report())
     selected_profile = overrides.pop("profile", profile())
     values = {
         "capability_report": report,
         "profile": selected_profile,
-        "now": NOW,
-        "preflight": preflight(report, selected_profile),
         "actual_ui_workflow": ui_workflow(),
         "api_graph": api_graph(),
     }
     values.update(overrides)
     return values
+
+
+@pytest.fixture(autouse=True)
+def trusted_utc_clock(monkeypatch):
+    monkeypatch.setattr(execution_module, "_utc_now", lambda: NOW, raising=False)
 
 
 def build_valid_plan(build=None, patches=None, **kwargs):
@@ -137,14 +139,29 @@ def task_context():
     }
 
 
-def terminal_evidence(plan, outputs, *, prompt_id="prompt-123", status="succeeded"):
+def history_response(graph=None, *, prompt_id="prompt-123", status="succeeded"):
+    graph = api_graph() if graph is None else graph
+    if status == "succeeded":
+        raw_status = {"status_str": "success", "completed": True, "messages": []}
+        outputs = {
+            "900": {
+                "images": [
+                    {"filename": "character.png", "subfolder": "run-123", "type": "output"}
+                ]
+            }
+        }
+    elif status == "failed":
+        raw_status = {"status_str": "error", "completed": False, "messages": []}
+        outputs = {}
+    else:
+        raw_status = {"status_str": "cancelled", "completed": False, "messages": []}
+        outputs = {}
     return {
-        "source": "comfyui_history",
-        "prompt_id": prompt_id,
-        "status": status,
-        "plan_hash": plan["plan_hash"],
-        "api_graph_hash": plan["api_graph_hash"],
-        "output_hashes": copy.deepcopy(outputs),
+        prompt_id: {
+            "prompt": [7, prompt_id, copy.deepcopy(graph), {"client_id": "test"}, ["900"]],
+            "outputs": outputs,
+            "status": raw_status,
+        }
     }
 
 
@@ -199,26 +216,13 @@ def test_character_base_rejects_profile_contract_drift(mutate, match):
 def test_plan_recomputes_ui_fingerprint_and_api_graph_hash():
     changed_ui = ui_workflow()
     changed_ui["nodes"][0]["type"] = "OtherNode"
-    with pytest.raises(ExecutionError, match="fingerprint"):
+    with pytest.raises(ExecutionError, match="slot"):
         build_valid_plan(actual_ui_workflow=changed_ui)
 
     changed_graph = api_graph()
-    changed_graph["24"]["inputs"]["seed"] = 999
-    with pytest.raises(ExecutionError, match="api_graph_hash"):
+    del changed_graph["24"]["inputs"]["populated_text"]
+    with pytest.raises(ExecutionError, match="populated_text"):
         build_valid_plan(api_graph=changed_graph)
-
-
-@pytest.mark.parametrize("branch,evidence_key", [
-    ("nodes", "workflow_fingerprint"),
-    ("models", "api_graph_hash"),
-    ("resources", "capability_report_hash"),
-    ("policy", "profile_hash"),
-])
-def test_plan_rejects_self_reported_or_mismatched_preflight_evidence(branch, evidence_key):
-    evidence = preflight()
-    evidence[branch][evidence_key] = "0" * 64
-    with pytest.raises(ExecutionError, match="preflight"):
-        build_valid_plan(preflight=evidence)
 
 
 def test_plan_records_complete_lineage_and_self_hash_without_mutating_inputs():
@@ -235,6 +239,19 @@ def test_plan_records_complete_lineage_and_self_hash_without_mutating_inputs():
     assert result["api_graph_hash"] == API_GRAPH_HASH
     assert result["capability_report_hash"] == content_hash(kwargs["capability_report"])
     assert result["profile_hash"] == content_hash(kwargs["profile"])
+    assert result["preflight"] == {
+        "workflow": {
+            "verified": True,
+            "fingerprint": UI_FINGERPRINT,
+            "slots": {"positive_prompt": 24, "negative_prompt": 25},
+        },
+        "api_graph": {"verified": True, "hash": API_GRAPH_HASH},
+        "capability": {
+            "verified": True,
+            "report_hash": content_hash(kwargs["capability_report"]),
+        },
+        "profile": {"verified": True, "hash": content_hash(kwargs["profile"])},
+    }
     unsigned = dict(result)
     del unsigned["plan_hash"]
     assert result["plan_hash"] == content_hash(unsigned)
@@ -245,7 +262,7 @@ def test_run_record_requires_valid_task_context_before_lineage_checks():
     with pytest.raises(ExecutionError, match="TaskContext"):
         build_run_record(
             {}, ready_build(), api_graph(), plan, "prompt-123", "failed", {}, {},
-            terminal_evidence=terminal_evidence(plan, {}, status="failed"),
+            history=history_response(status="failed"),
         )
 
 
@@ -261,27 +278,28 @@ def test_run_record_rejects_incomplete_or_forged_plan(mutation, match):
     with pytest.raises(ExecutionError, match=match):
         build_run_record(
             task_context(), ready_build(), api_graph(), plan, "prompt-123", "failed", {}, {},
-            terminal_evidence={"source": "comfyui_history"},
+            history=history_response(status="failed"),
         )
 
 
-@pytest.mark.parametrize("field,value", [
-    ("source", "caller_claim"),
-    ("prompt_id", "other-prompt"),
-    ("status", "failed"),
-    ("plan_hash", "0" * 64),
-    ("api_graph_hash", "0" * 64),
-    ("output_hashes", {}),
-])
-def test_run_record_rejects_terminal_evidence_mismatch(field, value):
+def test_run_record_rejects_history_prompt_graph_mismatch():
     plan = build_valid_plan()
-    outputs = {"image": content_hash("png")}
-    evidence = terminal_evidence(plan, outputs)
-    evidence[field] = value
-    with pytest.raises(ExecutionError, match="terminal evidence"):
+    outputs = {"character.png": content_hash("png")}
+    other_graph = api_graph()
+    other_graph["24"]["inputs"]["seed"] = 999
+    with pytest.raises(ExecutionError, match="history.*graph"):
         build_run_record(
             task_context(), ready_build(), api_graph(), plan, "prompt-123", "succeeded",
-            {}, outputs, terminal_evidence=evidence,
+            {}, outputs, history=history_response(other_graph),
+        )
+
+
+def test_run_record_rejects_output_hash_name_not_present_in_history():
+    plan = build_valid_plan()
+    with pytest.raises(ExecutionError, match="filename"):
+        build_run_record(
+            task_context(), ready_build(), api_graph(), plan, "prompt-123", "succeeded",
+            {}, {"other.png": content_hash("png")}, history=history_response(),
         )
 
 
@@ -289,22 +307,154 @@ def test_run_record_derives_performed_from_matching_history_and_hashes_record():
     build = ready_build()
     graph = api_graph()
     plan = build_valid_plan(build)
-    outputs = {"image": content_hash("png")}
-    evidence = terminal_evidence(plan, outputs)
+    outputs = {"character.png": content_hash("png")}
     record = build_run_record(
         task_context(), build, graph, plan, "prompt-123", "succeeded", {}, outputs,
-        terminal_evidence=evidence,
+        history=history_response(graph),
     )
-    assert record["execution_performed"] is True
-    assert record["terminal_evidence"] == evidence
+    assert record["history_verified"] is True
+    assert record["artifact_hashes_verified"] is False
+    assert record["history_outputs"] == [
+        {
+            "node_id": "900",
+            "filename": "character.png",
+            "subfolder": "run-123",
+            "type": "output",
+        }
+    ]
+    assert "execution_performed" not in record
     assert build["execution"]["performed"] is False
     unsigned = dict(record)
     del unsigned["record_hash"]
     assert record["record_hash"] == content_hash(unsigned)
 
 
+def test_comfy_history_error_status_characterizes_failed_terminal_record():
+    build = ready_build()
+    graph = api_graph()
+    plan = build_valid_plan(build)
+    record = build_run_record(
+        task_context(), build, graph, plan, "prompt-123", "failed", {}, {},
+        history=history_response(graph, status="failed"),
+    )
+    assert record["history_status"] == {"status_str": "error", "completed": False}
+    assert record["history_verified"] is True
+
+
+def test_cancelled_is_rejected_without_a_distinct_comfy_history_status():
+    build = ready_build()
+    graph = api_graph()
+    plan = build_valid_plan(build)
+    with pytest.raises(ExecutionError, match="cancel"):
+        build_run_record(
+            task_context(), build, graph, plan, "prompt-123", "cancelled", {}, {},
+            history=history_response(graph, status="cancelled"),
+        )
+
+
 def test_plan_rejects_non_object_api_graph():
-    evidence = preflight()
-    evidence["models"]["api_graph_hash"] = content_hash(None)
     with pytest.raises(ExecutionError, match="API graph"):
-        build_valid_plan(api_graph=None, preflight=evidence)
+        build_valid_plan(api_graph=None)
+
+
+def test_plan_rejects_arbitrary_ui_even_with_self_consistent_fingerprint_and_preflight():
+    arbitrary_ui = {"nodes": [], "groups": [], "links": []}
+    forged_fingerprint = structure_fingerprint(arbitrary_ui)
+    with pytest.raises(ExecutionError, match="slot"):
+        build_execution_plan(
+            "character-base", ready_build(), "camera-anima-v1", forged_fingerprint,
+            exact_patches(), True, capability_report=capability_report(), profile=profile(),
+            actual_ui_workflow=arbitrary_ui,
+            api_graph=api_graph(),
+        )
+
+
+def test_plan_rejects_profile_and_ui_that_self_certify_attacker_slot_type():
+    selected_profile = profile()
+    selected_profile["slots"]["positive_prompt"] = {
+        "id": 24,
+        "type": "AttackerNode",
+        "title": "EVIL",
+    }
+    attacker_ui = ui_workflow()
+    attacker_ui["nodes"][0]["type"] = "AttackerNode"
+    attacker_ui["nodes"][0]["title"] = "EVIL"
+    with pytest.raises(ExecutionError, match="slot.*positive_prompt"):
+        build_execution_plan(
+            "character-base", ready_build(), "camera-anima-v1",
+            structure_fingerprint(attacker_ui), exact_patches(), True,
+            capability_report=capability_report(), profile=selected_profile,
+            actual_ui_workflow=attacker_ui, api_graph=api_graph(),
+        )
+
+
+def test_run_record_rejects_caller_constructed_terminal_claim():
+    build = ready_build()
+    plan = build_valid_plan(build)
+    outputs = {"character.png": content_hash("png")}
+    with pytest.raises(TypeError):
+        build_run_record(
+            task_context(), build, api_graph(), plan, "prompt-123", "succeeded", {}, outputs,
+            terminal_evidence={"source": "comfyui_history"},
+        )
+
+
+def test_plan_public_api_does_not_accept_caller_controlled_clock():
+    kwargs = plan_kwargs()
+    with pytest.raises(TypeError):
+        build_execution_plan(
+            "character-base", ready_build(), "camera-anima-v1", UI_FINGERPRINT,
+            exact_patches(), True, now=NOW, **kwargs,
+        )
+
+
+def test_run_record_rejects_from_scratch_self_hashed_attacker_profile_plan():
+    build = ready_build()
+    graph = api_graph()
+    attacker_plan = {
+        "schema_version": "1.0",
+        "stage": "character-base",
+        "prompt_build_id": content_hash(build),
+        "capability_report_hash": "1" * 64,
+        "workflow_profile_id": "attacker-profile",
+        "profile_hash": "2" * 64,
+        "workflow_fingerprint": "3" * 64,
+        "api_graph_hash": content_hash(graph),
+        "patches": exact_patches(build),
+        "immutable_inputs": [],
+        "local_only": True,
+        "preflight": {
+            "workflow": {
+                "verified": True,
+                "fingerprint": "3" * 64,
+                "slots": {"positive_prompt": 24, "negative_prompt": 25},
+            },
+            "api_graph": {"verified": True, "hash": content_hash(graph)},
+            "capability": {"verified": True, "report_hash": "1" * 64},
+            "profile": {"verified": True, "hash": "2" * 64},
+        },
+        "expected_outputs": ["image/png"],
+        "execution_approved": True,
+    }
+    attacker_plan["plan_hash"] = content_hash(attacker_plan)
+    with pytest.raises(ExecutionError, match="profile"):
+        build_run_record(
+            task_context(), build, graph, attacker_plan, "prompt-123", "failed", {}, {},
+            history=history_response(graph, status="failed"),
+        )
+
+
+def test_run_record_rejects_self_hashed_plan_over_empty_api_graph():
+    build = ready_build()
+    empty_graph = {}
+    plan = build_valid_plan(build)
+    plan["api_graph_hash"] = content_hash(empty_graph)
+    plan["preflight"]["api_graph"]["hash"] = content_hash(empty_graph)
+    unsigned = dict(plan)
+    unsigned.pop("plan_hash")
+    plan["plan_hash"] = content_hash(unsigned)
+    with pytest.raises(ExecutionError, match="API graph|missing API node"):
+        build_run_record(
+            task_context(), build, empty_graph, plan, "prompt-123", "failed", {}, {},
+            history=history_response(empty_graph, status="failed"),
+        )
