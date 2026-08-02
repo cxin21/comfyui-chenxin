@@ -41,6 +41,8 @@ def build_capability_report(api, adapter: dict, now: datetime) -> dict:
         device = stats["devices"][0]
         running = queue["queue_running"]
         pending = queue["queue_pending"]
+        if not isinstance(system, dict) or not isinstance(device, dict):
+            raise CapabilityError("system and first device must be objects")
     except (KeyError, IndexError, TypeError, CapabilityError) as exc:
         raise CapabilityError(f"invalid ComfyUI capability response: {exc}") from exc
 
@@ -85,7 +87,7 @@ def report_is_fresh(report: dict, now: datetime) -> bool:
             return False
     except (AttributeError, KeyError, TypeError, ValueError):
         return False
-    return now.astimezone(timezone.utc) <= valid_until.astimezone(timezone.utc)
+    return now.astimezone(timezone.utc) < valid_until.astimezone(timezone.utc)
 
 
 def require_adapter_tools(report: dict, required) -> None:

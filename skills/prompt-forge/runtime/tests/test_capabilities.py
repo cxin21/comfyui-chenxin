@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -62,6 +62,29 @@ def test_report_expires_after_600_seconds():
     later = datetime(2026, 8, 2, 15, 10, 1, tzinfo=timezone.utc)
 
     assert not report_is_fresh(report, later)
+
+
+def test_report_expires_at_exactly_600_seconds():
+    now = datetime(2026, 8, 2, 15, 0, tzinfo=timezone.utc)
+    report = build_capability_report(FakeApi(), local_adapter(), now)
+
+    assert not report_is_fresh(report, now + timedelta(seconds=600))
+
+
+@pytest.mark.parametrize(
+    "stats",
+    [
+        {"system": [], "devices": [{"name": "RTX 4060"}]},
+        {"system": {"comfyui_version": "0.29.0"}, "devices": [[]]},
+    ],
+)
+def test_malformed_system_or_first_device_raises_capability_error(stats):
+    now = datetime(2026, 8, 2, 15, 0, tzinfo=timezone.utc)
+    api = FakeApi()
+    api.system_stats = lambda: stats
+
+    with pytest.raises(CapabilityError, match="invalid ComfyUI capability response"):
+        build_capability_report(api, local_adapter(), now)
 
 
 def test_missing_adapter_tool_is_a_hard_stop():
