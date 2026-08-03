@@ -168,6 +168,7 @@ def normalize_image_outputs(outputs, output_nodes, lineage_id, source_hash) -> l
         descriptor["semantic_conflict"] = bool(declared_conflicts)
         descriptor["reference_eligible"] = (
             descriptor["artifact_type"] == "CharacterAngleView"
+            and descriptor["semantic_conflict"] is False
         )
         normalized.append(descriptor)
     return normalized

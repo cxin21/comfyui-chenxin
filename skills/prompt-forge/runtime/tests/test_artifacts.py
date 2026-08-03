@@ -29,7 +29,7 @@ def test_outputs_are_normalized_and_deduplicated():
         {"artifact_type": "CharacterAngleView", "view_label": "front_closeup", "source_node_id": "524"},
         {"artifact_type": "CharacterSheet", "view_label": "sheet", "source_node_id": "224"},
     ]
-    assert result[0]["reference_eligible"] is True
+    assert result[0]["reference_eligible"] is False
     assert all(item["lineage_id"] == "lineage-1" for item in result)
     assert all(item["source_artifact_hash"] == "basehash" for item in result)
 

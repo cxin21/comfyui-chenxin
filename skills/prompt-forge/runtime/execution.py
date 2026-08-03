@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,10 +33,19 @@ _CHARACTER_BASE_SELECTORS = {
         "title": "NEGATIVE",
     },
 }
+_MULTIVIEW_STAGE = "character-multiview"
+_MULTIVIEW_PROFILE_ID = "flux2-klein-multiview-v1"
+_MULTIVIEW_FINGERPRINT = "fff6236efa6727ac6584d61f640a63f9602b2d07a545d216b96a870a681e6faf"
+_MULTIVIEW_OUTPUTS = ["image/png"]
+_MULTIVIEW_SLOTS = {"base_image_primary": 111, "base_image_secondary": 667}
+_MULTIVIEW_SELECTORS = {
+    "base_image_primary": {"id": 111, "type": "LoadImage"},
+    "base_image_secondary": {"id": 667, "type": "LoadImage"},
+}
 _PATCH_KEYS = frozenset(("slot", "input", "value"))
 _TERMINAL_STATUSES = frozenset(("succeeded", "failed"))
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
-_DRAFT_KEYS = frozenset(
+_STAGE1_DRAFT_KEYS = frozenset(
     (
         "schema_version",
         "stage",
@@ -56,7 +66,31 @@ _DRAFT_KEYS = frozenset(
         "draft_hash",
     )
 )
-_APPROVED_PLAN_KEYS = _DRAFT_KEYS.union(
+_MULTIVIEW_DRAFT_KEYS = frozenset(
+    (
+        "schema_version",
+        "stage",
+        "plan_state",
+        "upstream_record_hash",
+        "source_artifact_hash",
+        "lineage_id",
+        "uploaded_filename",
+        "capability_report_hash",
+        "workflow_profile_id",
+        "profile_hash",
+        "workflow_fingerprint",
+        "source_api_graph_hash",
+        "executable_api_graph_hash",
+        "patches",
+        "immutable_inputs",
+        "local_only",
+        "preflight",
+        "expected_outputs",
+        "execution_approved",
+        "draft_hash",
+    )
+)
+_APPROVAL_PLAN_FIELDS = frozenset(
     (
         "approval_event",
         "approval_id",
@@ -270,13 +304,249 @@ def build_execution_draft(
     return draft
 
 
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _validated_stage1_source(stage1_record: object, base_artifact: object) -> tuple[dict, dict]:
+    if not isinstance(stage1_record, dict) or stage1_record.get("schema_version") != "1.0":
+        raise ExecutionError("an accepted Stage 1 RunRecord is required")
+    record_hash = stage1_record.get("record_hash")
+    unsigned_record = dict(stage1_record)
+    unsigned_record.pop("record_hash", None)
+    if not isinstance(record_hash, str) or not _SHA256_RE.fullmatch(record_hash):
+        raise ExecutionError("Stage 1 RunRecord record_hash must be a lowercase SHA-256 digest")
+    if record_hash != content_hash(unsigned_record):
+        raise ExecutionError("Stage 1 RunRecord record_hash is not self-consistent")
+    if stage1_record.get("terminal_status") != "succeeded" or stage1_record.get("history_verified") is not True:
+        raise ExecutionError("Stage 1 RunRecord must be a verified successful run")
+    source_plan = stage1_record.get("execution_plan")
+    if not isinstance(source_plan, dict) or source_plan.get("stage") != "character-base":
+        raise ExecutionError("Stage 1 RunRecord must describe character-base")
+    if source_plan.get("workflow_profile_id") != _CHARACTER_BASE_PROFILE_ID:
+        raise ExecutionError("Stage 1 RunRecord profile lineage is invalid")
+
+    if not isinstance(base_artifact, dict) or base_artifact.get("schema_version") != "1.0":
+        raise ExecutionError("a versioned CharacterBaseImage artifact is required")
+    if base_artifact.get("artifact_type") != "CharacterBaseImage":
+        raise ExecutionError("Stage 2 requires artifact_type=CharacterBaseImage")
+    if base_artifact.get("accepted") is not True:
+        raise ExecutionError("CharacterBaseImage must be accepted before Stage 2")
+    artifact_hash = base_artifact.get("content_hash")
+    if not isinstance(artifact_hash, str) or not _SHA256_RE.fullmatch(artifact_hash):
+        raise ExecutionError("CharacterBaseImage content_hash must be a lowercase SHA-256 digest")
+    lineage_id = base_artifact.get("lineage_id")
+    if not isinstance(lineage_id, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", lineage_id):
+        raise ExecutionError("CharacterBaseImage lineage_id must be a safe non-empty identifier")
+    if base_artifact.get("source_record_hash") != record_hash:
+        raise ExecutionError("CharacterBaseImage source record lineage does not match RunRecord")
+    visual = base_artifact.get("visual_acceptance")
+    if not isinstance(visual, dict) or visual.get("front_facing") is not True:
+        raise ExecutionError("CharacterBaseImage requires front-facing visual acceptance")
+    if visual.get("identity_visible") is not True:
+        raise ExecutionError("CharacterBaseImage visual acceptance requires visible identity")
+
+    root_text = base_artifact.get("artifact_root")
+    path_text = base_artifact.get("artifact_path")
+    if not isinstance(root_text, str) or not isinstance(path_text, str):
+        raise ExecutionError("CharacterBaseImage artifact path/root are required")
+    root = Path(root_text)
+    path = Path(path_text)
+    try:
+        resolved_root = root.resolve(strict=True)
+        resolved_path = path.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise ExecutionError("CharacterBaseImage artifact path/root must exist") from exc
+    if str(root) != str(resolved_root) or str(path) != str(resolved_path):
+        raise ExecutionError("CharacterBaseImage artifact path/root must be canonical")
+    if not resolved_root.is_dir() or not resolved_path.is_file() or not resolved_path.is_relative_to(resolved_root):
+        raise ExecutionError("CharacterBaseImage artifact path must remain inside artifact root")
+    if _file_sha256(resolved_path) != artifact_hash:
+        raise ExecutionError("CharacterBaseImage content_hash does not match artifact bytes")
+    output_hashes = stage1_record.get("output_hashes")
+    if not isinstance(output_hashes, dict) or output_hashes.get(resolved_path.name) != artifact_hash:
+        raise ExecutionError("CharacterBaseImage hash does not match Stage 1 RunRecord outputs")
+    return copy.deepcopy(stage1_record), copy.deepcopy(base_artifact)
+
+
+def _validate_multiview_profile(profile: object, profile_id: object) -> None:
+    if not isinstance(profile, dict) or profile.get("schema_version") != "1.0":
+        raise ExecutionError("a versioned Flux workflow profile is required")
+    if profile_id != _MULTIVIEW_PROFILE_ID or profile.get("profile_id") != profile_id:
+        raise ExecutionError("character-multiview requires profile flux2-klein-multiview-v1")
+    if profile.get("workflow_fingerprint") != _MULTIVIEW_FINGERPRINT:
+        raise ExecutionError("Flux profile fingerprint is not the verified fingerprint")
+    if profile.get("runtime_classification") != "local":
+        raise ExecutionError("Flux profile must be local")
+    if profile.get("expected_outputs") != _MULTIVIEW_OUTPUTS:
+        raise ExecutionError("Flux profile must expect only image/png")
+    if profile.get("slots") != _MULTIVIEW_SELECTORS:
+        raise ExecutionError("Flux profile requires the verified nodes 111/667 selectors")
+    pose_ids = profile.get("immutable_roles", {}).get("pose_references")
+    if not isinstance(pose_ids, list) or not pose_ids:
+        raise ExecutionError("Flux profile requires immutable pose references")
+
+
+def _multiview_upload_name(lineage_id: str, artifact_hash: str) -> str:
+    return f"prompt-forge/{lineage_id}/character-base-{artifact_hash}.png"
+
+
+def _multiview_patches(filename: str, artifact_hash: str) -> list[dict]:
+    return [
+        {"slot": slot, "input": "image", "value": filename, "source_hash": artifact_hash}
+        for slot in ("base_image_primary", "base_image_secondary")
+    ]
+
+
+def _multiview_immutable_inputs(api_graph: dict, profile: dict) -> list[dict]:
+    result = []
+    for node_id in profile["immutable_roles"]["pose_references"]:
+        node = api_graph.get(str(node_id))
+        image = node.get("inputs", {}).get("image") if isinstance(node, dict) else None
+        if not isinstance(node, dict) or node.get("class_type") != "LoadImage" or not isinstance(image, str) or not image:
+            raise ExecutionError(f"immutable pose node {node_id} must be a configured LoadImage")
+        result.append({"node_id": node_id, "input": "image", "value": image})
+    return result
+
+
+def build_multiview_draft(
+    *,
+    stage1_record: dict,
+    base_artifact: dict,
+    workflow_profile_id: str,
+    workflow_fingerprint: str,
+    capability_report: dict,
+    profile: dict,
+    actual_ui_workflow: dict,
+    api_graph: dict,
+) -> dict:
+    """Build an unapproved Stage 2 draft bound to one accepted Stage 1 artifact."""
+    safe_record, safe_artifact = _validated_stage1_source(stage1_record, base_artifact)
+    _validate_multiview_profile(profile, workflow_profile_id)
+    _require_idle_local_capability(capability_report, _utc_now())
+    if not isinstance(api_graph, dict):
+        raise ExecutionError("actual Flux API graph must be an object")
+    try:
+        slots = resolve_slots(actual_ui_workflow, profile)
+        actual_fingerprint = structure_fingerprint(actual_ui_workflow)
+    except (ProfileError, TypeError, ValueError) as exc:
+        raise ExecutionError(f"Flux execution evidence is invalid: {exc}") from exc
+    if slots != _MULTIVIEW_SLOTS:
+        raise ExecutionError("Flux workflow slot resolution does not match nodes 111/667")
+    if workflow_fingerprint != _MULTIVIEW_FINGERPRINT or actual_fingerprint != workflow_fingerprint:
+        raise ExecutionError("Flux workflow fingerprint does not match verified actual UI")
+
+    filename = _multiview_upload_name(safe_artifact["lineage_id"], safe_artifact["content_hash"])
+    from .adapters.flux_multiview import FluxAdapterError, patch_base_images
+    try:
+        executable = patch_base_images(api_graph, filename, slots)
+    except FluxAdapterError as exc:
+        raise ExecutionError(f"Flux API graph is invalid: {exc}") from exc
+    source_hash = content_hash(api_graph)
+    executable_hash = content_hash(executable)
+    report_hash = content_hash(capability_report)
+    profile_hash = content_hash(profile)
+    preflight = _derived_preflight(
+        actual_fingerprint, source_hash, executable_hash, report_hash, profile_hash, slots
+    )
+    preflight["upstream"] = {
+        "verified": True,
+        "record_hash": safe_record["record_hash"],
+        "artifact_hash": safe_artifact["content_hash"],
+        "lineage_id": safe_artifact["lineage_id"],
+    }
+    draft = {
+        "schema_version": "1.0",
+        "stage": _MULTIVIEW_STAGE,
+        "plan_state": "draft",
+        "upstream_record_hash": safe_record["record_hash"],
+        "source_artifact_hash": safe_artifact["content_hash"],
+        "lineage_id": safe_artifact["lineage_id"],
+        "uploaded_filename": filename,
+        "capability_report_hash": report_hash,
+        "workflow_profile_id": _MULTIVIEW_PROFILE_ID,
+        "profile_hash": profile_hash,
+        "workflow_fingerprint": actual_fingerprint,
+        "source_api_graph_hash": source_hash,
+        "executable_api_graph_hash": executable_hash,
+        "patches": _multiview_patches(filename, safe_artifact["content_hash"]),
+        "immutable_inputs": _multiview_immutable_inputs(api_graph, profile),
+        "local_only": True,
+        "preflight": preflight,
+        "expected_outputs": list(_MULTIVIEW_OUTPUTS),
+        "execution_approved": False,
+    }
+    draft["draft_hash"] = content_hash(draft)
+    return draft
+
+
+def _validate_multiview_draft_contract(draft: dict) -> None:
+    for field in (
+        "upstream_record_hash",
+        "source_artifact_hash",
+        "capability_report_hash",
+        "profile_hash",
+        "workflow_fingerprint",
+        "source_api_graph_hash",
+        "executable_api_graph_hash",
+    ):
+        if not isinstance(draft.get(field), str) or not _SHA256_RE.fullmatch(draft[field]):
+            raise ExecutionError("Stage 2 draft lineage hashes must be lowercase SHA-256 digests")
+    lineage_id = draft.get("lineage_id")
+    if not isinstance(lineage_id, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", lineage_id):
+        raise ExecutionError("Stage 2 draft lineage_id is invalid")
+    expected_filename = _multiview_upload_name(lineage_id, draft["source_artifact_hash"])
+    if draft.get("uploaded_filename") != expected_filename:
+        raise ExecutionError("Stage 2 draft uploaded filename is not content-derived")
+    if draft.get("workflow_profile_id") != _MULTIVIEW_PROFILE_ID:
+        raise ExecutionError("Stage 2 draft profile is invalid")
+    if draft.get("workflow_fingerprint") != _MULTIVIEW_FINGERPRINT:
+        raise ExecutionError("Stage 2 draft fingerprint is invalid")
+    if draft.get("expected_outputs") != _MULTIVIEW_OUTPUTS or draft.get("local_only") is not True:
+        raise ExecutionError("Stage 2 draft output/runtime policy is invalid")
+    if draft.get("patches") != _multiview_patches(expected_filename, draft["source_artifact_hash"]):
+        raise ExecutionError("Stage 2 draft exact dual image patches are invalid")
+    immutable = draft.get("immutable_inputs")
+    pose_ids = {368, 151, 152, 154, 360, 364, 148, 149, 147, 373, 150, 367}
+    if not isinstance(immutable, list) or {item.get("node_id") for item in immutable if isinstance(item, dict)} != pose_ids:
+        raise ExecutionError("Stage 2 draft immutable pose inputs are invalid")
+    if any(
+        not isinstance(item, dict)
+        or set(item) != {"node_id", "input", "value"}
+        or item.get("input") != "image"
+        or not isinstance(item.get("value"), str)
+        or not item["value"]
+        for item in immutable
+    ):
+        raise ExecutionError("Stage 2 draft immutable pose inputs are invalid")
+    upstream = draft.get("preflight", {}).get("upstream")
+    if upstream != {
+        "verified": True,
+        "record_hash": draft["upstream_record_hash"],
+        "artifact_hash": draft["source_artifact_hash"],
+        "lineage_id": lineage_id,
+    }:
+        raise ExecutionError("Stage 2 draft upstream preflight is invalid")
+
+
 def _validate_draft_hash(draft: object) -> dict:
-    if not isinstance(draft, dict) or set(draft) != _DRAFT_KEYS:
+    if not isinstance(draft, dict):
         raise ExecutionError("ExecutionDraft schema is incomplete or contains unexpected fields")
-    if draft.get("schema_version") != "1.0" or draft.get("stage") != "character-base":
-        raise ExecutionError("ExecutionDraft is not a Stage 1 character-base draft")
+    expected_keys = (
+        _STAGE1_DRAFT_KEYS if draft.get("stage") == "character-base" else _MULTIVIEW_DRAFT_KEYS
+    )
+    if set(draft) != expected_keys:
+        raise ExecutionError("ExecutionDraft schema is incomplete or contains unexpected fields")
+    if draft.get("schema_version") != "1.0" or draft.get("stage") not in {"character-base", _MULTIVIEW_STAGE}:
+        raise ExecutionError("ExecutionDraft stage is unsupported")
     if draft.get("plan_state") != "draft" or draft.get("execution_approved") is not False:
         raise ExecutionError("ExecutionDraft must remain unapproved")
+    if draft.get("stage") == _MULTIVIEW_STAGE:
+        _validate_multiview_draft_contract(draft)
     unsigned = dict(draft)
     claimed_hash = unsigned.pop("draft_hash")
     if not isinstance(claimed_hash, str) or claimed_hash != content_hash(unsigned):
@@ -389,21 +659,30 @@ def approve_execution_draft(
 
 
 def _validate_approved_plan(plan: object, *, trusted_now: datetime | None) -> dict:
-    if not isinstance(plan, dict) or set(plan) != _APPROVED_PLAN_KEYS:
+    if not isinstance(plan, dict):
         raise ExecutionError("ExecutionPlan lineage is incomplete")
-    if plan.get("schema_version") != "1.0" or plan.get("stage") != "character-base":
-        raise ExecutionError("ExecutionPlan is not a Stage 1 character-base plan")
-    if plan.get("workflow_profile_id") != _CHARACTER_BASE_PROFILE_ID:
-        raise ExecutionError("ExecutionPlan profile is not camera-anima-v1")
+    draft_keys = (
+        _STAGE1_DRAFT_KEYS if plan.get("stage") == "character-base" else _MULTIVIEW_DRAFT_KEYS
+    )
+    if set(plan) != draft_keys.union(_APPROVAL_PLAN_FIELDS):
+        raise ExecutionError("ExecutionPlan lineage is incomplete")
+    stage = plan.get("stage")
+    if plan.get("schema_version") != "1.0" or stage not in {"character-base", _MULTIVIEW_STAGE}:
+        raise ExecutionError("ExecutionPlan stage is unsupported")
+    expected_profile = _CHARACTER_BASE_PROFILE_ID if stage == "character-base" else _MULTIVIEW_PROFILE_ID
+    expected_outputs = _CHARACTER_BASE_OUTPUTS if stage == "character-base" else _MULTIVIEW_OUTPUTS
+    expected_slots = _CHARACTER_BASE_SLOTS if stage == "character-base" else _MULTIVIEW_SLOTS
+    if plan.get("workflow_profile_id") != expected_profile:
+        raise ExecutionError("ExecutionPlan profile does not match its stage")
     if plan.get("plan_state") != "approved":
         raise ExecutionError("ExecutionPlan must be approved")
     if plan.get("local_only") is not True or plan.get("execution_approved") is not True:
         raise ExecutionError("ExecutionPlan must be local-only and approved")
-    if plan.get("expected_outputs") != _CHARACTER_BASE_OUTPUTS:
+    if plan.get("expected_outputs") != expected_outputs:
         raise ExecutionError("ExecutionPlan must expect exactly image/png")
-    if plan.get("immutable_inputs") != []:
+    if stage == "character-base" and plan.get("immutable_inputs") != []:
         raise ExecutionError("ExecutionPlan immutable_inputs contract is invalid")
-    reconstructed_draft = {key: copy.deepcopy(plan[key]) for key in _DRAFT_KEYS}
+    reconstructed_draft = {key: copy.deepcopy(plan[key]) for key in draft_keys}
     reconstructed_draft["plan_state"] = "draft"
     reconstructed_draft["execution_approved"] = False
     _validate_draft_hash(reconstructed_draft)
@@ -421,7 +700,6 @@ def _validate_approved_plan(plan: object, *, trusted_now: datetime | None) -> di
         "capability_report_hash",
         "source_api_graph_hash",
         "executable_api_graph_hash",
-        "prompt_build_id",
     ):
         if not isinstance(plan[field], str) or not _SHA256_RE.fullmatch(plan[field]):
             raise ExecutionError("ExecutionPlan lineage hashes must be lowercase SHA-256 digests")
@@ -431,8 +709,20 @@ def _validate_approved_plan(plan: object, *, trusted_now: datetime | None) -> di
         plan["executable_api_graph_hash"],
         plan["capability_report_hash"],
         plan["profile_hash"],
-        _CHARACTER_BASE_SLOTS,
+        expected_slots,
     )
+    if stage == _MULTIVIEW_STAGE:
+        for field in ("upstream_record_hash", "source_artifact_hash"):
+            if not isinstance(plan[field], str) or not _SHA256_RE.fullmatch(plan[field]):
+                raise ExecutionError("ExecutionPlan upstream hashes must be lowercase SHA-256 digests")
+        expected_preflight["upstream"] = {
+            "verified": True,
+            "record_hash": plan["upstream_record_hash"],
+            "artifact_hash": plan["source_artifact_hash"],
+            "lineage_id": plan["lineage_id"],
+        }
+    elif not isinstance(plan.get("prompt_build_id"), str) or not _SHA256_RE.fullmatch(plan["prompt_build_id"]):
+        raise ExecutionError("ExecutionPlan prompt_build_id must be a lowercase SHA-256 digest")
     if plan.get("preflight") != expected_preflight:
         raise ExecutionError("ExecutionPlan preflight lineage is not self-consistent")
     unsigned = dict(plan)
@@ -626,6 +916,106 @@ def build_run_record(
         "artifact_hashes_verified": False,
         "input_hashes": safe_inputs,
         "output_hashes": safe_outputs,
+    }
+    record["record_hash"] = content_hash(record)
+    return record
+
+
+def build_multiview_run_record(
+    task_context: dict,
+    stage1_record: dict,
+    base_artifact: dict,
+    api_graph: dict,
+    execution_plan: dict,
+    profile: dict,
+    prompt_id: str,
+    terminal_status: str,
+    output_hashes: dict,
+    *,
+    history: dict,
+) -> dict:
+    """Retain Stage 2 executable history and normalized artifact lineage."""
+    try:
+        safe_context = validate_task_context(task_context)
+    except ContractError as exc:
+        raise ExecutionError(f"invalid TaskContext: {exc}") from exc
+    safe_stage1, safe_artifact = _validated_stage1_source(stage1_record, base_artifact)
+    safe_plan = _validate_approved_plan(execution_plan, trusted_now=None)
+    if safe_plan["stage"] != _MULTIVIEW_STAGE:
+        raise ExecutionError("Stage 2 RunRecord requires a character-multiview plan")
+    if safe_plan["upstream_record_hash"] != safe_stage1["record_hash"]:
+        raise ExecutionError("Stage 2 plan does not match the Stage 1 RunRecord")
+    if safe_plan["source_artifact_hash"] != safe_artifact["content_hash"]:
+        raise ExecutionError("Stage 2 plan does not match the CharacterBaseImage")
+    if safe_plan["lineage_id"] != safe_artifact["lineage_id"]:
+        raise ExecutionError("Stage 2 plan lineage_id does not match the CharacterBaseImage")
+    _validate_multiview_profile(profile, safe_plan["workflow_profile_id"])
+    if content_hash(profile) != safe_plan["profile_hash"]:
+        raise ExecutionError("Stage 2 plan profile_hash does not match profile")
+    if content_hash(api_graph) != safe_plan["source_api_graph_hash"]:
+        raise ExecutionError("Stage 2 plan source graph does not match API graph")
+
+    from .adapters.flux_multiview import FluxAdapterError, patch_base_images
+    try:
+        executable = patch_base_images(api_graph, safe_plan["uploaded_filename"], _MULTIVIEW_SLOTS)
+    except FluxAdapterError as exc:
+        raise ExecutionError(f"Stage 2 API graph is invalid: {exc}") from exc
+    if content_hash(executable) != safe_plan["executable_api_graph_hash"]:
+        raise ExecutionError("Stage 2 executable graph does not match approved plan")
+    if safe_plan["patches"] != _multiview_patches(
+        safe_plan["uploaded_filename"], safe_artifact["content_hash"]
+    ):
+        raise ExecutionError("Stage 2 exact dual patches do not match source artifact")
+
+    if not isinstance(prompt_id, str) or not prompt_id:
+        raise ExecutionError("prompt_id is required for a terminal Stage 2 RunRecord")
+    if terminal_status not in _TERMINAL_STATUSES:
+        raise ExecutionError("Stage 2 terminal status must be succeeded or failed")
+    safe_outputs = _validated_hashes(output_hashes, "output")
+    history_status, history_outputs = _parse_history(
+        history, prompt_id, terminal_status, executable
+    )
+    history_filenames = {item["filename"] for item in history_outputs}
+    if set(safe_outputs) != history_filenames:
+        raise ExecutionError("output hash filename keys must match raw ComfyUI history")
+
+    entry_outputs = history[prompt_id]["outputs"]
+    from .artifacts import ArtifactNormalizationError, normalize_image_outputs
+    try:
+        artifacts = normalize_image_outputs(
+            entry_outputs,
+            profile.get("output_nodes"),
+            safe_artifact["lineage_id"],
+            safe_artifact["content_hash"],
+        )
+    except ArtifactNormalizationError as exc:
+        raise ExecutionError(f"Stage 2 artifact normalization failed: {exc}") from exc
+    if terminal_status == "succeeded" and not artifacts:
+        raise ExecutionError("successful Stage 2 history requires normalized image artifacts")
+    for artifact in artifacts:
+        artifact["content_hash"] = safe_outputs[artifact["filename"]]
+
+    record = {
+        "schema_version": "1.0",
+        "stage": _MULTIVIEW_STAGE,
+        "task_context_hash": content_hash(safe_context),
+        "upstream_record_hash": safe_stage1["record_hash"],
+        "source_artifact_hash": safe_artifact["content_hash"],
+        "lineage_id": safe_artifact["lineage_id"],
+        "source_api_graph_hash": safe_plan["source_api_graph_hash"],
+        "executable_api_graph_hash": safe_plan["executable_api_graph_hash"],
+        "execution_plan_hash": content_hash(safe_plan),
+        "execution_plan": copy.deepcopy(safe_plan),
+        "prompt_id": prompt_id,
+        "terminal_status": terminal_status,
+        "history_status": history_status,
+        "history_outputs": history_outputs,
+        "raw_history": copy.deepcopy(history),
+        "raw_history_hash": content_hash(history),
+        "history_verified": True,
+        "artifact_hashes_verified": False,
+        "output_hashes": safe_outputs,
+        "artifacts": artifacts,
     }
     record["record_hash"] = content_hash(record)
     return record

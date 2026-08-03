@@ -13,6 +13,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from runtime.adapters.camera import patch_character_base
+from runtime.adapters.flux_multiview import FluxAdapterError, patch_base_images
 from runtime.capabilities import build_capability_report
 from runtime.comfy_api import CapabilityError, ComfyApi
 from runtime.contracts import ContractError, canonical_json
@@ -22,6 +23,8 @@ from runtime.execution import (
     approve_execution_draft,
     build_approval_consumption,
     build_execution_draft,
+    build_multiview_draft,
+    build_multiview_run_record,
     build_run_record,
 )
 from runtime.workflow_profile import ProfileError, structure_fingerprint
@@ -64,6 +67,11 @@ def _parser() -> argparse.ArgumentParser:
     plan = commands.add_parser("plan", help="build a Stage 1 unapproved ExecutionDraft")
     _add_json_source(plan)
 
+    plan_multiview = commands.add_parser(
+        "plan-multiview", help="build a Stage 2 unapproved multiview ExecutionDraft"
+    )
+    _add_json_source(plan_multiview)
+
     approve = commands.add_parser("approve-plan", help="approve one displayed ExecutionDraft")
     _add_json_source(approve)
     approve.add_argument("--run-dir", type=Path, required=True)
@@ -74,6 +82,9 @@ def _parser() -> argparse.ArgumentParser:
 
     patch = commands.add_parser("patch-camera", help="patch the camera API graph")
     _add_json_source(patch)
+
+    patch_flux = commands.add_parser("patch-flux", help="patch both Flux base-image inputs")
+    _add_json_source(patch_flux)
 
     record = commands.add_parser("record", help="build and retain a RunRecord")
     _add_json_source(record)
@@ -183,9 +194,18 @@ def _dispatch(command: str, payload: dict, args) -> dict | tuple[dict, int]:
         return patch_character_base(
             payload["api_graph"], payload["prompt_build"], payload["slots"]
         )
+    if command == "patch-flux":
+        return patch_base_images(
+            payload["api_graph"], payload["image_name"], payload["slots"]
+        )
     if command == "plan":
         try:
             return build_execution_draft(**payload)
+        except ExecutionError as exc:
+            return {"accepted": False, "error": str(exc)}, 1
+    if command == "plan-multiview":
+        try:
+            return build_multiview_draft(**payload)
         except ExecutionError as exc:
             return {"accepted": False, "error": str(exc)}, 1
     if command == "approve-plan":
@@ -228,7 +248,11 @@ def _dispatch(command: str, payload: dict, args) -> dict | tuple[dict, int]:
         path = _write_approval_consumption(args.run_dir, consumption)
         return {"consumption": consumption, "consumption_path": str(path)}
     if command == "record":
-        record = build_run_record(**payload)
+        plan = payload.get("execution_plan")
+        if isinstance(plan, dict) and plan.get("stage") == "character-multiview":
+            record = build_multiview_run_record(**payload)
+        else:
+            record = build_run_record(**payload)
         path = _write_run_record(args.run_dir, record)
         return {"record": record, "record_path": str(path)}
     raise CliUsageError(f"unsupported command: {command}")
@@ -255,6 +279,7 @@ def main(argv: list[str] | None = None) -> int:
         CliUsageError,
         ContractError,
         ExecutionError,
+        FluxAdapterError,
         ProfileError,
         KeyError,
         OSError,
