@@ -84,7 +84,7 @@ def test_ready_shot_build_emits_allowlisted_patches_and_proof():
         "ready_to_execute": True,
         "execution": {"requested": True, "performed": False},
     }
-    proof = {"vae_encode_node_id": 59, "sampler_node_id": 27, "traversed_node_ids": [27, 59]}
+    proof = {"vae_encode_node_id": 59, "sampler_node_id": 27, "traversed_node_ids": [27, 75, 59]}
     result = build_shot_plan(
         "base",
         "shot",

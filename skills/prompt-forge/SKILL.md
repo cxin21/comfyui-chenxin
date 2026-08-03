@@ -69,7 +69,7 @@ REST 只可作为 health、queue、object info、saved workflow 和 history 的�
 
 ### 4. MCP load / strip / validate
 
-由已协商到的 MCP 能力加载用户指定的保存工作流，并负责 UI→API 转换、strip/slice、runtime classification 与 executable validation。禁止让 Python runtime 猜 widget-to-input 映射；相机的 `normalize-camera` 只执行 profile 中已观察、可审计的差异。受控 orchestrator 必须在相邻执行证据中保留未修改的 source API graph、source hash、normalized executable source 和归一化结果（runtime draft 至少绑定 source hash）；saved workflow 保持不变。若 caller 丢失 raw graph 或无法证明 normalized source 来自同一份 source，必须停止，不得用 normalized graph 反推来源。
+由已协商到的 MCP 能力加载用户指定的保存工作流，并负责 UI→API 转换、strip/slice、runtime classification 与 executable validation。禁止让 Python runtime 猜 widget-to-input 映射；相机的 `normalize-camera` 只执行 profile 中已观察、可审计的差异。受控 orchestrator 必须在相邻执行证据中保留未修改的 source API graph（`raw_source_api_graph_hash`）、normalized executable source（`normalized_source_api_graph_hash`）和归一化结果；runtime draft 当前的 `source_api_graph_hash` 明确指 normalized source hash。saved workflow 保持不变。若 caller 丢失 raw graph 或无法证明 normalized source 来自同一份 source，必须停止，不得用 normalized graph 反推来源。
 
 ### 5. Fingerprint
 
