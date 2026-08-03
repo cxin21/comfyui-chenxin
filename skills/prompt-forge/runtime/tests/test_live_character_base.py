@@ -15,17 +15,21 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-pytestmark = pytest.mark.skipif(
+LIVE_MARK = pytest.mark.skipif(
     os.environ.get("PROMPT_FORGE_LIVE") != "1",
     reason="set PROMPT_FORGE_LIVE=1 to enqueue real ComfyUI jobs",
 )
 
 from internals.prompt_compile import compile_prompt
 from runtime.adapters.camera import patch_character_base
-from runtime.capabilities import build_capability_report
+from runtime.capabilities import build_capability_report, report_is_fresh
 from runtime.comfy_api import ComfyApi
 from runtime.contracts import canonical_json, content_hash
-from runtime.execution import build_execution_plan, build_run_record
+from runtime.execution import (
+    approve_execution_draft,
+    build_execution_draft,
+    build_run_record,
+)
 from runtime.runtime_cli import _write_run_record
 from runtime.workflow_profile import resolve_slots, structure_fingerprint
 
@@ -115,8 +119,9 @@ def _latest_matching_history(history, saved_workflow, profile):
             continue
         candidates.append((sequence, prompt_id, entry, ui_workflow, graph))
     assert candidates, (
-        "no successful history entry is reliably bound to the current "
-        f"{WORKFLOW_NAME} UI fingerprint"
+        "no successful history entry matches the selected saved workflow id, "
+        "camera-anima-v1 slots, and API graph node classes for "
+        f"{WORKFLOW_NAME}"
     )
     return max(candidates, key=lambda item: item[0])
 
@@ -233,20 +238,19 @@ def _capability_report():
     return build_capability_report(ComfyApi(BASE_URL), adapter, datetime.now(timezone.utc))
 
 
-def _plan(build, profile, ui_workflow, graph, report):
+def _draft(build, profile, ui_workflow, graph, report):
     patches = [
         {"slot": "positive_prompt", "input": "wildcard_text", "value": build["prompt"]},
         {"slot": "positive_prompt", "input": "populated_text", "value": build["prompt"]},
         {"slot": "negative_prompt", "input": "wildcard_text", "value": build["negative_prompt"]},
         {"slot": "negative_prompt", "input": "populated_text", "value": build["negative_prompt"]},
     ]
-    return build_execution_plan(
+    return build_execution_draft(
         "character-base",
         build,
         "camera-anima-v1",
         structure_fingerprint(ui_workflow),
         patches,
-        True,
         capability_report=report,
         profile=profile,
         actual_ui_workflow=ui_workflow,
@@ -356,6 +360,27 @@ def _write_json_evidence(path, value):
     return path.resolve()
 
 
+def _load_external_approval(draft, run_dir):
+    pending_path = _write_json_evidence(
+        run_dir / f'{draft["draft_hash"]}.pending-draft.json', draft
+    )
+    approval_file = os.environ.get("PROMPT_FORGE_APPROVAL_FILE")
+    assert approval_file, (
+        "set PROMPT_FORGE_APPROVAL_FILE to a fresh external approval event bound to "
+        f"draft_hash={draft['draft_hash']}; pending draft: {pending_path}"
+    )
+    event_path = Path(approval_file).resolve(strict=True)
+    event = json.loads(event_path.read_text(encoding="utf-8"))
+    plan = approve_execution_draft(draft, event)
+    retained_event = _write_json_evidence(
+        run_dir / f'{plan["approval_id"]}.approval.json', event
+    )
+    retained_plan = _write_json_evidence(
+        run_dir / f'{plan["plan_hash"]}.approved-plan.json', plan
+    )
+    return plan, pending_path, retained_event, retained_plan
+
+
 def _control_record(
     run_dir,
     source_prompt_id,
@@ -410,6 +435,64 @@ def _production_record(
     return record, path, raw_history_path
 
 
+def _historical_characterization_record(
+    run_dir, prompt_id, source_graph, executable_graph, history, hashes, paths
+):
+    record = {
+        "schema_version": "1.0",
+        "record_type": "historical_render_graph_characterization",
+        "production_execution_plan": False,
+        "approval_lineage_verified": False,
+        "prompt_id": prompt_id,
+        "terminal_status": "succeeded",
+        "source_graph_hash": content_hash(source_graph),
+        "executable_graph_hash": content_hash(executable_graph),
+        "raw_history_hash": content_hash(history),
+        "artifact_paths": paths,
+        "artifact_hashes": hashes,
+    }
+    record["record_hash"] = content_hash(record)
+    path = _write_run_record(run_dir, record)
+    raw_history_path = _write_json_evidence(run_dir / f"{prompt_id}-raw-history.json", history)
+    return record, path, raw_history_path
+
+
+def test_latest_history_selection_uses_workflow_id_and_profile_not_current_saved_fingerprint():
+    profile = json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
+    history_ui = json.loads(
+        (Path(__file__).parent / "fixtures/camera-ui-minimal.json").read_text(encoding="utf-8")
+    )
+    history_ui["id"] = "stable-workflow-id"
+    saved_ui = copy.deepcopy(history_ui)
+    saved_ui["nodes"].append({"id": 999, "type": "UnrelatedNode", "title": "CURRENT"})
+    graph = json.loads(
+        (Path(__file__).parent / "fixtures/camera-api-minimal.json").read_text(encoding="utf-8")
+    )
+    entry = {
+        "prompt": [7, "history-prompt", graph, {"extra_pnginfo": {"workflow": history_ui}}],
+        "status": {"status_str": "success", "completed": True},
+    }
+
+    selected = _latest_matching_history(
+        {"history-prompt": entry}, saved_ui, profile
+    )
+
+    assert selected[1] == "history-prompt"
+    assert structure_fingerprint(saved_ui) != structure_fingerprint(selected[3])
+
+
+def test_missing_external_approval_preserves_pending_draft(tmp_path, monkeypatch):
+    monkeypatch.delenv("PROMPT_FORGE_APPROVAL_FILE", raising=False)
+    draft = {"draft_hash": "a" * 64, "plan_state": "draft"}
+
+    with pytest.raises(AssertionError, match="PROMPT_FORGE_APPROVAL_FILE"):
+        _load_external_approval(draft, tmp_path)
+
+    pending = tmp_path / f'{draft["draft_hash"]}.pending-draft.json'
+    assert json.loads(pending.read_text(encoding="utf-8")) == draft
+
+
+@LIVE_MARK
 def test_live_character_base_experiments_a_then_b():
     assert BASE_URL == "http://127.0.0.1:8188"
     assert _queue_is_empty(), "ComfyUI queue must be empty before live preflight"
@@ -446,20 +529,21 @@ def test_live_character_base_experiments_a_then_b():
     }
     before_filenames = _history_filenames(history_at_source)
 
-    # Experiment A: start from the proven graph and change exactly one seed input.
+    # Historical Experiment A: characterize the retained seed-only replay. This
+    # repaired test never creates a new A job.
     graph_a = copy.deepcopy(baseline_graph)
     seed_a = 0 if baseline_seed >= 2**63 - 1 else baseline_seed + 1
     graph_a[seed_node]["inputs"]["seed"] = seed_a
     assert _diff_paths(baseline_graph, graph_a) == [f"{seed_node}.inputs.seed"]
     prompt_id_a = os.environ.get("PROMPT_FORGE_EXPERIMENT_A_PROMPT_ID")
-    if prompt_id_a:
-        history_a = _request_json(f"/history/{urllib.parse.quote(prompt_id_a, safe='')}")
-        entry_a = history_a[prompt_id_a]
-        assert _successful(entry_a), "reused Experiment A is not terminal success"
-        assert canonical_json(entry_a["prompt"][2]) == canonical_json(graph_a)
-    else:
-        prompt_id_a = _enqueue(graph_a, ui_workflow, "A-seed-only")
-        history_a, entry_a = _wait_terminal(prompt_id_a)
+    assert prompt_id_a, (
+        "set PROMPT_FORGE_EXPERIMENT_A_PROMPT_ID to retained historical A; "
+        "the repaired test will not enqueue a new control run"
+    )
+    history_a = _request_json(f"/history/{urllib.parse.quote(prompt_id_a, safe='')}")
+    entry_a = history_a[prompt_id_a]
+    assert _successful(entry_a), "reused Experiment A is not terminal success"
+    assert canonical_json(entry_a["prompt"][2]) == canonical_json(graph_a)
     hashes_a, paths_a = _verify_outputs(entry_a, output_dir, before_filenames)
     record_a, record_path_a, raw_history_path_a = _control_record(
         run_dir,
@@ -488,7 +572,7 @@ def test_live_character_base_experiments_a_then_b():
     assert build_b["prompt"] != prompts["positive"]
     assert build_b["negative_prompt"] == prompts["negative"]
     report_b = _capability_report()
-    plan_b = _plan(build_b, profile, ui_workflow, graph_a, report_b)
+    draft_b = _draft(build_b, profile, ui_workflow, graph_a, report_b)
     executable_b = patch_character_base(
         graph_a, build_b, {"positive_prompt": 24, "negative_prompt": 25}
     )
@@ -498,34 +582,65 @@ def test_live_character_base_experiments_a_then_b():
         "24.inputs.wildcard_text",
     }
     prompt_id_b = os.environ.get("PROMPT_FORGE_EXPERIMENT_B_PROMPT_ID")
+    plan_b = None
+    approval_paths = None
     if prompt_id_b:
+        _write_json_evidence(
+            run_dir / f'{draft_b["draft_hash"]}.pending-draft.json', draft_b
+        )
         history_b = _request_json(f"/history/{urllib.parse.quote(prompt_id_b, safe='')}")
         entry_b = history_b[prompt_id_b]
         assert _successful(entry_b), "reused Experiment B is not terminal success"
         assert canonical_json(entry_b["prompt"][2]) == canonical_json(executable_b)
     else:
+        plan_b, pending_path, event_path, approved_plan_path = _load_external_approval(
+            draft_b, run_dir
+        )
+        approval_paths = {
+            "displayed_draft": str(pending_path),
+            "approval_event": str(event_path),
+            "approved_plan": str(approved_plan_path),
+        }
+        # Approval is checked again immediately before its one permitted enqueue.
+        plan_b = approve_execution_draft(draft_b, plan_b["approval_event"])
+        assert report_is_fresh(report_b, datetime.now(timezone.utc)), (
+            "CapabilityReport expired after approval; rebuild and display a new draft"
+        )
+        assert _queue_is_empty(), "ComfyUI queue changed after approval"
         prompt_id_b = _enqueue(executable_b, ui_workflow, "B-positive-prompt-only")
         history_b, entry_b = _wait_terminal(prompt_id_b)
     hashes_b, paths_b = _verify_outputs(
         entry_b, output_dir, before_filenames.union(hashes_a)
     )
-    record_b, record_path_b, raw_history_path_b = _production_record(
-        run_dir,
-        _task_context("B"),
-        build_b,
-        graph_a,
-        plan_b,
-        prompt_id_b,
-        history_b,
-        hashes_b,
-    )
+    if plan_b is None:
+        record_b, record_path_b, raw_history_path_b = _historical_characterization_record(
+            run_dir,
+            prompt_id_b,
+            graph_a,
+            executable_b,
+            history_b,
+            hashes_b,
+            paths_b,
+        )
+    else:
+        record_b, record_path_b, raw_history_path_b = _production_record(
+            run_dir,
+            _task_context("B"),
+            build_b,
+            graph_a,
+            plan_b,
+            prompt_id_b,
+            history_b,
+            hashes_b,
+        )
 
     summary = {
         "workflow": WORKFLOW_NAME,
         "saved_workflow_count": len(names),
         "source_prompt_id": source_prompt_id,
-        "saved_workflow_fingerprint": structure_fingerprint(saved_ui_workflow),
-        "history_ui_fingerprint": structure_fingerprint(ui_workflow),
+        "current_saved_workflow_fingerprint": structure_fingerprint(saved_ui_workflow),
+        "selected_history_ui_fingerprint": structure_fingerprint(ui_workflow),
+        "history_selection_basis": "workflow-id + camera-anima-v1 slots + API node classes",
         "source_graph_hash": content_hash(baseline_graph),
         "verified_resources": verified_resources,
         "seed": seed_a,
@@ -538,6 +653,11 @@ def test_live_character_base_experiments_a_then_b():
             "record_hash": record_a["record_hash"],
         },
         "experiment_b": {
+            "evidence_class": (
+                "production-approved" if plan_b is not None else "historical-render-characterization"
+            ),
+            "approval_lineage_verified": plan_b is not None,
+            "approval_paths": approval_paths,
             "prompt_id": prompt_id_b,
             "output_paths": paths_b,
             "output_hashes": hashes_b,

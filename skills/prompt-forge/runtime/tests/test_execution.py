@@ -7,7 +7,12 @@ import pytest
 
 import runtime.execution as execution_module
 from runtime.contracts import content_hash
-from runtime.execution import ExecutionError, build_execution_plan, build_run_record
+from runtime.execution import (
+    ExecutionError,
+    approve_execution_draft,
+    build_execution_draft,
+    build_run_record,
+)
 from runtime.workflow_profile import structure_fingerprint
 
 
@@ -117,17 +122,36 @@ def trusted_utc_clock(monkeypatch):
     monkeypatch.setattr(execution_module, "_utc_now", lambda: NOW, raising=False)
 
 
-def build_valid_plan(build=None, patches=None, **kwargs):
+def build_valid_draft(build=None, patches=None, **kwargs):
     build = build or ready_build()
-    return build_execution_plan(
+    return build_execution_draft(
         "character-base",
         build,
         "camera-anima-v1",
         UI_FINGERPRINT,
         exact_patches(build) if patches is None else patches,
-        True,
         **plan_kwargs(**kwargs),
     )
+
+
+def approval_event(draft, **overrides):
+    event = {
+        "decision": "approved",
+        "draft_hash": draft["draft_hash"],
+        "displayed_at": (NOW - timedelta(minutes=2)).isoformat().replace("+00:00", "Z"),
+        "approved_at": (NOW - timedelta(minutes=1)).isoformat().replace("+00:00", "Z"),
+        "expires_at": (NOW + timedelta(minutes=5)).isoformat().replace("+00:00", "Z"),
+        "scope": "enqueue-once",
+        "actor": "user:test",
+        "source": "test-fixture",
+    }
+    event.update(overrides)
+    return event
+
+
+def build_valid_plan(build=None, patches=None, **kwargs):
+    draft = build_valid_draft(build, patches, **kwargs)
+    return approve_execution_draft(draft, approval_event(draft))
 
 
 def task_context():
@@ -175,9 +199,11 @@ def history_response(graph=None, *, prompt_id="prompt-123", status="succeeded"):
     }
 
 
-def test_plan_requires_current_approval_before_other_runtime_inputs():
-    with pytest.raises(ExecutionError, match="approval"):
-        build_execution_plan("character-base", ready_build(), "camera-anima-v1", "abc", [], False)
+def test_draft_does_not_accept_caller_approval_boolean():
+    with pytest.raises(TypeError):
+        build_execution_draft(
+            "character-base", ready_build(), "camera-anima-v1", "abc", [], False
+        )
 
 
 def test_character_base_plan_requires_exact_prompt_derived_patch_set():
@@ -198,7 +224,7 @@ def test_character_base_plan_requires_exact_prompt_derived_patch_set():
 
 
 def test_character_base_contract_is_not_defined_by_profile_allowlist():
-    result = build_valid_plan()
+    result = build_valid_draft()
     assert [f"{item['slot']}.{item['input']}" for item in result["patches"]] == [
         "positive_prompt.wildcard_text",
         "positive_prompt.populated_text",
@@ -240,9 +266,9 @@ def test_plan_records_complete_lineage_and_self_hash_without_mutating_inputs():
     patch_values = exact_patches(build)
     kwargs = plan_kwargs()
     before = copy.deepcopy((build, patch_values, kwargs))
-    result = build_execution_plan(
+    result = build_execution_draft(
         "character-base", build, "camera-anima-v1", UI_FINGERPRINT,
-        patch_values, True, **kwargs,
+        patch_values, **kwargs,
     )
     assert (build, patch_values, kwargs) == before
     assert result["prompt_build_id"] == content_hash(build)
@@ -267,9 +293,63 @@ def test_plan_records_complete_lineage_and_self_hash_without_mutating_inputs():
         },
         "profile": {"verified": True, "hash": content_hash(kwargs["profile"])},
     }
+    assert result["plan_state"] == "draft"
+    assert result["execution_approved"] is False
     unsigned = dict(result)
+    del unsigned["draft_hash"]
+    assert result["draft_hash"] == content_hash(unsigned)
+
+
+def test_approval_binds_exact_displayed_draft_and_hashes_event_and_plan():
+    draft = build_valid_draft()
+    event = approval_event(draft)
+
+    plan = approve_execution_draft(draft, event)
+
+    assert plan["plan_state"] == "approved"
+    assert plan["execution_approved"] is True
+    assert plan["draft_hash"] == draft["draft_hash"]
+    assert plan["approval_event"] == event
+    assert plan["approval_id"] == content_hash(event)
+    unsigned = dict(plan)
     del unsigned["plan_hash"]
-    assert result["plan_hash"] == content_hash(unsigned)
+    assert plan["plan_hash"] == content_hash(unsigned)
+
+
+@pytest.mark.parametrize(
+    "event_changes, match",
+    [
+        ({"draft_hash": "0" * 64}, "draft_hash"),
+        ({"decision": "rejected"}, "decision"),
+        ({"scope": "enqueue-many"}, "scope"),
+        ({"actor": ""}, "actor"),
+        ({"source": ""}, "source"),
+        ({"unexpected": True}, "schema"),
+        ({"displayed_at": "2026-08-03T00:00:00+08:00"}, "UTC"),
+        ({"approved_at": "2026-08-02T23:57:00Z"}, "order"),
+        ({"expires_at": "2026-08-03T00:00:00Z"}, "expired"),
+        ({"expires_at": "2026-08-03T00:09:00Z"}, "600"),
+    ],
+)
+def test_approval_rejects_wrong_or_stale_event(event_changes, match):
+    draft = build_valid_draft()
+    with pytest.raises(ExecutionError, match=match):
+        approve_execution_draft(draft, approval_event(draft, **event_changes))
+
+
+def test_approval_rejects_modified_or_stale_hashed_draft():
+    draft = build_valid_draft()
+    draft["patches"][0]["value"] = "modified after display"
+    with pytest.raises(ExecutionError, match="draft_hash"):
+        approve_execution_draft(draft, approval_event(draft))
+
+
+def test_approval_rejects_event_with_missing_required_field():
+    draft = build_valid_draft()
+    event = approval_event(draft)
+    event.pop("actor")
+    with pytest.raises(ExecutionError, match="schema"):
+        approve_execution_draft(draft, event)
 
 
 def test_run_record_requires_valid_task_context_before_lineage_checks():
@@ -282,10 +362,11 @@ def test_run_record_requires_valid_task_context_before_lineage_checks():
 
 
 @pytest.mark.parametrize("mutation, match", [
-    (lambda p: p.update(prompt_build_id="0" * 64), "prompt_build_id"),
-    (lambda p: p.update(source_api_graph_hash="0" * 64), "source_api_graph_hash"),
-    (lambda p: p.update(executable_api_graph_hash="0" * 64), "executable_api_graph_hash"),
+    (lambda p: p.update(prompt_build_id="0" * 64), "draft_hash"),
+    (lambda p: p.update(source_api_graph_hash="0" * 64), "draft_hash"),
+    (lambda p: p.update(executable_api_graph_hash="0" * 64), "draft_hash"),
     (lambda p: p.pop("profile_hash"), "lineage"),
+    (lambda p: p.update(approval_id="0" * 64), "approval_id"),
     (lambda p: p.update(plan_hash="0" * 64), "plan_hash"),
 ])
 def test_run_record_rejects_incomplete_or_forged_plan(mutation, match):
@@ -377,9 +458,9 @@ def test_plan_rejects_arbitrary_ui_even_with_self_consistent_fingerprint_and_pre
     arbitrary_ui = {"nodes": [], "groups": [], "links": []}
     forged_fingerprint = structure_fingerprint(arbitrary_ui)
     with pytest.raises(ExecutionError, match="slot"):
-        build_execution_plan(
+        build_execution_draft(
             "character-base", ready_build(), "camera-anima-v1", forged_fingerprint,
-            exact_patches(), True, capability_report=capability_report(), profile=profile(),
+            exact_patches(), capability_report=capability_report(), profile=profile(),
             actual_ui_workflow=arbitrary_ui,
             api_graph=api_graph(),
         )
@@ -396,9 +477,9 @@ def test_plan_rejects_profile_and_ui_that_self_certify_attacker_slot_type():
     attacker_ui["nodes"][0]["type"] = "AttackerNode"
     attacker_ui["nodes"][0]["title"] = "EVIL"
     with pytest.raises(ExecutionError, match="slot.*positive_prompt"):
-        build_execution_plan(
+        build_execution_draft(
             "character-base", ready_build(), "camera-anima-v1",
-            structure_fingerprint(attacker_ui), exact_patches(), True,
+            structure_fingerprint(attacker_ui), exact_patches(),
             capability_report=capability_report(), profile=selected_profile,
             actual_ui_workflow=attacker_ui, api_graph=api_graph(),
         )
@@ -418,9 +499,9 @@ def test_run_record_rejects_caller_constructed_terminal_claim():
 def test_plan_public_api_does_not_accept_caller_controlled_clock():
     kwargs = plan_kwargs()
     with pytest.raises(TypeError):
-        build_execution_plan(
+        build_execution_draft(
             "character-base", ready_build(), "camera-anima-v1", UI_FINGERPRINT,
-            exact_patches(), True, now=NOW, **kwargs,
+            exact_patches(), now=NOW, **kwargs,
         )
 
 
@@ -430,6 +511,7 @@ def test_run_record_rejects_from_scratch_self_hashed_attacker_profile_plan():
     attacker_plan = {
         "schema_version": "1.0",
         "stage": "character-base",
+        "plan_state": "approved",
         "prompt_build_id": content_hash(build),
         "capability_report_hash": "1" * 64,
         "workflow_profile_id": "attacker-profile",
@@ -456,7 +538,19 @@ def test_run_record_rejects_from_scratch_self_hashed_attacker_profile_plan():
         },
         "expected_outputs": ["image/png"],
         "execution_approved": True,
+        "draft_hash": "4" * 64,
+        "approval_event": {
+            "decision": "approved",
+            "draft_hash": "4" * 64,
+            "displayed_at": "2026-08-02T23:58:00Z",
+            "approved_at": "2026-08-02T23:59:00Z",
+            "expires_at": "2026-08-03T00:05:00Z",
+            "scope": "enqueue-once",
+            "actor": "attacker",
+            "source": "attacker",
+        },
     }
+    attacker_plan["approval_id"] = content_hash(attacker_plan["approval_event"])
     attacker_plan["plan_hash"] = content_hash(attacker_plan)
     with pytest.raises(ExecutionError, match="profile"):
         build_run_record(
@@ -473,6 +567,17 @@ def test_run_record_rejects_self_hashed_plan_over_empty_api_graph():
     plan["executable_api_graph_hash"] = content_hash(empty_graph)
     plan["preflight"]["api_graph"]["source_hash"] = content_hash(empty_graph)
     plan["preflight"]["api_graph"]["executable_hash"] = content_hash(empty_graph)
+    draft = {
+        key: copy.deepcopy(value)
+        for key, value in plan.items()
+        if key not in {"approval_event", "approval_id", "plan_hash"}
+    }
+    draft["plan_state"] = "draft"
+    draft["execution_approved"] = False
+    draft.pop("draft_hash")
+    plan["draft_hash"] = content_hash(draft)
+    plan["approval_event"]["draft_hash"] = plan["draft_hash"]
+    plan["approval_id"] = content_hash(plan["approval_event"])
     unsigned = dict(plan)
     unsigned.pop("plan_hash")
     plan["plan_hash"] = content_hash(unsigned)

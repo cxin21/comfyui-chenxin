@@ -59,21 +59,23 @@ REST 只可作为 health、queue、object info、saved workflow 和 history 的�
 
 对实际 UI workflow 运行 `runtime_cli.py fingerprint`。指纹必须与已批准 WorkflowProfile 匹配，语义 slot 必须唯一解析。漂移、歧义或无法证明指定 workflow 与 API graph 的对应关系时 fail closed。
 
-### 6. ExecutionPlan
+### 6. ExecutionDraft
 
-将 PromptBuild、当前 CapabilityReport、profile、实际 UI workflow、source API graph 和 allowlisted patches 送入 `runtime_cli.py plan`。计划必须 local-only、队列为空、`execution_approved=true`，且只改变 profile 暴露的 slot。这里的字段只表示当前显式生成请求允许构造 production plan；它本身不是 enqueue 许可。模型、LoRA、sampler、scheduler 和图结构默认不可变。
+将 PromptBuild、当前 CapabilityReport、profile、实际 UI workflow、source API graph 和 allowlisted patches 送入 `runtime_cli.py plan`。该命令先完成全部质量、能力、profile、UI/API、patch 与 preflight 校验，只能返回 `plan_state=draft`、`execution_approved=false` 和自洽 `draft_hash`。它不接受任何 approval 布尔值。模型、LoRA、sampler、scheduler 和图结构默认不可变。
 
-### 7. 展示 prompt 与 plan
+### 7. 展示实际 draft
 
-enqueue 前向用户展示最终 positive/negative prompt、workflow/profile、所有 patches、immutable inputs、预期输出、主要风险和单变量实验。初始“生成”请求允许准备计划，但不能替代看到实际 prompt/plan 后的审批。
+enqueue 前向用户展示最终 positive prompt、negative prompt、workflow/profile、完整 graph mutation/patches、immutable inputs、预期输出、主要风险、单变量实验和 exact `draft_hash`。初始“生成”请求只允许准备 draft；`true`、旧授权或未绑定本次 hash 的确认都不是审批。
 
 ### 8. 明确审批
 
-只有用户对本次展示的 prompt 和 ExecutionPlan 给出明确肯定后，才把 `execution_approved` 视为有效。内容变更、能力报告过期、workflow/profile 漂移或队列状态变化都使审批失效，必须重新 preflight 并展示。
+展示后才可从外部取得新的 approval event。事件必须精确绑定所展示的 `draft_hash`，且包含 `decision=approved`、UTC `displayed_at/approved_at/expires_at`、`scope=enqueue-once`、非空 `actor/source`；顺序为 `displayed_at <= approved_at <= trusted_now < expires_at`，总窗口不超过 600 秒。不要自动生成事件，不要把对话意图改写成事件，也不要交互式假确认。
+
+把 `{draft, approval_event}` 送入 `runtime_cli.py approve-plan --run-dir <dir>`。只有该命令返回的 `plan_state=approved`、`execution_approved=true` 计划可进入执行；approval event、approved plan 与 `approval_id` 必须在 caller run-dir 相邻保留。内容修改、错误 hash、事件过期、能力报告过期、workflow/profile 漂移或队列变化都使审批失效，必须重建、重展示并取得新事件。
 
 ### 9. Enqueue
 
-审批有效且队列仍为空时，使用实际协商到的 MCP enqueue/monitor 能力提交 executable API graph。一次只提交一个 job，等待 terminal success/failure 后才开始下一实验。不要调用保存工作流、安装、删除或清理接口。
+批准后再次确认原 CapabilityReport 仍新鲜且队列仍为空，再使用实际协商到的 MCP enqueue/monitor 能力提交 executable API graph。一次只提交一个 job，等待 terminal success/failure 后才开始下一实验。不要调用保存工作流、安装、删除或清理接口。生产路径必须有真实 MCP 能力协商证据；live REST A/B 只属于 render/graph characterization，不能证明 MCP 路径合规。
 
 ### 10. Artifact verification
 
@@ -81,20 +83,24 @@ enqueue 前向用户展示最终 positive/negative prompt、workflow/profile、�
 
 ### 11. RunRecord
 
-使用 `runtime_cli.py record --run-dir <dir>` 消费 raw history，生成并保留 append-only RunRecord。Record 保存 TaskContext/PromptBuild hashes、完整 PromptBuild、ExecutionPlan、source/executable graph hashes、已核对的 history status/output descriptors、prompt ID 与 artifact hashes；审批事件、被审批 plan hash、raw history 及其 hash、artifact 绝对路径作为相邻执行证据保留。文件名为 `<record_hash>.json`：同内容重复写入幂等，不同内容绝不覆盖。
+使用 `runtime_cli.py record --run-dir <dir>` 消费 raw history，生成并保留 append-only RunRecord。Record 只接受 `approve-plan` 产出的 approved plan，并重验 draft lineage、approval event/ID、plan hash、source/executable graph 与 PromptBuild。Record 保存 TaskContext/PromptBuild hashes、完整 PromptBuild、ExecutionPlan、已核对的 history status/output descriptors、prompt ID 与 artifact hashes；approval event、approved plan、raw history 及其 hash、artifact 绝对路径作为相邻执行证据保留。文件名为 `<record_hash>.json`：同内容重复写入幂等，不同内容绝不覆盖。
+
+旧格式 RunRecord 若只有 `execution_approved=true`、没有绑定 displayed `draft_hash` 的严格 approval event，只能作为历史 render/graph/history 证据；它连当次展示后审批都不能证明，更不能授权新执行。不得追溯补造事件或把旧记录升级为 production approval evidence。
 
 最终答复至少给出 prompt ID、seed、artifact 绝对路径、artifact hash、RunRecord 路径和 terminal status；没有这些证据时只报告已到达的阶段。
 
 ## CLI 退出合同
 
-`runtime_cli.py` 的 `discover`、`fingerprint`、`plan`、`patch-camera`、`record` 均接受 UTF-8 JSON 文件或 stdin，只把 JSON 写到 stdout。stderr 只有单行 `[prompt-forge-runtime]` 诊断：`0` 成功，`1` 计划被拒，`2` 输入或运行时失败。
+`runtime_cli.py` 的 `discover`、`fingerprint`、`plan`、`approve-plan`、`patch-camera`、`record` 均接受 UTF-8 JSON 文件或 stdin，只把 JSON 写到 stdout。`approve-plan` 和 `record` 还要求 caller `--run-dir`。stderr 只有单行 `[prompt-forge-runtime]` 诊断：`0` 成功，`1` draft 被运行时证据拒绝，`2` 输入、审批或运行时失败。
 
 ## 常见错误
 
 | 错误 | 正确处理 |
 |---|---|
 | 看到 MCP 文档中的名字就直接调用 | 先枚举当前真实工具并按能力协商 |
-| 初始生成请求后直接 enqueue | 展示实际 prompt/plan，再取得明确审批 |
+| 初始生成请求后直接 enqueue | 构造 draft，展示实际 prompt/negative/graph mutation/draft_hash，再取得外部新鲜事件 |
+| 把 `execution_approved=true` 或旧 approval 当许可 | 只接受 `approve-plan` 对本次 exact displayed draft 产出的 approved plan |
+| 把旧 boolean-only RunRecord 称为审批证明 | 仅称为历史 render/graph/history 证据；没有 display-bound event 就没有可审计审批 |
 | 从 UI JSON 猜 API inputs | 让 MCP 完成转换、strip 和 validate |
 | 只保存 prompt ID 或截图 | 保留 raw history、artifact hash 和 RunRecord |
 | 失败后换 workflow/model 重试 | 停止并报告 hard gate，不静默替代 |

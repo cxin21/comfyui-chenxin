@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,7 +16,12 @@ from runtime.adapters.camera import patch_character_base
 from runtime.capabilities import build_capability_report
 from runtime.comfy_api import CapabilityError, ComfyApi
 from runtime.contracts import ContractError, canonical_json
-from runtime.execution import ExecutionError, build_execution_plan, build_run_record
+from runtime.execution import (
+    ExecutionError,
+    approve_execution_draft,
+    build_execution_draft,
+    build_run_record,
+)
 from runtime.workflow_profile import ProfileError, structure_fingerprint
 
 
@@ -53,8 +59,12 @@ def _parser() -> argparse.ArgumentParser:
     fingerprint = commands.add_parser("fingerprint", help="fingerprint a UI workflow")
     _add_json_source(fingerprint, workflow=True)
 
-    plan = commands.add_parser("plan", help="build a Stage 1 ExecutionPlan")
+    plan = commands.add_parser("plan", help="build a Stage 1 unapproved ExecutionDraft")
     _add_json_source(plan)
+
+    approve = commands.add_parser("approve-plan", help="approve one displayed ExecutionDraft")
+    _add_json_source(approve)
+    approve.add_argument("--run-dir", type=Path, required=True)
 
     patch = commands.add_parser("patch-camera", help="patch the camera API graph")
     _add_json_source(patch)
@@ -110,6 +120,35 @@ def _write_run_record(run_dir: Path, record: dict) -> Path:
     return path.resolve()
 
 
+def _write_execution_evidence(
+    run_dir: Path,
+    value: dict,
+    *,
+    digest: str,
+    suffix: str,
+) -> Path:
+    if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+        raise ExecutionError("execution evidence requires a lowercase SHA-256 digest")
+    run_dir.mkdir(parents=True, exist_ok=True)
+    if not run_dir.is_dir():
+        raise OSError(f"run directory is not a directory: {run_dir}")
+    path = run_dir / f"{digest}.{suffix}.json"
+    canonical = canonical_json(value)
+    try:
+        with path.open("x", encoding="utf-8", newline="\n") as handle:
+            handle.write(canonical)
+            handle.write("\n")
+    except FileExistsError:
+        try:
+            existing = json.loads(path.read_text(encoding="utf-8"))
+            identical = canonical_json(existing) == canonical
+        except (OSError, UnicodeError, ValueError, json.JSONDecodeError):
+            identical = False
+        if not identical:
+            raise ExecutionError(f"refusing to overwrite different execution evidence: {path}")
+    return path.resolve()
+
+
 def _dispatch(command: str, payload: dict, args) -> dict | tuple[dict, int]:
     if command == "discover":
         return _discover(payload)
@@ -121,9 +160,32 @@ def _dispatch(command: str, payload: dict, args) -> dict | tuple[dict, int]:
         )
     if command == "plan":
         try:
-            return build_execution_plan(**payload)
+            return build_execution_draft(**payload)
         except ExecutionError as exc:
             return {"accepted": False, "error": str(exc)}, 1
+    if command == "approve-plan":
+        draft = _require_object(payload.get("draft"), "draft")
+        event = _require_object(payload.get("approval_event"), "approval_event")
+        if set(payload) != {"draft", "approval_event"}:
+            raise ExecutionError("approve-plan accepts only draft and approval_event")
+        approved = approve_execution_draft(draft, event)
+        event_path = _write_execution_evidence(
+            args.run_dir,
+            event,
+            digest=approved["approval_id"],
+            suffix="approval",
+        )
+        plan_path = _write_execution_evidence(
+            args.run_dir,
+            approved,
+            digest=approved["plan_hash"],
+            suffix="approved-plan",
+        )
+        return {
+            "plan": approved,
+            "approval_event_path": str(event_path),
+            "plan_path": str(plan_path),
+        }
     if command == "record":
         record = build_run_record(**payload)
         path = _write_run_record(args.run_dir, record)

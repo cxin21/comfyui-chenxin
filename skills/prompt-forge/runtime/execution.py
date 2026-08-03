@@ -34,10 +34,11 @@ _CHARACTER_BASE_SELECTORS = {
 _PATCH_KEYS = frozenset(("slot", "input", "value"))
 _TERMINAL_STATUSES = frozenset(("succeeded", "failed"))
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
-_PLAN_KEYS = frozenset(
+_DRAFT_KEYS = frozenset(
     (
         "schema_version",
         "stage",
+        "plan_state",
         "prompt_build_id",
         "capability_report_hash",
         "workflow_profile_id",
@@ -51,7 +52,26 @@ _PLAN_KEYS = frozenset(
         "preflight",
         "expected_outputs",
         "execution_approved",
+        "draft_hash",
+    )
+)
+_APPROVED_PLAN_KEYS = _DRAFT_KEYS.union(
+    (
+        "approval_event",
+        "approval_id",
         "plan_hash",
+    )
+)
+_APPROVAL_EVENT_KEYS = frozenset(
+    (
+        "decision",
+        "draft_hash",
+        "displayed_at",
+        "approved_at",
+        "expires_at",
+        "scope",
+        "actor",
+        "source",
     )
 )
 
@@ -153,22 +173,19 @@ def _derived_preflight(
     }
 
 
-def build_execution_plan(
+def build_execution_draft(
     stage: str,
     prompt_build: dict,
     workflow_profile_id: str,
     workflow_fingerprint: str,
     patches: list,
-    execution_approved: bool,
     *,
     capability_report: dict | None = None,
     profile: dict | None = None,
     actual_ui_workflow: dict | None = None,
     api_graph: dict | None = None,
 ) -> dict:
-    """Build a character-base plan from independently recomputed local evidence."""
-    if execution_approved is not True:
-        raise ExecutionError("current explicit execution approval is required")
+    """Build an unapproved character-base draft from recomputed local evidence."""
     if stage != "character-base":
         raise ExecutionError("this execution boundary supports only character-base")
     if not isinstance(prompt_build, dict) or prompt_build.get("ready_to_execute") is not True:
@@ -229,9 +246,10 @@ def build_execution_plan(
         prompt_slots,
     )
 
-    plan = {
+    draft = {
         "schema_version": "1.0",
         "stage": "character-base",
+        "plan_state": "draft",
         "prompt_build_id": content_hash(prompt_build),
         "capability_report_hash": report_hash,
         "workflow_profile_id": _CHARACTER_BASE_PROFILE_ID,
@@ -244,8 +262,89 @@ def build_execution_plan(
         "local_only": True,
         "preflight": derived_preflight,
         "expected_outputs": list(_CHARACTER_BASE_OUTPUTS),
-        "execution_approved": True,
+        "execution_approved": False,
     }
+    draft["draft_hash"] = content_hash(draft)
+    return draft
+
+
+def _validate_draft_hash(draft: object) -> dict:
+    if not isinstance(draft, dict) or set(draft) != _DRAFT_KEYS:
+        raise ExecutionError("ExecutionDraft schema is incomplete or contains unexpected fields")
+    if draft.get("schema_version") != "1.0" or draft.get("stage") != "character-base":
+        raise ExecutionError("ExecutionDraft is not a Stage 1 character-base draft")
+    if draft.get("plan_state") != "draft" or draft.get("execution_approved") is not False:
+        raise ExecutionError("ExecutionDraft must remain unapproved")
+    unsigned = dict(draft)
+    claimed_hash = unsigned.pop("draft_hash")
+    if not isinstance(claimed_hash, str) or claimed_hash != content_hash(unsigned):
+        raise ExecutionError("ExecutionDraft draft_hash is not self-consistent")
+    return copy.deepcopy(draft)
+
+
+def _parse_utc_timestamp(value: object, label: str) -> datetime:
+    if not isinstance(value, str) or not value:
+        raise ExecutionError(f"approval event {label} must be a UTC timestamp")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ExecutionError(f"approval event {label} must be a UTC timestamp") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() != timezone.utc.utcoffset(parsed):
+        raise ExecutionError(f"approval event {label} must be UTC")
+    return parsed
+
+
+def _validate_approval_event(
+    event: object,
+    draft_hash: str,
+    *,
+    trusted_now: datetime | None,
+) -> dict:
+    if not isinstance(event, dict) or set(event) != _APPROVAL_EVENT_KEYS:
+        raise ExecutionError("approval event schema is incomplete or contains unexpected fields")
+    if event.get("decision") != "approved":
+        raise ExecutionError("approval event decision must be approved")
+    if event.get("draft_hash") != draft_hash:
+        raise ExecutionError("approval event draft_hash does not match the displayed draft")
+    if event.get("scope") != "enqueue-once":
+        raise ExecutionError("approval event scope must be enqueue-once")
+    for field in ("actor", "source"):
+        value = event.get(field)
+        if not isinstance(value, str) or not value.strip():
+            raise ExecutionError(f"approval event {field} must be a non-empty string")
+
+    displayed_at = _parse_utc_timestamp(event.get("displayed_at"), "displayed_at")
+    approved_at = _parse_utc_timestamp(event.get("approved_at"), "approved_at")
+    expires_at = _parse_utc_timestamp(event.get("expires_at"), "expires_at")
+    if not displayed_at <= approved_at:
+        raise ExecutionError("approval event timestamp order is invalid")
+    if (expires_at - displayed_at).total_seconds() > 600:
+        raise ExecutionError("approval event window must not exceed 600 seconds")
+    if approved_at >= expires_at:
+        raise ExecutionError("approval event timestamp order is invalid")
+    if trusted_now is not None:
+        if trusted_now.tzinfo is None or trusted_now.utcoffset() != timezone.utc.utcoffset(trusted_now):
+            raise ExecutionError("trusted approval clock must be UTC")
+        if approved_at > trusted_now:
+            raise ExecutionError("approval event timestamp order is invalid")
+        if trusted_now >= expires_at:
+            raise ExecutionError("approval event is expired")
+    return copy.deepcopy(event)
+
+
+def approve_execution_draft(draft: dict, approval_event: dict) -> dict:
+    """Approve exactly one displayed draft with a fresh external event."""
+    safe_draft = _validate_draft_hash(draft)
+    safe_event = _validate_approval_event(
+        approval_event,
+        safe_draft["draft_hash"],
+        trusted_now=_utc_now(),
+    )
+    plan = copy.deepcopy(safe_draft)
+    plan["plan_state"] = "approved"
+    plan["execution_approved"] = True
+    plan["approval_event"] = safe_event
+    plan["approval_id"] = content_hash(safe_event)
     plan["plan_hash"] = content_hash(plan)
     return plan
 
@@ -264,18 +363,34 @@ def _validated_hashes(value: object, label: str) -> dict[str, str]:
 
 
 def _validate_plan_lineage(plan: object, prompt_build: dict, api_graph: dict) -> None:
-    if not isinstance(plan, dict) or set(plan) != _PLAN_KEYS:
+    if not isinstance(plan, dict) or set(plan) != _APPROVED_PLAN_KEYS:
         raise ExecutionError("ExecutionPlan lineage is incomplete")
     if plan.get("schema_version") != "1.0" or plan.get("stage") != "character-base":
         raise ExecutionError("ExecutionPlan is not a Stage 1 character-base plan")
     if plan.get("workflow_profile_id") != _CHARACTER_BASE_PROFILE_ID:
         raise ExecutionError("ExecutionPlan profile is not camera-anima-v1")
+    if plan.get("plan_state") != "approved":
+        raise ExecutionError("ExecutionPlan must be approved")
     if plan.get("local_only") is not True or plan.get("execution_approved") is not True:
         raise ExecutionError("ExecutionPlan must be local-only and approved")
     if plan.get("expected_outputs") != _CHARACTER_BASE_OUTPUTS:
         raise ExecutionError("ExecutionPlan must expect exactly image/png")
     if plan.get("immutable_inputs") != []:
         raise ExecutionError("ExecutionPlan immutable_inputs contract is invalid")
+    reconstructed_draft = {
+        key: copy.deepcopy(plan[key])
+        for key in _DRAFT_KEYS
+    }
+    reconstructed_draft["plan_state"] = "draft"
+    reconstructed_draft["execution_approved"] = False
+    _validate_draft_hash(reconstructed_draft)
+    safe_event = _validate_approval_event(
+        plan.get("approval_event"),
+        plan["draft_hash"],
+        trusted_now=None,
+    )
+    if plan.get("approval_id") != content_hash(safe_event):
+        raise ExecutionError("ExecutionPlan approval_id is not self-consistent")
     if plan["prompt_build_id"] != content_hash(prompt_build):
         raise ExecutionError("ExecutionPlan prompt_build_id does not match PromptBuild")
     if plan["source_api_graph_hash"] != content_hash(api_graph):

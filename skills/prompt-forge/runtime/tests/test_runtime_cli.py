@@ -8,7 +8,7 @@ from pathlib import Path
 
 from runtime.adapters.camera import patch_character_base
 from runtime.contracts import content_hash
-from runtime.execution import build_execution_plan
+from runtime.execution import approve_execution_draft, build_execution_draft
 from runtime.workflow_profile import structure_fingerprint
 import runtime.runtime_cli as runtime_cli
 
@@ -98,7 +98,7 @@ def _exact_patches(build):
     ]
 
 
-def _plan_envelope(execution_approved=True):
+def _plan_envelope():
     build = _ready_build()
     workflow = _ui_workflow()
     return {
@@ -107,12 +107,27 @@ def _plan_envelope(execution_approved=True):
         "workflow_profile_id": "camera-anima-v1",
         "workflow_fingerprint": structure_fingerprint(workflow),
         "patches": _exact_patches(build),
-        "execution_approved": execution_approved,
         "capability_report": _capability_report(),
         "profile": _profile(),
         "actual_ui_workflow": workflow,
         "api_graph": _api_graph(),
     }
+
+
+def _approval_event(draft, **overrides):
+    now = datetime.now(timezone.utc)
+    event = {
+        "decision": "approved",
+        "draft_hash": draft["draft_hash"],
+        "displayed_at": (now - timedelta(seconds=2)).isoformat().replace("+00:00", "Z"),
+        "approved_at": (now - timedelta(seconds=1)).isoformat().replace("+00:00", "Z"),
+        "expires_at": (now + timedelta(minutes=5)).isoformat().replace("+00:00", "Z"),
+        "scope": "enqueue-once",
+        "actor": "user:test",
+        "source": "cli-test",
+    }
+    event.update(overrides)
+    return event
 
 
 def _task_context():
@@ -210,18 +225,82 @@ def test_patch_camera_accepts_stdin_and_emits_only_json():
     assert graph["25"]["inputs"]["populated_text"] == payload["prompt_build"]["negative_prompt"]
 
 
-def test_plan_rejection_is_json_exit_one_without_runtime_diagnostic(tmp_path):
+def test_plan_emits_unapproved_draft_without_accepting_approval_boolean(tmp_path):
     payload = tmp_path / "plan.json"
-    payload.write_text(json.dumps(_plan_envelope(execution_approved=False)), encoding="utf-8")
+    envelope = _plan_envelope()
+    payload.write_text(json.dumps(envelope), encoding="utf-8")
 
     result = _run("plan", "--input", payload)
 
-    assert result.returncode == 1
+    assert result.returncode == 0, result.stderr
     assert result.stderr == ""
-    assert json.loads(result.stdout) == {
-        "accepted": False,
-        "error": "current explicit execution approval is required",
-    }
+    draft = json.loads(result.stdout)
+    assert draft["plan_state"] == "draft"
+    assert draft["execution_approved"] is False
+    assert len(draft["draft_hash"]) == 64
+
+    envelope["execution_approved"] = True
+    payload.write_text(json.dumps(envelope), encoding="utf-8")
+    rejected = _run("plan", "--input", payload)
+    assert rejected.returncode == 2
+    assert rejected.stdout == ""
+    assert "unexpected keyword" in rejected.stderr
+
+
+def test_approve_plan_binds_exact_draft_and_exclusive_writes_evidence(tmp_path):
+    draft = build_execution_draft(**_plan_envelope())
+    payload = tmp_path / "approval.json"
+    event = _approval_event(draft)
+    payload.write_text(
+        json.dumps({"draft": draft, "approval_event": event}), encoding="utf-8"
+    )
+    run_dir = tmp_path / "runs"
+
+    first = _run("approve-plan", "--input", payload, "--run-dir", run_dir)
+    second = _run("approve-plan", "--input", payload, "--run-dir", run_dir)
+
+    assert first.returncode == second.returncode == 0
+    result = json.loads(first.stdout)
+    assert json.loads(second.stdout) == result
+    assert result["plan"]["approval_id"] == content_hash(event)
+    assert Path(result["approval_event_path"]).name.endswith(".approval.json")
+    assert Path(result["plan_path"]).name.endswith(".approved-plan.json")
+    assert json.loads(Path(result["approval_event_path"]).read_text(encoding="utf-8")) == event
+    assert json.loads(Path(result["plan_path"]).read_text(encoding="utf-8")) == result["plan"]
+
+    plan_path = Path(result["plan_path"])
+    tampered = copy.deepcopy(result["plan"])
+    tampered["plan_state"] = "tampered"
+    plan_path.write_text(json.dumps(tampered), encoding="utf-8")
+    rejected = _run("approve-plan", "--input", payload, "--run-dir", run_dir)
+    assert rejected.returncode == 2
+    assert rejected.stdout == ""
+    assert "refusing to overwrite" in rejected.stderr
+    assert json.loads(plan_path.read_text(encoding="utf-8")) == tampered
+
+
+def test_approve_plan_wrong_or_stale_event_is_exit_two_without_files(tmp_path):
+    draft = build_execution_draft(**_plan_envelope())
+    run_dir = tmp_path / "runs"
+    for event in (
+        _approval_event(draft, draft_hash="0" * 64),
+        _approval_event(
+            draft,
+            displayed_at="2026-08-02T00:00:00Z",
+            approved_at="2026-08-02T00:00:01Z",
+            expires_at="2026-08-02T00:05:00Z",
+        ),
+    ):
+        result = _run(
+            "approve-plan",
+            "--from-stdin",
+            "--run-dir",
+            run_dir,
+            input_text=json.dumps({"draft": draft, "approval_event": event}),
+        )
+        assert result.returncode == 2
+        assert result.stdout == ""
+    assert not run_dir.exists()
 
 
 def test_malformed_json_is_exit_two_with_one_prefixed_stderr_line():
@@ -236,7 +315,8 @@ def test_malformed_json_is_exit_two_with_one_prefixed_stderr_line():
 
 def test_record_uses_exclusive_create_and_identical_content_is_idempotent(tmp_path):
     plan_input = _plan_envelope()
-    plan = build_execution_plan(**plan_input)
+    draft = build_execution_draft(**plan_input)
+    plan = approve_execution_draft(draft, _approval_event(draft))
     build = plan_input["prompt_build"]
     graph = plan_input["api_graph"]
     prompt_id = "prompt-cli-1"
