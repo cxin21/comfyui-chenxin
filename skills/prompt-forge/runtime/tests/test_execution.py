@@ -10,6 +10,7 @@ from runtime.contracts import content_hash
 from runtime.execution import (
     ExecutionError,
     approve_execution_draft,
+    build_approval_consumption,
     build_execution_draft,
     build_run_record,
 )
@@ -350,6 +351,41 @@ def test_approval_rejects_event_with_missing_required_field():
     event.pop("actor")
     with pytest.raises(ExecutionError, match="schema"):
         approve_execution_draft(draft, event)
+
+
+def test_approval_consumption_is_bound_to_plan_and_stable_enqueue_request():
+    plan = build_valid_plan()
+
+    consumption = build_approval_consumption(plan, "request-b-123")
+
+    assert consumption["approval_id"] == plan["approval_id"]
+    assert consumption["plan_hash"] == plan["plan_hash"]
+    assert consumption["draft_hash"] == plan["draft_hash"]
+    assert consumption["enqueue_request_id"] == "request-b-123"
+    assert consumption["consumed_at"] == "2026-08-03T00:00:00Z"
+    unsigned = dict(consumption)
+    unsigned.pop("consumption_id")
+    assert consumption["consumption_id"] == content_hash(unsigned)
+
+
+def test_approval_consumption_rejects_expired_or_tampered_plan(monkeypatch):
+    plan = build_valid_plan()
+    monkeypatch.setattr(
+        execution_module,
+        "_utc_now",
+        lambda: NOW + timedelta(minutes=6),
+    )
+    with pytest.raises(ExecutionError, match="expired"):
+        build_approval_consumption(plan, "request-b-123")
+
+    monkeypatch.setattr(execution_module, "_utc_now", lambda: NOW)
+    tampered = copy.deepcopy(plan)
+    tampered["approval_id"] = "0" * 64
+    with pytest.raises(ExecutionError, match="approval_id"):
+        build_approval_consumption(tampered, "request-b-123")
+
+    with pytest.raises(ExecutionError, match="request"):
+        build_approval_consumption(plan, " ")
 
 
 def test_run_record_requires_valid_task_context_before_lineage_checks():

@@ -5,11 +5,12 @@ import hashlib
 import io
 import json
 import os
+import re
 import time
 import urllib.parse
 import urllib.request
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -21,16 +22,18 @@ LIVE_MARK = pytest.mark.skipif(
 )
 
 from internals.prompt_compile import compile_prompt
+import runtime.execution as execution_module
 from runtime.adapters.camera import patch_character_base
 from runtime.capabilities import build_capability_report, report_is_fresh
 from runtime.comfy_api import ComfyApi
 from runtime.contracts import canonical_json, content_hash
 from runtime.execution import (
     approve_execution_draft,
+    build_approval_consumption,
     build_execution_draft,
     build_run_record,
 )
-from runtime.runtime_cli import _write_run_record
+from runtime.runtime_cli import _write_approval_consumption, _write_run_record
 from runtime.workflow_profile import resolve_slots, structure_fingerprint
 
 
@@ -43,6 +46,28 @@ ANIMA_INTENT = SKILL_ROOT / "internals/tests/fixtures/anima-intent.json"
 DEFAULT_RUN_DIR = (
     WORKSPACE
     / ".superpowers/sdd/2026-08-02-prompt-forge-v7-slice1-runtime-base/live-runs"
+)
+_PENDING_BUNDLE_KEYS = frozenset(
+    {
+        "schema_version",
+        "bundle_type",
+        "created_at",
+        "draft",
+        "task_context",
+        "prompt_build",
+        "profile",
+        "history_ui_workflow",
+        "source_api_graph",
+        "seed_node",
+        "seed",
+        "patches",
+        "capability_report",
+        "experiment_a",
+        "bundle_hash",
+    }
+)
+_PENDING_INPUT_KEYS = _PENDING_BUNDLE_KEYS.difference(
+    {"schema_version", "bundle_type", "created_at", "bundle_hash"}
 )
 
 
@@ -258,17 +283,18 @@ def _draft(build, profile, ui_workflow, graph, report):
     )
 
 
-def _enqueue(graph, ui_workflow, experiment):
+def _enqueue(graph, ui_workflow, experiment, enqueue_request_id):
     assert _queue_is_empty(), "ComfyUI queue must be empty before enqueue"
     response = _request_json(
         "/prompt",
         method="POST",
         payload={
             "prompt": graph,
-            "client_id": f"prompt-forge-{uuid.uuid4()}",
+            "client_id": enqueue_request_id,
             "extra_data": {
                 "extra_pnginfo": {"workflow": ui_workflow},
                 "prompt_forge_experiment": experiment,
+                "prompt_forge_enqueue_request_id": enqueue_request_id,
             },
         },
     )
@@ -276,6 +302,40 @@ def _enqueue(graph, ui_workflow, experiment):
     prompt_id = response.get("prompt_id")
     assert isinstance(prompt_id, str) and prompt_id
     return prompt_id
+
+
+def _enqueue_or_recover(graph, ui_workflow, experiment, enqueue_request_id):
+    try:
+        return _enqueue(graph, ui_workflow, experiment, enqueue_request_id)
+    except Exception as enqueue_error:
+        try:
+            history = _request_json("/history")
+        except Exception as history_error:
+            raise AssertionError(
+                "enqueue outcome is uncertain; consumption is retained and history "
+                "could not be queried by the stable enqueue request id"
+            ) from history_error
+        if not isinstance(history, dict):
+            raise AssertionError(
+                "enqueue outcome is uncertain; consumption is retained and history "
+                "was not a mapping"
+            ) from enqueue_error
+        matches = []
+        for prompt_id, entry in history.items():
+            prompt = entry.get("prompt") if isinstance(entry, dict) else None
+            extra_data = prompt[3] if isinstance(prompt, list) and len(prompt) >= 4 else None
+            if (
+                isinstance(prompt_id, str)
+                and isinstance(extra_data, dict)
+                and extra_data.get("prompt_forge_enqueue_request_id") == enqueue_request_id
+            ):
+                matches.append(prompt_id)
+        if len(matches) == 1:
+            return matches[0]
+        raise AssertionError(
+            "enqueue outcome is uncertain; consumption is retained and history did not "
+            "contain exactly one prompt for the stable enqueue request id"
+        ) from enqueue_error
 
 
 def _wait_terminal(prompt_id, timeout_seconds=1800):
@@ -292,6 +352,41 @@ def _wait_terminal(prompt_id, timeout_seconds=1800):
                 pytest.fail(f"ComfyUI job failed: {status}")
         time.sleep(2)
     pytest.fail(f"ComfyUI job did not reach a terminal state within {timeout_seconds}s")
+
+
+def test_enqueue_timeout_recovers_prompt_id_from_stable_request_id(monkeypatch):
+    request_id = "prompt-forge-stable-request"
+    history = {
+        "accepted-prompt": {
+            "prompt": [
+                7,
+                "accepted-prompt",
+                {},
+                {"prompt_forge_enqueue_request_id": request_id},
+            ]
+        }
+    }
+    monkeypatch.setattr(
+        __name__ + "._enqueue",
+        lambda *_args: (_ for _ in ()).throw(TimeoutError("POST timed out")),
+    )
+    monkeypatch.setattr(
+        __name__ + "._request_json",
+        lambda path, **_kwargs: history if path == "/history" else None,
+    )
+
+    assert _enqueue_or_recover({}, {}, "B", request_id) == "accepted-prompt"
+
+
+def test_enqueue_timeout_without_history_match_reports_uncertain(monkeypatch):
+    monkeypatch.setattr(
+        __name__ + "._enqueue",
+        lambda *_args: (_ for _ in ()).throw(TimeoutError("POST timed out")),
+    )
+    monkeypatch.setattr(__name__ + "._request_json", lambda *_args, **_kwargs: {})
+
+    with pytest.raises(AssertionError, match="outcome is uncertain"):
+        _enqueue_or_recover({}, {}, "B", "prompt-forge-stable-request")
 
 
 def _output_descriptors(entry):
@@ -358,6 +453,141 @@ def _write_json_evidence(path, value):
         existing = json.loads(path.read_text(encoding="utf-8"))
         assert canonical_json(existing) == canonical, f"refusing to overwrite evidence: {path}"
     return path.resolve()
+
+
+def _utc_timestamp(value, label):
+    assert isinstance(value, str) and value, f"{label} must be a UTC timestamp"
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise AssertionError(f"{label} must be a UTC timestamp") from exc
+    assert parsed.tzinfo is not None and parsed.utcoffset() == timedelta(0), (
+        f"{label} must be UTC"
+    )
+    return parsed
+
+
+def _validate_pending_bundle(bundle):
+    assert isinstance(bundle, dict) and set(bundle) == _PENDING_BUNDLE_KEYS, (
+        "pending bundle schema is incomplete or contains unexpected fields"
+    )
+    assert bundle["schema_version"] == "1.0"
+    assert bundle["bundle_type"] == "character-base-b-pending"
+    unsigned = dict(bundle)
+    claimed_hash = unsigned.pop("bundle_hash")
+    assert claimed_hash == content_hash(unsigned), "pending bundle_hash is not self-consistent"
+
+    trusted_now = execution_module._utc_now()
+    created_at = _utc_timestamp(bundle["created_at"], "pending bundle created_at")
+    age = (trusted_now - created_at).total_seconds()
+    assert 0 <= age <= 600, "pending bundle must be resumed within 600 seconds"
+    report = bundle["capability_report"]
+    assert isinstance(report, dict) and report.get("generated_at") == bundle["created_at"], (
+        "pending bundle CapabilityReport timestamp does not match bundle creation"
+    )
+    assert report_is_fresh(report, trusted_now), "pending bundle CapabilityReport is expired"
+
+    draft = build_execution_draft(
+        "character-base",
+        bundle["prompt_build"],
+        "camera-anima-v1",
+        structure_fingerprint(bundle["history_ui_workflow"]),
+        bundle["patches"],
+        capability_report=report,
+        profile=bundle["profile"],
+        actual_ui_workflow=bundle["history_ui_workflow"],
+        api_graph=bundle["source_api_graph"],
+    )
+    assert draft == bundle["draft"], "pending bundle does not rebuild the exact draft"
+    assert draft["draft_hash"] == bundle["draft"]["draft_hash"]
+
+    seed_node = bundle["seed_node"]
+    assert isinstance(seed_node, str) and seed_node in bundle["source_api_graph"]
+    assert bundle["source_api_graph"][seed_node]["inputs"].get("seed") == bundle["seed"], (
+        "pending bundle source graph seed lineage is invalid"
+    )
+    experiment_a = bundle["experiment_a"]
+    assert isinstance(experiment_a, dict) and set(experiment_a) == {
+        "prompt_id",
+        "history",
+        "artifact_hashes",
+        "artifact_paths",
+        "record_hash",
+    }
+    prompt_id = experiment_a["prompt_id"]
+    history = experiment_a["history"]
+    assert isinstance(prompt_id, str) and isinstance(history.get(prompt_id), dict)
+    prompt = history[prompt_id].get("prompt")
+    assert isinstance(prompt, list) and len(prompt) >= 3 and prompt[1] == prompt_id
+    assert canonical_json(prompt[2]) == canonical_json(bundle["source_api_graph"]), (
+        "pending bundle Experiment A graph lineage is invalid"
+    )
+    hashes = experiment_a["artifact_hashes"]
+    paths = experiment_a["artifact_paths"]
+    assert isinstance(hashes, dict) and hashes and set(hashes) == set(paths)
+    assert all(isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) for value in hashes.values())
+    assert isinstance(experiment_a["record_hash"], str) and re.fullmatch(
+        r"[0-9a-f]{64}", experiment_a["record_hash"]
+    )
+    return bundle, draft
+
+
+def _write_pending_bundle(run_dir, frozen_inputs):
+    assert isinstance(frozen_inputs, dict) and set(frozen_inputs) == _PENDING_INPUT_KEYS
+    report = frozen_inputs["capability_report"]
+    bundle = {
+        "schema_version": "1.0",
+        "bundle_type": "character-base-b-pending",
+        "created_at": report["generated_at"],
+        **copy.deepcopy(frozen_inputs),
+    }
+    bundle["bundle_hash"] = content_hash(bundle)
+    _validate_pending_bundle(bundle)
+    run_root = Path(run_dir).resolve()
+    run_root.mkdir(parents=True, exist_ok=True)
+    path = run_root / f'pending-{bundle["draft"]["draft_hash"]}.json'
+    try:
+        with path.open("x", encoding="utf-8", newline="\n") as handle:
+            handle.write(canonical_json(bundle))
+            handle.write("\n")
+    except FileExistsError as exc:
+        raise AssertionError(f"pending bundle already exists: {path}") from exc
+    return bundle, path.resolve()
+
+
+def _load_pending_bundle(bundle_path, run_dir):
+    raw_path = Path(bundle_path)
+    assert raw_path.is_absolute(), "PROMPT_FORGE_PENDING_BUNDLE must be an absolute path"
+    assert raw_path.exists(), "PROMPT_FORGE_PENDING_BUNDLE does not exist"
+    run_root = Path(run_dir).resolve(strict=True)
+    resolved = raw_path.resolve(strict=True)
+    assert resolved.is_relative_to(run_root), "pending bundle must remain under caller run-dir"
+    bundle = json.loads(resolved.read_text(encoding="utf-8"))
+    return _validate_pending_bundle(bundle)
+
+
+def _select_b_bundle(run_dir, first_run_builder):
+    pending_path = os.environ.get("PROMPT_FORGE_PENDING_BUNDLE")
+    if pending_path:
+        bundle, draft = _load_pending_bundle(Path(pending_path), run_dir)
+        return bundle, draft, True
+    bundle, _ = first_run_builder()
+    return bundle, bundle["draft"], False
+
+
+def _require_safe_current_report(report, now):
+    assert isinstance(report, dict) and report_is_fresh(report, now), (
+        "current CapabilityReport must be fresh"
+    )
+    assert report.get("comfyui", {}).get("reachable") is True, (
+        "current ComfyUI runtime must be reachable"
+    )
+    assert report.get("adapter", {}).get("runtime_classification") == "local", (
+        "current runtime must remain local"
+    )
+    assert report.get("queue") == {"running": 0, "pending": 0}, (
+        "current ComfyUI queue is not empty"
+    )
 
 
 def _load_external_approval(draft, run_dir):
@@ -457,6 +687,94 @@ def _historical_characterization_record(
     return record, path, raw_history_path
 
 
+def _resume_live_b(run_dir, output_dir):
+    def _forbid_first_run():
+        raise AssertionError("B recovery must not execute the Experiment A first-run path")
+
+    bundle, draft, resumed = _select_b_bundle(run_dir, _forbid_first_run)
+    assert resumed, "PROMPT_FORGE_PENDING_BUNDLE is required for B recovery"
+
+    # This report is a current safety gate only. It must never replace the
+    # frozen CapabilityReport that deterministically rebuilt `draft` above.
+    current_report = _capability_report()
+    _require_safe_current_report(current_report, datetime.now(timezone.utc))
+    verified_resources = _verify_graph_resources(
+        bundle["source_api_graph"], _request_json("/object_info")
+    )
+
+    plan, displayed_path, event_path, approved_plan_path = _load_external_approval(
+        draft, run_dir
+    )
+    plan = approve_execution_draft(draft, plan["approval_event"])
+    executable = patch_character_base(
+        bundle["source_api_graph"],
+        bundle["prompt_build"],
+        {"positive_prompt": 24, "negative_prompt": 25},
+    )
+    assert content_hash(executable) == draft["executable_api_graph_hash"]
+
+    enqueue_request_id = os.environ.get("PROMPT_FORGE_ENQUEUE_REQUEST_ID")
+    if not enqueue_request_id:
+        enqueue_request_id = f"prompt-forge-{uuid.uuid4()}"
+    consumption = build_approval_consumption(plan, enqueue_request_id)
+    consumption_path = _write_approval_consumption(run_dir, consumption)
+
+    # Consumption is intentionally not rolled back if POST raises or times out:
+    # the server may already have accepted the request. Recovery must inspect
+    # history using enqueue_request_id, never blindly enqueue again.
+    prompt_id = _enqueue_or_recover(
+        executable,
+        bundle["history_ui_workflow"],
+        "B-positive-prompt-only",
+        enqueue_request_id,
+    )
+    history, entry = _wait_terminal(prompt_id)
+    experiment_a = bundle["experiment_a"]
+    hashes, paths = _verify_outputs(
+        entry,
+        output_dir,
+        set(experiment_a["artifact_hashes"]),
+    )
+    record, record_path, raw_history_path = _production_record(
+        run_dir,
+        bundle["task_context"],
+        bundle["prompt_build"],
+        bundle["source_api_graph"],
+        plan,
+        prompt_id,
+        history,
+        hashes,
+    )
+    print(
+        canonical_json(
+            {
+                "workflow": WORKFLOW_NAME,
+                "selected_history_ui_fingerprint": structure_fingerprint(
+                    bundle["history_ui_workflow"]
+                ),
+                "verified_resources": verified_resources,
+                "seed": bundle["seed"],
+                "experiment_a": copy.deepcopy(experiment_a),
+                "experiment_b": {
+                    "evidence_class": "production-approved-consumed-once",
+                    "approval_lineage_verified": True,
+                    "displayed_draft": str(displayed_path),
+                    "approval_event": str(event_path),
+                    "approved_plan": str(approved_plan_path),
+                    "approval_consumption": str(consumption_path),
+                    "enqueue_request_id": enqueue_request_id,
+                    "prompt_id": prompt_id,
+                    "output_paths": paths,
+                    "output_hashes": hashes,
+                    "run_record": str(record_path),
+                    "raw_history": str(raw_history_path),
+                    "record_hash": record["record_hash"],
+                },
+            }
+        )
+    )
+
+
 def test_latest_history_selection_uses_workflow_id_and_profile_not_current_saved_fingerprint():
     profile = json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
     history_ui = json.loads(
@@ -492,6 +810,133 @@ def test_missing_external_approval_preserves_pending_draft(tmp_path, monkeypatch
     assert json.loads(pending.read_text(encoding="utf-8")) == draft
 
 
+def _pending_bundle_fixture(now):
+    profile = json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
+    ui_workflow = json.loads(
+        (Path(__file__).parent / "fixtures/camera-ui-minimal.json").read_text(encoding="utf-8")
+    )
+    graph = json.loads(
+        (Path(__file__).parent / "fixtures/camera-api-minimal.json").read_text(encoding="utf-8")
+    )
+    build = {
+        "schema_version": "1.0",
+        "target": "image",
+        "generation_mode": "text-to-image",
+        "model_id": "anima",
+        "dialect": "tags",
+        "prompt": "score_9, 1girl, solo, from_front, full_body",
+        "negative_prompt": "worst quality, low quality, watermark",
+        "validated_tags": ["1girl", "solo", "from_front", "full_body"],
+        "rejected_tags": [],
+        "recipe_control_tokens": ["score_9"],
+        "locked_facts": ["1girl"],
+        "ready_to_execute": True,
+        "execution": {"requested": True, "performed": False},
+    }
+    report = {
+        "schema_version": "1.0",
+        "comfyui": {"url": BASE_URL, "reachable": True},
+        "adapter": {"runtime_classification": "local", "tools": ["enqueue"]},
+        "queue": {"running": 0, "pending": 0},
+        "generated_at": now.isoformat().replace("+00:00", "Z"),
+        "valid_until": (now + timedelta(minutes=10)).isoformat().replace("+00:00", "Z"),
+    }
+    draft = _draft(build, profile, ui_workflow, graph, report)
+    prompt_id = "historical-a"
+    history = {
+        prompt_id: {
+            "prompt": [7, prompt_id, copy.deepcopy(graph)],
+            "status": {"status_str": "success", "completed": True},
+            "outputs": {},
+        }
+    }
+    return {
+        "draft": draft,
+        "task_context": _task_context("B"),
+        "prompt_build": build,
+        "profile": profile,
+        "history_ui_workflow": ui_workflow,
+        "source_api_graph": graph,
+        "seed_node": "24",
+        "seed": 101,
+        "patches": draft["patches"],
+        "capability_report": report,
+        "experiment_a": {
+            "prompt_id": prompt_id,
+            "history": history,
+            "artifact_hashes": {"a.png": "a" * 64},
+            "artifact_paths": {"a.png": "E:/Comfy/output/a.png"},
+            "record_hash": "b" * 64,
+        },
+    }
+
+
+def test_pending_bundle_resume_rebuilds_exact_frozen_draft_without_first_run(tmp_path, monkeypatch):
+    now = datetime(2026, 8, 3, 0, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(execution_module, "_utc_now", lambda: now)
+    frozen = _pending_bundle_fixture(now)
+    bundle, bundle_path = _write_pending_bundle(tmp_path, frozen)
+    changed_report = copy.deepcopy(frozen["capability_report"])
+    changed_report["generated_at"] = (now + timedelta(seconds=1)).isoformat().replace(
+        "+00:00", "Z"
+    )
+    first_run_calls = []
+    monkeypatch.setenv("PROMPT_FORGE_PENDING_BUNDLE", str(bundle_path))
+
+    first = _select_b_bundle(
+        tmp_path,
+        lambda: first_run_calls.append(changed_report),
+    )
+    second = _select_b_bundle(
+        tmp_path,
+        lambda: first_run_calls.append(changed_report),
+    )
+
+    assert first_run_calls == []
+    assert first[2] is True and second[2] is True
+    assert first[0] == second[0] == bundle
+    assert first[1] == second[1] == frozen["draft"]
+    assert content_hash(changed_report) != frozen["draft"]["capability_report_hash"]
+
+
+def test_pending_bundle_resume_rejects_missing_expired_or_modified_bundle(tmp_path, monkeypatch):
+    now = datetime(2026, 8, 3, 0, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(execution_module, "_utc_now", lambda: now)
+    frozen = _pending_bundle_fixture(now)
+    _, bundle_path = _write_pending_bundle(tmp_path, frozen)
+
+    with pytest.raises(AssertionError, match="absolute|exists"):
+        _load_pending_bundle(tmp_path / "missing.json", tmp_path)
+
+    monkeypatch.setattr(execution_module, "_utc_now", lambda: now + timedelta(seconds=601))
+    with pytest.raises(AssertionError, match="600"):
+        _load_pending_bundle(bundle_path, tmp_path)
+
+    monkeypatch.setattr(execution_module, "_utc_now", lambda: now)
+    modified = json.loads(bundle_path.read_text(encoding="utf-8"))
+    modified["prompt_build"]["prompt"] = "tampered"
+    bundle_path.write_text(json.dumps(modified), encoding="utf-8")
+    with pytest.raises(AssertionError, match="bundle_hash"):
+        _load_pending_bundle(bundle_path, tmp_path)
+
+
+@pytest.mark.parametrize(
+    "mutate, match",
+    [
+        (lambda report: report["queue"].update(pending=1), "queue"),
+        (lambda report: report["comfyui"].update(reachable=False), "reachable"),
+        (lambda report: report["adapter"].update(runtime_classification="unknown"), "local"),
+    ],
+)
+def test_resume_current_capability_gate_fails_closed(mutate, match, monkeypatch):
+    now = datetime(2026, 8, 3, 0, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(execution_module, "_utc_now", lambda: now)
+    report = _pending_bundle_fixture(now)["capability_report"]
+    mutate(report)
+    with pytest.raises(AssertionError, match=match):
+        _require_safe_current_report(report, now)
+
+
 @LIVE_MARK
 def test_live_character_base_experiments_a_then_b():
     assert BASE_URL == "http://127.0.0.1:8188"
@@ -501,6 +946,9 @@ def test_live_character_base_experiments_a_then_b():
     output_dir = Path(output_dir_raw).resolve(strict=True)
     assert output_dir.is_absolute() and output_dir.is_dir()
     run_dir = Path(os.environ.get("PROMPT_FORGE_RUN_DIR", DEFAULT_RUN_DIR)).resolve()
+    if os.environ.get("PROMPT_FORGE_PENDING_BUNDLE"):
+        _resume_live_b(run_dir, output_dir)
+        return
 
     names, saved_ui_workflow = _saved_workflow()
     history_before = _request_json("/history")
@@ -573,97 +1021,31 @@ def test_live_character_base_experiments_a_then_b():
     assert build_b["negative_prompt"] == prompts["negative"]
     report_b = _capability_report()
     draft_b = _draft(build_b, profile, ui_workflow, graph_a, report_b)
-    executable_b = patch_character_base(
-        graph_a, build_b, {"positive_prompt": 24, "negative_prompt": 25}
-    )
-    assert graph_a[seed_node]["inputs"]["seed"] == executable_b[seed_node]["inputs"]["seed"]
-    assert set(_diff_paths(graph_a, executable_b)) == {
-        "24.inputs.populated_text",
-        "24.inputs.wildcard_text",
-    }
-    prompt_id_b = os.environ.get("PROMPT_FORGE_EXPERIMENT_B_PROMPT_ID")
-    plan_b = None
-    approval_paths = None
-    if prompt_id_b:
-        _write_json_evidence(
-            run_dir / f'{draft_b["draft_hash"]}.pending-draft.json', draft_b
-        )
-        history_b = _request_json(f"/history/{urllib.parse.quote(prompt_id_b, safe='')}")
-        entry_b = history_b[prompt_id_b]
-        assert _successful(entry_b), "reused Experiment B is not terminal success"
-        assert canonical_json(entry_b["prompt"][2]) == canonical_json(executable_b)
-    else:
-        plan_b, pending_path, event_path, approved_plan_path = _load_external_approval(
-            draft_b, run_dir
-        )
-        approval_paths = {
-            "displayed_draft": str(pending_path),
-            "approval_event": str(event_path),
-            "approved_plan": str(approved_plan_path),
-        }
-        # Approval is checked again immediately before its one permitted enqueue.
-        plan_b = approve_execution_draft(draft_b, plan_b["approval_event"])
-        assert report_is_fresh(report_b, datetime.now(timezone.utc)), (
-            "CapabilityReport expired after approval; rebuild and display a new draft"
-        )
-        assert _queue_is_empty(), "ComfyUI queue changed after approval"
-        prompt_id_b = _enqueue(executable_b, ui_workflow, "B-positive-prompt-only")
-        history_b, entry_b = _wait_terminal(prompt_id_b)
-    hashes_b, paths_b = _verify_outputs(
-        entry_b, output_dir, before_filenames.union(hashes_a)
-    )
-    if plan_b is None:
-        record_b, record_path_b, raw_history_path_b = _historical_characterization_record(
-            run_dir,
-            prompt_id_b,
-            graph_a,
-            executable_b,
-            history_b,
-            hashes_b,
-            paths_b,
-        )
-    else:
-        record_b, record_path_b, raw_history_path_b = _production_record(
-            run_dir,
-            _task_context("B"),
-            build_b,
-            graph_a,
-            plan_b,
-            prompt_id_b,
-            history_b,
-            hashes_b,
-        )
-
-    summary = {
-        "workflow": WORKFLOW_NAME,
-        "saved_workflow_count": len(names),
-        "source_prompt_id": source_prompt_id,
-        "current_saved_workflow_fingerprint": structure_fingerprint(saved_ui_workflow),
-        "selected_history_ui_fingerprint": structure_fingerprint(ui_workflow),
-        "history_selection_basis": "workflow-id + camera-anima-v1 slots + API node classes",
-        "source_graph_hash": content_hash(baseline_graph),
-        "verified_resources": verified_resources,
-        "seed": seed_a,
-        "experiment_a": {
+    bundle, bundle_path = _write_pending_bundle(
+        run_dir,
+        {
+            "draft": draft_b,
+            "task_context": _task_context("B"),
+            "prompt_build": build_b,
+            "profile": profile,
+            "history_ui_workflow": ui_workflow,
+            "source_api_graph": graph_a,
+            "seed_node": seed_node,
+            "seed": seed_a,
+            "patches": draft_b["patches"],
+            "capability_report": report_b,
+            "experiment_a": {
             "prompt_id": prompt_id_a,
-            "output_paths": paths_a,
-            "output_hashes": hashes_a,
-            "run_record": str(record_path_a),
-            "raw_history": str(raw_history_path_a),
+            "history": history_a,
+            "artifact_paths": paths_a,
+            "artifact_hashes": hashes_a,
             "record_hash": record_a["record_hash"],
+            },
         },
-        "experiment_b": {
-            "evidence_class": (
-                "production-approved" if plan_b is not None else "historical-render-characterization"
-            ),
-            "approval_lineage_verified": plan_b is not None,
-            "approval_paths": approval_paths,
-            "prompt_id": prompt_id_b,
-            "output_paths": paths_b,
-            "output_hashes": hashes_b,
-            "run_record": str(record_path_b),
-            "raw_history": str(raw_history_path_b),
-            "record_hash": record_b["record_hash"],
-        },
-    }
-    print(canonical_json(summary))
+    )
+    assert bundle["draft"]["draft_hash"] == draft_b["draft_hash"]
+    pytest.fail(
+        "B draft is pending external approval; display the frozen bundle and rerun with "
+        f"PROMPT_FORGE_PENDING_BUNDLE={bundle_path} and an approval event bound to "
+        f"draft_hash={draft_b['draft_hash']}"
+    )

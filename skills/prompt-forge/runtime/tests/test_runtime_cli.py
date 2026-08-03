@@ -303,6 +303,40 @@ def test_approve_plan_wrong_or_stale_event_is_exit_two_without_files(tmp_path):
     assert not run_dir.exists()
 
 
+def test_consume_approval_is_atomic_and_never_idempotent(tmp_path):
+    draft = build_execution_draft(**_plan_envelope())
+    plan = approve_execution_draft(draft, _approval_event(draft))
+    payload = {
+        "approved_plan": plan,
+        "enqueue_request_id": "stable-client-request-b",
+    }
+    run_dir = tmp_path / "runs"
+
+    first = _run(
+        "consume-approval",
+        "--from-stdin",
+        "--run-dir",
+        run_dir,
+        input_text=json.dumps(payload),
+    )
+    second = _run(
+        "consume-approval",
+        "--from-stdin",
+        "--run-dir",
+        run_dir,
+        input_text=json.dumps(payload),
+    )
+
+    assert first.returncode == 0, first.stderr
+    result = json.loads(first.stdout)
+    consumed_path = Path(result["consumption_path"])
+    assert consumed_path.name == f'{plan["approval_id"]}.consumed.json'
+    assert json.loads(consumed_path.read_text(encoding="utf-8")) == result["consumption"]
+    assert second.returncode == 2
+    assert second.stdout == ""
+    assert "already consumed" in second.stderr
+
+
 def test_malformed_json_is_exit_two_with_one_prefixed_stderr_line():
     result = _run("fingerprint", "--from-stdin", input_text="{")
 

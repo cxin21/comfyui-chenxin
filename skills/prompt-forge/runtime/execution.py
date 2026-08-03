@@ -349,20 +349,7 @@ def approve_execution_draft(draft: dict, approval_event: dict) -> dict:
     return plan
 
 
-def _validated_hashes(value: object, label: str) -> dict[str, str]:
-    if not isinstance(value, dict):
-        raise ExecutionError(f"{label} hashes must be an object")
-    result: dict[str, str] = {}
-    for name, digest in value.items():
-        if not isinstance(name, str) or not name:
-            raise ExecutionError(f"{label} hash names must be non-empty strings")
-        if not isinstance(digest, str) or not _SHA256_RE.fullmatch(digest):
-            raise ExecutionError(f"{label} hashes must be lowercase SHA-256 digests")
-        result[name] = digest
-    return result
-
-
-def _validate_plan_lineage(plan: object, prompt_build: dict, api_graph: dict) -> None:
+def _validate_approved_plan(plan: object, *, trusted_now: datetime | None) -> dict:
     if not isinstance(plan, dict) or set(plan) != _APPROVED_PLAN_KEYS:
         raise ExecutionError("ExecutionPlan lineage is incomplete")
     if plan.get("schema_version") != "1.0" or plan.get("stage") != "character-base":
@@ -377,31 +364,17 @@ def _validate_plan_lineage(plan: object, prompt_build: dict, api_graph: dict) ->
         raise ExecutionError("ExecutionPlan must expect exactly image/png")
     if plan.get("immutable_inputs") != []:
         raise ExecutionError("ExecutionPlan immutable_inputs contract is invalid")
-    reconstructed_draft = {
-        key: copy.deepcopy(plan[key])
-        for key in _DRAFT_KEYS
-    }
+    reconstructed_draft = {key: copy.deepcopy(plan[key]) for key in _DRAFT_KEYS}
     reconstructed_draft["plan_state"] = "draft"
     reconstructed_draft["execution_approved"] = False
     _validate_draft_hash(reconstructed_draft)
     safe_event = _validate_approval_event(
         plan.get("approval_event"),
         plan["draft_hash"],
-        trusted_now=None,
+        trusted_now=trusted_now,
     )
     if plan.get("approval_id") != content_hash(safe_event):
         raise ExecutionError("ExecutionPlan approval_id is not self-consistent")
-    if plan["prompt_build_id"] != content_hash(prompt_build):
-        raise ExecutionError("ExecutionPlan prompt_build_id does not match PromptBuild")
-    if plan["source_api_graph_hash"] != content_hash(api_graph):
-        raise ExecutionError("ExecutionPlan source_api_graph_hash does not match API graph")
-    if plan.get("patches") != _character_base_patches(prompt_build):
-        raise ExecutionError("ExecutionPlan exact four patches do not match PromptBuild")
-    from .adapters.camera import patch_character_base
-
-    patched_graph = patch_character_base(api_graph, prompt_build, _CHARACTER_BASE_SLOTS)
-    if plan["executable_api_graph_hash"] != content_hash(patched_graph):
-        raise ExecutionError("ExecutionPlan executable_api_graph_hash does not match patched graph")
     for field in (
         "profile_hash",
         "workflow_fingerprint",
@@ -426,6 +399,57 @@ def _validate_plan_lineage(plan: object, prompt_build: dict, api_graph: dict) ->
     claimed_hash = unsigned.pop("plan_hash")
     if not isinstance(claimed_hash, str) or claimed_hash != content_hash(unsigned):
         raise ExecutionError("ExecutionPlan plan_hash is not self-consistent")
+    return copy.deepcopy(plan)
+
+
+def build_approval_consumption(approved_plan: dict, enqueue_request_id: str) -> dict:
+    """Consume a fresh approved plan for one stable enqueue request."""
+    trusted_now = _utc_now()
+    safe_plan = _validate_approved_plan(approved_plan, trusted_now=trusted_now)
+    if (
+        not isinstance(enqueue_request_id, str)
+        or not enqueue_request_id.strip()
+        or len(enqueue_request_id) > 256
+    ):
+        raise ExecutionError("enqueue request id must be a non-empty string up to 256 characters")
+    record = {
+        "schema_version": "1.0",
+        "approval_id": safe_plan["approval_id"],
+        "plan_hash": safe_plan["plan_hash"],
+        "draft_hash": safe_plan["draft_hash"],
+        "enqueue_request_id": enqueue_request_id,
+        "consumed_at": trusted_now.isoformat().replace("+00:00", "Z"),
+    }
+    record["consumption_id"] = content_hash(record)
+    return record
+
+
+def _validated_hashes(value: object, label: str) -> dict[str, str]:
+    if not isinstance(value, dict):
+        raise ExecutionError(f"{label} hashes must be an object")
+    result: dict[str, str] = {}
+    for name, digest in value.items():
+        if not isinstance(name, str) or not name:
+            raise ExecutionError(f"{label} hash names must be non-empty strings")
+        if not isinstance(digest, str) or not _SHA256_RE.fullmatch(digest):
+            raise ExecutionError(f"{label} hashes must be lowercase SHA-256 digests")
+        result[name] = digest
+    return result
+
+
+def _validate_plan_lineage(plan: object, prompt_build: dict, api_graph: dict) -> None:
+    plan = _validate_approved_plan(plan, trusted_now=None)
+    if plan["prompt_build_id"] != content_hash(prompt_build):
+        raise ExecutionError("ExecutionPlan prompt_build_id does not match PromptBuild")
+    if plan["source_api_graph_hash"] != content_hash(api_graph):
+        raise ExecutionError("ExecutionPlan source_api_graph_hash does not match API graph")
+    if plan.get("patches") != _character_base_patches(prompt_build):
+        raise ExecutionError("ExecutionPlan exact four patches do not match PromptBuild")
+    from .adapters.camera import patch_character_base
+
+    patched_graph = patch_character_base(api_graph, prompt_build, _CHARACTER_BASE_SLOTS)
+    if plan["executable_api_graph_hash"] != content_hash(patched_graph):
+        raise ExecutionError("ExecutionPlan executable_api_graph_hash does not match patched graph")
 
 
 def _history_outputs(outputs: object) -> list[dict]:

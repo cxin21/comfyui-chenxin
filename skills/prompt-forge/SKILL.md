@@ -73,9 +73,13 @@ enqueue 前向用户展示最终 positive prompt、negative prompt、workflow/pr
 
 把 `{draft, approval_event}` 送入 `runtime_cli.py approve-plan --run-dir <dir>`。只有该命令返回的 `plan_state=approved`、`execution_approved=true` 计划可进入执行；approval event、approved plan 与 `approval_id` 必须在 caller run-dir 相邻保留。内容修改、错误 hash、事件过期、能力报告过期、workflow/profile 漂移或队列变化都使审批失效，必须重建、重展示并取得新事件。
 
+需要跨进程等待审批时，先把完整 immutable pending bundle 以 `pending-<draft_hash>.json` exclusive-create 到 caller run-dir：包含 draft、TaskContext/PromptBuild、profile、实际 history UI、source API graph/seed、exact patches、生成 draft 的 frozen CapabilityReport，以及前序实验的 prompt/history/artifact lineage。恢复必须显式提供绝对路径 `PROMPT_FORGE_PENDING_BUNDLE`，且路径位于同一 run-dir；从 bundle 内 frozen inputs 重建并核对 exact `draft_hash`，不得用新 CapabilityReport 替换后重建。bundle 被改、超过 600 秒、frozen report 失效或 approval 失效就停止。恢复路径不得重跑前序实验。
+
 ### 9. Enqueue
 
-批准后再次确认原 CapabilityReport 仍新鲜且队列仍为空，再使用实际协商到的 MCP enqueue/monitor 能力提交 executable API graph。一次只提交一个 job，等待 terminal success/failure 后才开始下一实验。不要调用保存工作流、安装、删除或清理接口。生产路径必须有真实 MCP 能力协商证据；live REST A/B 只属于 render/graph characterization，不能证明 MCP 路径合规。
+批准后获取新的只读 CapabilityReport，只用于确认当前资源、runtime classification 和队列安全；它不能替换 frozen report 或改变获批 draft。生成稳定 `enqueue_request_id`，把 `{approved_plan, enqueue_request_id}` 送入 `runtime_cli.py consume-approval --run-dir <dir>`。只有 atomic exclusive-create `<approval_id>.consumed.json` 成功后才能 POST；该文件已存在时一律拒绝，即使内容相同也不得幂等复用。
+
+consume 成功后使用实际协商到的 MCP enqueue/monitor 能力提交 executable API graph，并把同一 `enqueue_request_id` 传给服务端。一次只提交一个 job。POST 超时、断连或返回不确定时不得删除 consumption 或盲目重试；服务器可能已经接收，必须先按 request/client id 查询 history。等待 terminal success/failure 后才开始下一实验。不要调用保存工作流、安装、删除或清理接口。生产路径必须有真实 MCP 能力协商证据；live REST A/B 只属于 render/graph characterization，不能证明 MCP 路径合规。
 
 ### 10. Artifact verification
 
@@ -91,7 +95,7 @@ enqueue 前向用户展示最终 positive prompt、negative prompt、workflow/pr
 
 ## CLI 退出合同
 
-`runtime_cli.py` 的 `discover`、`fingerprint`、`plan`、`approve-plan`、`patch-camera`、`record` 均接受 UTF-8 JSON 文件或 stdin，只把 JSON 写到 stdout。`approve-plan` 和 `record` 还要求 caller `--run-dir`。stderr 只有单行 `[prompt-forge-runtime]` 诊断：`0` 成功，`1` draft 被运行时证据拒绝，`2` 输入、审批或运行时失败。
+`runtime_cli.py` 的 `discover`、`fingerprint`、`plan`、`approve-plan`、`consume-approval`、`patch-camera`、`record` 均接受 UTF-8 JSON 文件或 stdin，只把 JSON 写到 stdout。`approve-plan`、`consume-approval` 和 `record` 还要求 caller `--run-dir`。stderr 只有单行 `[prompt-forge-runtime]` 诊断：`0` 成功，`1` draft 被运行时证据拒绝，`2` 输入、审批、重复消费或运行时失败。
 
 ## 常见错误
 
@@ -101,6 +105,9 @@ enqueue 前向用户展示最终 positive prompt、negative prompt、workflow/pr
 | 初始生成请求后直接 enqueue | 构造 draft，展示实际 prompt/negative/graph mutation/draft_hash，再取得外部新鲜事件 |
 | 把 `execution_approved=true` 或旧 approval 当许可 | 只接受 `approve-plan` 对本次 exact displayed draft 产出的 approved plan |
 | 把旧 boolean-only RunRecord 称为审批证明 | 仅称为历史 render/graph/history 证据；没有 display-bound event 就没有可审计审批 |
+| 恢复时生成新 CapabilityReport 并重建 draft | 从 run-dir 的 immutable pending bundle 用 frozen inputs 重建 exact draft；fresh report 只做当前安全门 |
+| `enqueue-once` 只是事件字符串 | POST 前 atomic `consume-approval`；任何已有 consumption 都拒绝 |
+| POST 超时后删除 consumption 再试 | 保留消费记录，先按稳定 request/client id 查 history，绝不盲目重复 enqueue |
 | 从 UI JSON 猜 API inputs | 让 MCP 完成转换、strip 和 validate |
 | 只保存 prompt ID 或截图 | 保留 raw history、artifact hash 和 RunRecord |
 | 失败后换 workflow/model 重试 | 停止并报告 hard gate，不静默替代 |

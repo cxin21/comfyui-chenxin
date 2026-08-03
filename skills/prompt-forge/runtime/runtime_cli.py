@@ -19,6 +19,7 @@ from runtime.contracts import ContractError, canonical_json
 from runtime.execution import (
     ExecutionError,
     approve_execution_draft,
+    build_approval_consumption,
     build_execution_draft,
     build_run_record,
 )
@@ -65,6 +66,10 @@ def _parser() -> argparse.ArgumentParser:
     approve = commands.add_parser("approve-plan", help="approve one displayed ExecutionDraft")
     _add_json_source(approve)
     approve.add_argument("--run-dir", type=Path, required=True)
+
+    consume = commands.add_parser("consume-approval", help="consume one approved enqueue scope")
+    _add_json_source(consume)
+    consume.add_argument("--run-dir", type=Path, required=True)
 
     patch = commands.add_parser("patch-camera", help="patch the camera API graph")
     _add_json_source(patch)
@@ -149,6 +154,23 @@ def _write_execution_evidence(
     return path.resolve()
 
 
+def _write_approval_consumption(run_dir: Path, consumption: dict) -> Path:
+    approval_id = consumption.get("approval_id")
+    if not isinstance(approval_id, str) or re.fullmatch(r"[0-9a-f]{64}", approval_id) is None:
+        raise ExecutionError("approval consumption requires a lowercase SHA-256 approval_id")
+    run_dir.mkdir(parents=True, exist_ok=True)
+    if not run_dir.is_dir():
+        raise OSError(f"run directory is not a directory: {run_dir}")
+    path = run_dir / f"{approval_id}.consumed.json"
+    try:
+        with path.open("x", encoding="utf-8", newline="\n") as handle:
+            handle.write(canonical_json(consumption))
+            handle.write("\n")
+    except FileExistsError as exc:
+        raise ExecutionError(f"approval already consumed: {path}") from exc
+    return path.resolve()
+
+
 def _dispatch(command: str, payload: dict, args) -> dict | tuple[dict, int]:
     if command == "discover":
         return _discover(payload)
@@ -186,6 +208,18 @@ def _dispatch(command: str, payload: dict, args) -> dict | tuple[dict, int]:
             "approval_event_path": str(event_path),
             "plan_path": str(plan_path),
         }
+    if command == "consume-approval":
+        if set(payload) != {"approved_plan", "enqueue_request_id"}:
+            raise ExecutionError(
+                "consume-approval accepts only approved_plan and enqueue_request_id"
+            )
+        approved_plan = _require_object(payload.get("approved_plan"), "approved_plan")
+        consumption = build_approval_consumption(
+            approved_plan,
+            payload.get("enqueue_request_id"),
+        )
+        path = _write_approval_consumption(args.run_dir, consumption)
+        return {"consumption": consumption, "consumption_path": str(path)}
     if command == "record":
         record = build_run_record(**payload)
         path = _write_run_record(args.run_dir, record)
