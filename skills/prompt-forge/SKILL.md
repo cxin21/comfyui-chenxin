@@ -5,6 +5,18 @@ description: Use when compiling prompts for image or video models, or when an ex
 
 # Prompt Forge
 
+## Stage 3/4 execution contract
+
+The character-to-video pipeline is ordered and fail-closed:
+
+1. `accept-reference` is the only transition that makes a verified Flux angle reusable by Stage 3.
+2. `plan-stage-execution` binds the Stage 3 camera img2img or Stage 4 Yusu Director graph to a fresh local capability report, profile hash, and immutable PromptBuild lineage.
+3. `approve-stage` requires a newly displayed exact draft hash; `consume-stage` uses an exclusive one-time consumption record.
+4. `build-stage-submission` reconstructs the exact graph/request. Only `submit_stage(...)` with an injected trusted-local enqueue callable and the canonical consumed-namespace receipt path may cross the external side-effect boundary; it first writes an exclusive submission-intent sentinel.
+5. `record-stage` requires a succeeded receipt, matching raw history when available, and a verified PNG/video artifact with lineage and technical metadata.
+
+Never synthesize approval from chat text, never treat a UI screenshot as an executable graph, and never claim a ComfyUI enqueue without a real response receipt. A current camera conversion error is a hard stop, not a reason to fall back to a hand-written API graph.
+
 Prompt Forge 把用户意图编译为模型方言，并把本地 ComfyUI 执行绑定到可审计证据。默认只编译；生成是独立阶段。编译器始终保持 `execution.performed=false`。
 
 ## 不可突破的边界
@@ -73,7 +85,7 @@ enqueue 前向用户展示最终 positive prompt、negative prompt、workflow/pr
 
 把 `{draft, approval_event}` 送入 `runtime_cli.py approve-plan --run-dir <dir>`。只有该命令返回的 `plan_state=approved`、`execution_approved=true` 计划可进入执行；approval event、approved plan 与 `approval_id` 必须在 caller run-dir 相邻保留。内容修改、错误 hash、事件过期、能力报告过期、workflow/profile 漂移或队列变化都使审批失效，必须重建、重展示并取得新事件。
 
-需要跨进程等待审批时，先把完整 immutable pending bundle 以 `pending-<draft_hash>.json` exclusive-create 到 caller run-dir：包含 draft、TaskContext/PromptBuild、profile、实际 history UI、source API graph/seed、exact patches、生成 draft 的 frozen CapabilityReport、前序实验的 prompt/history/artifact lineage，以及 canonical `consumption_root`；root 纳入 `bundle_hash`。恢复必须显式提供绝对路径 `PROMPT_FORGE_PENDING_BUNDLE`，bundle 必须直接位于该 root，当前 resolved run-dir 必须与 bundle root 字符串完全相等；parent、child、另一个目录或 symlink/path alias 都拒绝。从 bundle 内 frozen inputs 重建并核对 exact `draft_hash`，不得用新 CapabilityReport 替换后重建。bundle 被改、超过 600 秒、frozen report 失效或 approval 失效就停止。恢复路径不得重跑前序实验。
+需要跨进程等待审批时，使用 runtime 的 `write_pending_bundle` exclusive-create immutable bundle（Stage 2 文件名为 `pending-c-<draft_hash>.json`）：它绑定 exact draft、stage-specific frozen critical inputs、canonical `consumption_root`、`<stage>:<draft_hash>` consumption namespace、created/expiry UTC 时间与 `bundle_hash`。恢复只能用 `load_pending_bundle` 对该绝对 canonical 路径执行 exact-hash、stage、frozen-input、namespace 和 expiry 校验；parent/child/alias/symlink、跨 stage、篡改或超过 600 秒一律拒绝。bundle 不替换新的 CapabilityReport，也不重跑前序实验。
 
 ### 9. Enqueue
 
@@ -95,19 +107,20 @@ consume 成功后使用实际协商到的 MCP enqueue/monitor 能力提交 execu
 
 Stage 2 只接受已成功且 history 已核对的 Stage 1 RunRecord，以及独立接受的 `CharacterBaseImage` descriptor。descriptor 必须包含真实 PNG 的 lowercase SHA-256、与 RunRecord 相同的 `source_record_hash`、安全 `lineage_id`、canonical `artifact_root/artifact_path`，并明确 `visual_acceptance.front_facing=true` 与 `identity_visible=true`。路径必须实际位于 root 内，文件字节 hash、RunRecord output hash 与 descriptor hash 必须三者相等。`DiagnosticImage`、未接受 artifact、错误 type、空/伪 hash、lineage 不一致或未通过 front-facing acceptance 一律拒绝。
 
-1. 枚举当前 MCP 注册表，使用实际存在的 saved-workflow load、UI→API、strip/slice、runtime classification 与 validate 能力处理 `Flux2-Klein人物一键多视图工作流.json`。禁止猜工具名、禁止手写 UI converter。只有 runtime 明确为 local、validation 零 error、当前 UI fingerprint 精确为 `fff6236efa6727ac6584d61f640a63f9602b2d07a545d216b96a870a681e6faf`、profile/节点/模型/资源验证通过且队列为空，才能继续；转换 warning 导致断线或 required input 缺失时 fail closed。在这一步通过前不得上传。
+1. 枚举当前 MCP 注册表，使用实际存在的 saved-workflow load、UI→API、strip/slice、runtime classification 与 validate 能力处理 `Flux2-Klein人物一键多视图工作流.json`。生产 draft 只能由受控本地 orchestrator 调用 `build_multiview_draft_with_mcp`：它在进程内实际执行 `get_workflow({workflow_id, format:"ui"})`、`get_workflow({workflow_id, format:"api"})`、`strip_workflow({workflow_id})`、`validate_workflow({workflow: api_graph})` 与 `check_workflow_runtime({workflow: api_graph})`，再把真实响应摘要、comfyui-mcp 版本和本地 provenance 绑定进 draft。禁止猜工具名、禁止手写 UI converter，也禁止让 JSON caller 用自填 receipt/`trust_model` 代替这些调用。只有 runtime 明确为 local、validation 零 error、当前 UI fingerprint 精确为 `fff6236efa6727ac6584d61f640a63f9602b2d07a545d216b96a870a681e6faf`、profile/节点/模型/资源验证通过且队列为空，才能继续；转换 warning 导致断线或 required input 缺失时 fail closed。在这一步通过前不得上传。
 2. `lineage_id` 必须匹配 ASCII `[A-Za-z0-9][A-Za-z0-9._-]{0,127}`。随后以 `prompt-forge/<lineage_id>/character-base-<content_hash>.png` 这个 lineage+content-derived 名称，通过当前真实 `comfyui-mcp` image-upload 能力上传 Stage 1 PNG；MCP 返回的 stored filename 必须与请求名称完全相同，并须保留源 hash、上传 receipt 和服务器端可读确认。禁止覆盖已有不同内容。
-3. 用 `runtime_cli.py plan-multiview` 构建 draft。它从 artifact hash 派生 uploaded filename，只允许 node `111` 与 `667` 的 `inputs.image` 变为同一文件，并让两个 patch 都携带同一 `source_hash`。pose `LoadImage` 节点 `368/151/152/154/360/364/148/149/147/373/150/367`、CR Text/view instructions、模型、LoRA、sampler、scheduler 和所有其他字段必须与 source API graph 完全相同；不得注入 negative prompt，draft 展示时明确写 `negative_prompt: absent`。再用 `patch-flux` 生成 executable graph，并核对其 content hash 等于 draft 的 `executable_api_graph_hash`。
-4. 完整展示 Stage 2 draft 与 `draft_hash`，随后严格复用第 8–9 节的外部 approval event、`approve-plan`、canonical consumption root、`consume-approval` 和 enqueue-once 流程。不得为 Stage 2 恢复旧 `execution_approved=True` 输入或创建第二套授权。缺 `PROMPT_FORGE_APPROVAL_FILE` 时只 exclusive-create `pending-c-<draft_hash>.json`、报告 exact hash/path 并停止；绝不自动生成 approval、consume 或 enqueue。
-5. terminal 后保留 raw history；history 内 prompt graph 必须 canonical-equal executable graph。按 verified profile output map normalize image artifacts，全部绑定 Stage 1 `source_artifact_hash` 和 `lineage_id`。未知 output 是 `DiagnosticImage`；`reference_eligible=false` 或 `semantic_conflict=true` 的产物不能成为 Stage 3 reference candidate。通过 generic `record` 生成 Stage 2 RunRecord，并相邻保留 approval、consumption、raw history、artifact path/hash 证据。
+3. 由同一个受控本地 orchestrator 调用 `build_multiview_draft_with_mcp` 构建 production draft。纯 JSON `runtime_cli.py plan-multiview` 没有 callable，必须 typed fail closed，不能把 caller-authored conversion receipt 变成可审批 draft；`validate_multiview_mcp_preflight` 若用于离线 receipt/回归 fixture，只是 audit，不产生 production draft，也不得进入 `approve-plan`。production draft 从 artifact hash 派生 uploaded filename，只允许 node `111` 与 `667` 的 `inputs.image` 变为同一文件，并让两个 patch 都携带同一 `source_hash`。pose `LoadImage` 节点 `368/151/152/154/360/364/148/149/147/373/150/367`、CR Text/view instructions、模型、LoRA、sampler、scheduler 和所有其他字段必须与 source API graph 完全相同；不得注入 negative prompt，draft 展示时明确写 `negative_prompt: absent`。此时只生成 draft，不 patch、更不提交。
+4. 完整展示 Stage 2 draft 与 `draft_hash`，随后严格复用第 8–9 节的外部 approval event、`approve-plan`、canonical consumption root 与 `consume-approval`。不得为 Stage 2 恢复旧 `execution_approved=True` 输入或创建第二套授权。缺 `PROMPT_FORGE_APPROVAL_FILE` 时只 exclusive-create `pending-c-<draft_hash>.json`、报告 exact hash/path 并停止；绝不自动生成 approval、consume 或 enqueue。
+5. consume 成功后，受控本地 orchestrator 才能以获批 plan 构造 executable graph 并调用实际 `enqueue_workflow` MCP；它必须先 exclusive-create 以 consumption id 绑定的 submission-intent sentinel（同时绑定 request id、submission hash、graph hash 和 exact args），随后才可调用。已有 in-progress/success/failed sentinel 时不得再次调用；callable 失败时保留 typed failed receipt，并先查询 server 状态而非删除或盲目重试。它必须把 sentinel 的 stable request id 放入 `prompt[3].extra_data.prompt_forge_enqueue_request_id`，保留 exact tool arguments、response digest、provenance 和 receipt。纯 JSON CLI 的 `patch-flux` 没有此可信 callable，必须 fail closed，绝不声称已提交。
+6. terminal 后保留 raw history；history 内 prompt graph 必须 canonical-equal executable graph，且其请求 ID 必须从 `history[prompt_id]["prompt"][3]["extra_data"]["prompt_forge_enqueue_request_id"]`（兼容该 metadata dict 的直接字段）读取并等于 immutable consumption sentinel。Stage 1 accepted descriptor 必须恰好匹配一条 raw history `type=output`、subfolder、filename，并解析到相同 canonical artifact path。`record` 还必须消费 exact submission、enqueue receipt、sentinel 和 canonical ComfyUI output root；逐个重新读取 PNG、校验结构并计算 SHA-256。按 verified profile output map normalize image artifacts，全部绑定 Stage 1 `source_artifact_hash` 和 `lineage_id`，并标记 `hash_verified=true`；Stage 3 还必须有明确 `accepted=true`，并同时满足 `CharacterAngleView`、非冲突和 `reference_eligible=true`。未知 output 是 `DiagnosticImage`，默认不接受任何 Stage 2 artifact。相邻保留 approval、consumption、submission、enqueue receipt、raw history 和 artifact path/hash 证据。
 
-Experiment C 一次只提交一个 job、不保存 workflow、不删除 history/output、不改 models/nodes。REST live 只能标记为 characterization，不能替代 MCP production proof。默认 live 测试 skip；没有经 MCP validate 的真实 executable API graph 时不得创建 pending draft，更不得上传或 enqueue。
+Experiment C 一次只提交一个 job、不保存 workflow、不删除 history/output、不改 models/nodes。信任边界是本地受控 orchestrator 与其实际调用的 MCP：receipt 是可审计的本地观察，不是虚构的 MCP 加密签名；跨不可信进程/主机不得把 receipt/self-hash 当认证。REST live 只能标记为 characterization，不能替代 MCP production proof。默认 live 测试 skip；当前 comfyui-mcp 0.49.0 转换仍有 70 warnings/86 validation errors，故不得创建 pending C draft、上传或 enqueue，也不得声称 Experiment C 通过。
 
 最终答复至少给出 prompt ID、seed、artifact 绝对路径、artifact hash、RunRecord 路径和 terminal status；没有这些证据时只报告已到达的阶段。
 
 ## CLI 退出合同
 
-`runtime_cli.py` 的 `discover`、`fingerprint`、`plan`、`plan-multiview`、`approve-plan`、`consume-approval`、`patch-camera`、`patch-flux`、`record` 均接受 UTF-8 JSON 文件或 stdin，只把 JSON 写到 stdout。`approve-plan`、`consume-approval` 和 `record` 还要求 caller `--run-dir`。stderr 只有单行 `[prompt-forge-runtime]` 诊断：`0` 成功，`1` draft 被运行时证据拒绝，`2` 输入、审批、重复消费或运行时失败。
+`runtime_cli.py` 的 `discover`、`fingerprint`、`plan`、`plan-multiview`、`approve-plan`、`consume-approval`、`patch-camera`、`patch-flux`、`record` 均接受 UTF-8 JSON 文件或 stdin，只把 JSON 写到 stdout。`plan-multiview` 是明确的 JSON fail-closed 边界：没有受控本地 callable 时返回 exit `1` 与 typed rejection，不生成 draft；Stage 2 production planning 只能走本地授权 orchestrator 的 `build_multiview_draft_with_mcp`。`patch-flux` 同理不负责 production submit，受控提交只走 `submit_multiview`。`approve-plan`、`consume-approval` 和 `record` 还要求 caller `--run-dir`。stderr 只有单行 `[prompt-forge-runtime]` 诊断：`0` 成功，`1` draft 被运行时证据拒绝，`2` 输入、审批、重复消费或运行时失败。
 
 ## 常见错误
 

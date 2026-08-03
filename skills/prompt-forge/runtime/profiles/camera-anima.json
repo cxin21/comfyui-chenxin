@@ -10,13 +10,24 @@
     "camera_angle": {"id": 583, "type": "CameraAngleNode"},
     "camera_extra": {"id": 585, "type": "CameraExtraConfigNode"}
   },
+  "img2img": {
+    "group_id": 3,
+    "node_ids": [21, 58, 57, 59],
+    "load_image_node_id": 21,
+    "vae_encode_node_id": 59,
+    "latent_switch_node_id": 75,
+    "sampler_node_id": 27,
+    "expected_path_node_ids": [27, 75, 59]
+  },
   "allowed_mutations": [
     "positive_prompt.wildcard_text",
     "positive_prompt.populated_text",
     "negative_prompt.wildcard_text",
     "negative_prompt.populated_text",
     "camera_angle",
-    "camera_extra"
+    "camera_extra",
+    "img2img.group_3.mode",
+    "img2img.load_image.image"
   ],
   "expected_outputs": ["image/png"]
 }

@@ -2,12 +2,23 @@
 
 from __future__ import annotations
 
+import copy
 import re
+import hashlib
+import json
+import subprocess
+from datetime import datetime, timezone
+from fractions import Fraction
+from pathlib import Path
 from pathlib import PurePosixPath, PureWindowsPath
 
 
 class ArtifactNormalizationError(ValueError):
     """Raised when ComfyUI output data cannot meet the artifact contract."""
+
+
+class ArtifactError(ArtifactNormalizationError):
+    """Raised when a generated artifact fails technical verification."""
 
 
 _PROFILE_KEYS = frozenset(("artifact_type", "view_label"))
@@ -46,8 +57,14 @@ def _require_safe_subfolder(value: object) -> str:
         return value
     posix = PurePosixPath(value)
     windows = PureWindowsPath(value)
-    if posix.is_absolute() or windows.is_absolute() or windows.drive:
-        raise ArtifactNormalizationError("image subfolder must be a safe relative path")
+    if (
+        posix.is_absolute()
+        or windows.is_absolute()
+        or windows.drive
+        or "\\" in value
+        or value != "/".join(posix.parts)
+    ):
+        raise ArtifactNormalizationError("image subfolder must be a canonical safe relative path")
     if any(part in {"", ".", ".."} for part in (*posix.parts, *windows.parts)):
         raise ArtifactNormalizationError("image subfolder must not contain path traversal")
     return value
@@ -78,6 +95,69 @@ def _validated_image(image: object) -> tuple[str, str, str]:
     if not isinstance(image_type, str) or image_type not in _ALLOWED_IMAGE_TYPES:
         raise ArtifactNormalizationError("image type must be output or temp")
     return image_type, subfolder, filename
+
+
+def is_stage3_reference_eligible(artifact: object) -> bool:
+    """Return whether an accepted, verified multiview artifact may be reused."""
+    return (
+        isinstance(artifact, dict)
+        and artifact.get("accepted") is True
+        and artifact.get("artifact_type") == "CharacterAngleView"
+        and isinstance(artifact.get("view_label"), str)
+        and bool(artifact["view_label"])
+        and artifact.get("reference_eligible") is True
+        and artifact.get("semantic_conflict") is False
+        and artifact.get("hash_verified") is True
+    )
+
+
+def accept_stage3_reference(artifact: object, actor: str, accepted_at: str) -> dict:
+    """Record an explicit human acceptance for one verified angle artifact.
+
+    Normalization deliberately leaves ``accepted`` false.  This function is the
+    only transition that may make a multiview output eligible for Stage 3; it
+    binds the actor, timestamp, and exact artifact hash into a self-hashed
+    acceptance object.
+    """
+    if not (
+        isinstance(artifact, dict)
+        and artifact.get("artifact_type") == "CharacterAngleView"
+        and isinstance(artifact.get("view_label"), str)
+        and bool(artifact["view_label"])
+        and artifact.get("reference_eligible") is True
+        and artifact.get("semantic_conflict") is False
+        and artifact.get("hash_verified") is True
+    ):
+        raise ArtifactNormalizationError("reference is not eligible for Stage 3 acceptance")
+    if artifact.get("accepted") is True:
+        raise ArtifactNormalizationError("reference is already accepted")
+    if not isinstance(actor, str) or not actor.strip():
+        raise ArtifactNormalizationError("reference acceptance actor is required")
+    if not isinstance(accepted_at, str) or not accepted_at.strip():
+        raise ArtifactNormalizationError("reference acceptance timestamp is required")
+    try:
+        parsed = datetime.fromisoformat(accepted_at.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ArtifactNormalizationError("reference acceptance timestamp is invalid") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() != timezone.utc.utcoffset(parsed):
+        raise ArtifactNormalizationError("reference acceptance timestamp must be UTC")
+    content = artifact.get("content_hash")
+    if not isinstance(content, str) or not re.fullmatch(r"[0-9a-f]{64}", content):
+        raise ArtifactNormalizationError("reference content_hash must be a lowercase SHA-256 digest")
+    acceptance = {
+        "schema_version": "1.0",
+        "artifact_hash": content,
+        "actor": actor.strip(),
+        "accepted_at": accepted_at,
+    }
+    acceptance["acceptance_id"] = hashlib.sha256(
+        json.dumps(acceptance, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    result = copy.deepcopy(artifact)
+    result["accepted"] = True
+    result["acceptance"] = acceptance
+    result["acceptance_id"] = acceptance["acceptance_id"]
+    return result
 
 
 def _candidate(semantic: dict[str, str | None], node_id: str) -> dict[str, str | None]:
@@ -172,3 +252,149 @@ def normalize_image_outputs(outputs, output_nodes, lineage_id, source_hash) -> l
         )
         normalized.append(descriptor)
     return normalized
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+    except OSError as exc:
+        raise ArtifactError("video artifact bytes cannot be read") from exc
+    return digest.hexdigest()
+
+
+def _parse_frame_rate(value: object) -> int | float:
+    if not isinstance(value, str) or not value or value in {"0/0", "N/A"}:
+        raise ArtifactError("video stream frame rate is invalid")
+    try:
+        rate = Fraction(value)
+    except (ValueError, ZeroDivisionError) as exc:
+        raise ArtifactError("video stream frame rate is invalid") from exc
+    if rate <= 0:
+        raise ArtifactError("video stream frame rate is invalid")
+    return int(rate) if rate.denominator == 1 else float(rate)
+
+
+def probe_video(path: Path) -> dict:
+    """Read technical video metadata using the installed ffprobe binary."""
+    if not isinstance(path, Path):
+        raise ArtifactError("video path must be a pathlib.Path")
+    try:
+        resolved = path.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise ArtifactError("video path does not exist") from exc
+    if not resolved.is_file():
+        raise ArtifactError("video path is not a file")
+    command = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-count_frames",
+        "-show_streams",
+        "-show_format",
+        "-of",
+        "json",
+        str(resolved),
+    ]
+    try:
+        result = subprocess.run(command, check=False, capture_output=True, text=True, timeout=30)
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
+        raise ArtifactError("ffprobe could not inspect the video") from exc
+    if result.returncode != 0:
+        raise ArtifactError("ffprobe returned a non-zero status")
+    try:
+        payload = json.loads(result.stdout)
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise ArtifactError("ffprobe returned invalid JSON") from exc
+    streams = payload.get("streams") if isinstance(payload, dict) else None
+    if not isinstance(streams, list):
+        raise ArtifactError("ffprobe returned no streams")
+    video_stream = next(
+        (stream for stream in streams if isinstance(stream, dict) and stream.get("codec_type") == "video"),
+        None,
+    )
+    if video_stream is None:
+        raise ArtifactError("video stream is missing")
+    frame_value = video_stream.get("nb_read_frames") or video_stream.get("nb_frames")
+    try:
+        frame_count = int(frame_value)
+    except (TypeError, ValueError) as exc:
+        raise ArtifactError("video frame count is invalid") from exc
+    if frame_count <= 0:
+        raise ArtifactError("video frame count is empty")
+    try:
+        size_bytes = resolved.stat().st_size
+    except OSError as exc:
+        raise ArtifactError("video file metadata cannot be read") from exc
+    if size_bytes <= 0:
+        raise ArtifactError("video artifact is empty")
+    return {
+        "filename": resolved.name,
+        "path": str(resolved),
+        "size_bytes": size_bytes,
+        "fps": _parse_frame_rate(video_stream.get("avg_frame_rate") or video_stream.get("r_frame_rate")),
+        "frame_count": frame_count,
+        "codec_name": video_stream.get("codec_name"),
+        "width": video_stream.get("width"),
+        "height": video_stream.get("height"),
+    }
+
+
+def verify_video_artifact(
+    metadata: dict,
+    expected_fps: int,
+    expected_frames: int,
+    *,
+    lineage_id: str | None = None,
+    source_shot_hash: str | None = None,
+    artifact_path: Path | None = None,
+) -> dict:
+    """Validate a video against the planned technical contract."""
+    if not isinstance(metadata, dict):
+        raise ArtifactError("video metadata must be an object")
+    if not isinstance(expected_fps, int) or isinstance(expected_fps, bool) or expected_fps <= 0:
+        raise ArtifactError("expected fps must be a positive integer")
+    if not isinstance(expected_frames, int) or isinstance(expected_frames, bool) or expected_frames <= 0:
+        raise ArtifactError("expected frame count must be a positive integer")
+    filename = metadata.get("filename")
+    if not isinstance(filename, str) or not filename.strip() or filename != filename.strip():
+        raise ArtifactError("video filename is invalid")
+    size_bytes = metadata.get("size_bytes")
+    if not isinstance(size_bytes, int) or isinstance(size_bytes, bool) or size_bytes <= 0:
+        raise ArtifactError("video artifact is empty")
+    if metadata.get("fps") != expected_fps:
+        raise ArtifactError("video fps does not match the expected plan")
+    if metadata.get("frame_count") != expected_frames:
+        raise ArtifactError("video frame count does not match the expected plan")
+
+    result = {
+        "schema_version": "1.0",
+        "artifact_type": "VideoClip",
+        "accepted": True,
+        "filename": filename,
+        "size_bytes": size_bytes,
+        "fps": expected_fps,
+        "frame_count": expected_frames,
+    }
+    if lineage_id is not None:
+        if not isinstance(lineage_id, str) or not _SAFE_IDENTIFIER_RE.fullmatch(lineage_id):
+            raise ArtifactError("video lineage_id is invalid")
+        result["lineage_id"] = lineage_id
+    if source_shot_hash is not None:
+        if not isinstance(source_shot_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", source_shot_hash):
+            raise ArtifactError("video source_shot_hash is invalid")
+        result["source_shot_hash"] = source_shot_hash
+    if artifact_path is not None:
+        if not isinstance(artifact_path, Path):
+            raise ArtifactError("video artifact_path must be a pathlib.Path")
+        try:
+            resolved = artifact_path.resolve(strict=True)
+        except (OSError, RuntimeError) as exc:
+            raise ArtifactError("video artifact_path does not exist") from exc
+        if not resolved.is_file() or resolved.name != filename:
+            raise ArtifactError("video artifact_path does not match metadata")
+        result["artifact_path"] = str(resolved)
+        result["content_hash"] = _sha256_file(resolved)
+    return result

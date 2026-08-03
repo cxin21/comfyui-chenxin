@@ -107,3 +107,88 @@ def validate_anima_prompt_build(build: object, intent: object) -> list[str]:
             errors.append("negative prompt contradicts locked facts")
 
     return errors
+
+
+def _video_dimension_values(intent: dict, name: str) -> list[str]:
+    dimensions = intent.get("dimensions")
+    if not isinstance(dimensions, dict):
+        return []
+    raw_values = dimensions.get(name)
+    if not isinstance(raw_values, list):
+        return []
+    values: list[str] = []
+    for item in raw_values:
+        value = item.get("value") if isinstance(item, dict) else item
+        if isinstance(value, str) and value.strip():
+            values.append(value.strip())
+    return values
+
+
+def _word_variants(value: str) -> set[str]:
+    words = re.findall(r"[a-z0-9]+", value.casefold())
+    variants: set[str] = set()
+    for word in words:
+        if len(word) <= 2:
+            continue
+        variants.add(word)
+        if len(word) >= 4:
+            variants.add(word[:4])
+        for suffix in ("ing", "ies", "es", "ly", "s"):
+            if word.endswith(suffix) and len(word) - len(suffix) >= 3:
+                variants.add(word[: -len(suffix)])
+    return variants
+
+
+def _video_phrase_present(prompt: str, phrase: str) -> bool:
+    prompt_words = re.findall(r"[a-z0-9]+", prompt.casefold())
+    phrase_words = [word for word in re.findall(r"[a-z0-9]+", phrase.casefold()) if len(word) > 2]
+    for phrase_word in phrase_words:
+        if not any(
+            prompt_word == phrase_word
+            or prompt_word.startswith(phrase_word)
+            or phrase_word.startswith(prompt_word)
+            or (len(prompt_word) >= 4 and len(phrase_word) >= 4 and prompt_word[:4] == phrase_word[:4])
+            for prompt_word in prompt_words
+        ):
+            return False
+    return bool(phrase_words)
+
+
+def validate_ltx_prompt_build(build: object, intent: object) -> list[str]:
+    """Return deterministic quality errors for a Yusu LTX video build."""
+    if not isinstance(build, dict):
+        return ["Video PromptBuild must be an object"]
+    if not isinstance(intent, dict):
+        return ["Video PromptIntent must be an object"]
+    errors: list[str] = []
+    if build.get("target") != "video":
+        errors.append("LTX PromptBuild target must be video")
+    if _normalized(build.get("dialect")) != "video_timeline":
+        errors.append("LTX PromptBuild requires the video-timeline dialect")
+    if build.get("ready_to_execute") is not True:
+        errors.append("LTX PromptBuild is not ready to execute")
+    prompt = build.get("prompt")
+    if not isinstance(prompt, str) or not prompt.strip():
+        errors.append("video prompt is empty")
+        prompt = ""
+    negative = build.get("negative_prompt")
+    if negative != "":
+        errors.append("LTX uses the workflow-owned negative conditioning; negative_prompt must be empty")
+
+    for dimension in ("subject", "action", "motion", "camera"):
+        values = _video_dimension_values(intent, dimension)
+        if not values:
+            errors.append(f"video {dimension} dimension is required")
+            continue
+        for value in values:
+            if not _video_phrase_present(prompt, value):
+                errors.append(f"video {dimension} is not represented in the prompt: {value}")
+
+    locked_facts = intent.get("locked_facts")
+    if not isinstance(locked_facts, list) or not all(isinstance(item, str) for item in locked_facts):
+        errors.append("video locked facts must be a string list")
+    else:
+        for fact in locked_facts:
+            if fact.strip() and not _video_phrase_present(prompt, fact):
+                errors.append(f"video locked fact is not represented in the prompt: {fact}")
+    return errors

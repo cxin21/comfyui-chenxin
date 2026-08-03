@@ -12,8 +12,10 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from runtime.adapters.camera import patch_character_base
-from runtime.adapters.flux_multiview import FluxAdapterError, patch_base_images
+from runtime.adapters.camera import activate_g1, patch_character_base, verify_img2img_path
+from runtime.adapters.flux_multiview import FluxAdapterError
+from runtime.adapters.yusu_timeline import patch_yusu_timeline
+from runtime.artifacts import accept_stage3_reference, verify_video_artifact
 from runtime.capabilities import build_capability_report
 from runtime.comfy_api import CapabilityError, ComfyApi
 from runtime.contracts import ContractError, canonical_json
@@ -25,7 +27,20 @@ from runtime.execution import (
     build_execution_draft,
     build_multiview_draft,
     build_multiview_run_record,
+    build_multiview_submission,
     build_run_record,
+)
+from runtime.pipeline_state import advance_state, stage_is_reusable
+from runtime.reference_select import select_reference
+from runtime.stages import StageError, build_shot_plan, build_video_plan
+from runtime.stage_execution import (
+    StageExecutionError,
+    approve_stage_execution_draft,
+    build_stage_consumption,
+    build_stage_execution_draft,
+    build_stage_run_record,
+    build_stage_submission,
+    write_stage_consumption,
 )
 from runtime.workflow_profile import ProfileError, structure_fingerprint
 
@@ -68,7 +83,8 @@ def _parser() -> argparse.ArgumentParser:
     _add_json_source(plan)
 
     plan_multiview = commands.add_parser(
-        "plan-multiview", help="build a Stage 2 unapproved multiview ExecutionDraft"
+        "plan-multiview",
+        help="fail closed: Stage 2 production planning requires local MCP callables",
     )
     _add_json_source(plan_multiview)
 
@@ -85,6 +101,63 @@ def _parser() -> argparse.ArgumentParser:
 
     patch_flux = commands.add_parser("patch-flux", help="patch both Flux base-image inputs")
     _add_json_source(patch_flux)
+
+    select = commands.add_parser("select-reference", help="select one accepted shot reference")
+    _add_json_source(select)
+
+    accept_reference = commands.add_parser(
+        "accept-reference", help="record explicit human acceptance for one verified angle artifact"
+    )
+    _add_json_source(accept_reference)
+
+    activate = commands.add_parser("activate-g1", help="activate the complete camera G1 group")
+    _add_json_source(activate)
+
+    verify_path = commands.add_parser("verify-img2img-path", help="prove the G1 latent path")
+    _add_json_source(verify_path)
+
+    plan_shot = commands.add_parser("plan-shot", help="build a Stage 3 shot-image draft")
+    _add_json_source(plan_shot)
+
+    patch_yusu = commands.add_parser("patch-yusu", help="patch one Yusu Director timeline segment")
+    _add_json_source(patch_yusu)
+
+    plan_video = commands.add_parser("plan-video", help="build a Stage 4 video draft")
+    _add_json_source(plan_video)
+
+    stage_draft = commands.add_parser(
+        "plan-stage-execution", help="bind a Stage 3/4 plan to fresh local graph evidence"
+    )
+    _add_json_source(stage_draft)
+
+    stage_approve = commands.add_parser(
+        "approve-stage", help="approve one displayed Stage 3/4 execution draft"
+    )
+    _add_json_source(stage_approve)
+    stage_approve.add_argument("--run-dir", type=Path, required=True)
+
+    stage_consume = commands.add_parser(
+        "consume-stage", help="consume one approved Stage 3/4 enqueue scope"
+    )
+    _add_json_source(stage_consume)
+    stage_consume.add_argument("--run-dir", type=Path, required=True)
+
+    stage_submit = commands.add_parser(
+        "build-stage-submission", help="build the exact Stage 3/4 graph/request without enqueueing"
+    )
+    _add_json_source(stage_submit)
+
+    stage_record = commands.add_parser(
+        "record-stage", help="build and retain a verified Stage 3/4 RunRecord"
+    )
+    _add_json_source(stage_record)
+    stage_record.add_argument("--run-dir", type=Path, required=True)
+
+    verify_video = commands.add_parser("verify-video", help="verify video technical metadata")
+    _add_json_source(verify_video)
+
+    state = commands.add_parser("pipeline-state", help="advance or check pipeline state")
+    _add_json_source(state)
 
     record = commands.add_parser("record", help="build and retain a RunRecord")
     _add_json_source(record)
@@ -195,9 +268,129 @@ def _dispatch(command: str, payload: dict, args) -> dict | tuple[dict, int]:
             payload["api_graph"], payload["prompt_build"], payload["slots"]
         )
     if command == "patch-flux":
-        return patch_base_images(
-            payload["api_graph"], payload["image_name"], payload["slots"]
+        raise ExecutionError(
+            "patch-flux is unavailable at the JSON CLI boundary: a trusted local "
+            "MCP enqueue callable is required; no graph was submitted"
         )
+    if command == "select-reference":
+        if set(payload) != {"desired_view", "artifacts"}:
+            raise CliUsageError("select-reference accepts desired_view and artifacts")
+        return select_reference(payload["desired_view"], payload["artifacts"])
+    if command == "accept-reference":
+        if set(payload) != {"artifact", "actor", "accepted_at"}:
+            raise CliUsageError("accept-reference accepts artifact, actor and accepted_at")
+        return accept_stage3_reference(payload["artifact"], payload["actor"], payload["accepted_at"])
+    if command == "activate-g1":
+        if set(payload) != {"workflow", "image_name", "profile"}:
+            raise CliUsageError("activate-g1 accepts workflow, image_name and profile")
+        return activate_g1(payload["workflow"], payload["image_name"], payload["profile"])
+    if command == "verify-img2img-path":
+        if set(payload) != {"api_graph", "profile"}:
+            raise CliUsageError("verify-img2img-path accepts api_graph and profile")
+        return verify_img2img_path(payload["api_graph"], payload["profile"])
+    if command == "plan-shot":
+        try:
+            return build_shot_plan(**payload)
+        except StageError as exc:
+            return {"accepted": False, "error": str(exc)}, 1
+    if command == "patch-yusu":
+        required = {"graph", "image_ref", "prompt", "frames", "fps", "profile"}
+        if set(payload) != required:
+            raise CliUsageError("patch-yusu accepts graph, image_ref, prompt, frames, fps and profile")
+        return patch_yusu_timeline(
+            payload["graph"],
+            payload["image_ref"],
+            payload["prompt"],
+            payload["frames"],
+            payload["fps"],
+            payload["profile"],
+        )
+    if command == "plan-video":
+        try:
+            return build_video_plan(
+                payload.pop("shot"),
+                payload.pop("prompt_build"),
+                payload.pop("workflow_hash"),
+                payload.pop("profile_hash"),
+                payload.pop("execution_approved"),
+                **payload,
+            )
+        except StageError as exc:
+            return {"accepted": False, "error": str(exc)}, 1
+    if command == "plan-stage-execution":
+        try:
+            optional = {
+                key: payload[key]
+                for key in ("ui_workflow", "image_name", "reference_artifact", "image_ref")
+                if key in payload
+            }
+            return build_stage_execution_draft(
+                payload["stage_plan"],
+                payload["source_api_graph"],
+                payload["profile"],
+                payload["capability_report"],
+                **optional,
+            )
+        except StageExecutionError as exc:
+            return {"accepted": False, "error": str(exc)}, 1
+    if command == "approve-stage":
+        draft = _require_object(payload.get("draft"), "draft")
+        event = _require_object(payload.get("approval_event"), "approval_event")
+        if set(payload) != {"draft", "approval_event"}:
+            raise StageExecutionError("approve-stage accepts only draft and approval_event")
+        approved = approve_stage_execution_draft(draft, event, args.run_dir)
+        event_path = _write_execution_evidence(
+            args.run_dir, event, digest=approved["approval_id"], suffix="stage-approval"
+        )
+        plan_path = _write_execution_evidence(
+            args.run_dir, approved,
+            digest=approved["execution_plan_hash"], suffix="stage-approved-plan",
+        )
+        return {"plan": approved, "approval_event_path": str(event_path), "plan_path": str(plan_path)}
+    if command == "consume-stage":
+        if set(payload) != {"approved_plan", "enqueue_request_id"}:
+            raise StageExecutionError("consume-stage accepts only approved_plan and enqueue_request_id")
+        consumption = build_stage_consumption(payload["approved_plan"], payload["enqueue_request_id"])
+        path = write_stage_consumption(args.run_dir, consumption)
+        return {"consumption": consumption, "consumption_path": str(path)}
+    if command == "build-stage-submission":
+        required = {
+            "approved_plan", "source_api_graph", "consumption", "consumption_path",
+            "profile", "capability_report",
+        }
+        if not required.issubset(payload):
+            raise CliUsageError("build-stage-submission is missing required evidence")
+        optional = {
+            key: payload[key]
+            for key in ("reference_image_name", "reference_artifact", "image_ref")
+            if key in payload
+        }
+        return build_stage_submission(
+            payload["approved_plan"], payload["source_api_graph"], payload["consumption"],
+            Path(payload["consumption_path"]), profile=payload["profile"],
+            capability_report=payload["capability_report"], **optional,
+        )
+    if command == "verify-video":
+        metadata = payload.get("metadata")
+        expected_fps = payload.get("expected_fps")
+        expected_frames = payload.get("expected_frames")
+        artifact_path = payload.get("artifact_path")
+        if artifact_path is not None:
+            artifact_path = Path(artifact_path)
+        return verify_video_artifact(
+            metadata,
+            expected_fps,
+            expected_frames,
+            lineage_id=payload.get("lineage_id"),
+            source_shot_hash=payload.get("source_shot_hash"),
+            artifact_path=artifact_path,
+        )
+    if command == "pipeline-state":
+        if set(payload) == {"state", "transition"}:
+            return advance_state(payload["state"], payload["transition"])
+        if set(payload) == {"saved", "input_hash", "prompt_build_hash", "workflow_hash", "profile_version"}:
+            return {"reusable": stage_is_reusable(payload["saved"], payload["input_hash"], payload["prompt_build_hash"], payload["workflow_hash"], payload["profile_version"])}
+        raise CliUsageError("pipeline-state accepts a transition or a reuse check")
     if command == "plan":
         try:
             return build_execution_draft(**payload)
@@ -255,6 +448,13 @@ def _dispatch(command: str, payload: dict, args) -> dict | tuple[dict, int]:
             record = build_run_record(**payload)
         path = _write_run_record(args.run_dir, record)
         return {"record": record, "record_path": str(path)}
+    if command == "record-stage":
+        record = build_stage_run_record(
+            payload["approved_plan"], payload["submission"], payload["enqueue_receipt"],
+            payload["artifact"], history=payload.get("history"),
+        )
+        path = _write_run_record(args.run_dir, record)
+        return {"record": record, "record_path": str(path)}
     raise CliUsageError(f"unsupported command: {command}")
 
 
@@ -279,6 +479,7 @@ def main(argv: list[str] | None = None) -> int:
         CliUsageError,
         ContractError,
         ExecutionError,
+        StageExecutionError,
         FluxAdapterError,
         ProfileError,
         KeyError,

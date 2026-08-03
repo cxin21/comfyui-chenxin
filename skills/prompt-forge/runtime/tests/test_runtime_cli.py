@@ -479,3 +479,52 @@ def test_record_uses_exclusive_create_and_identical_content_is_idempotent(tmp_pa
     assert rejected.stdout == ""
     assert "refusing to overwrite" in rejected.stderr
     assert json.loads(record_path.read_text(encoding="utf-8")) == tampered
+
+
+def test_select_reference_command_is_explicit_and_deterministic():
+    payload = {
+        "desired_view": "left_45",
+        "artifacts": [
+            {"artifact_type": "CharacterBaseImage", "view_label": "front", "accepted": True, "content_hash": "base"},
+            {"artifact_type": "CharacterAngleView", "view_label": "left_45", "accepted": True, "content_hash": "angle"},
+        ],
+    }
+    result = _run("select-reference", "--from-stdin", input_text=json.dumps(payload))
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["artifact"]["content_hash"] == "angle"
+
+
+def test_activate_g1_and_verify_path_commands_do_not_enqueue():
+    ui = json.loads((FIXTURES / "camera-img2img-ui-minimal.json").read_text(encoding="utf-8"))
+    activate_payload = {"workflow": ui, "image_name": "runs/ref.png", "profile": {"img2img": {"group_id": 3, "node_ids": [21, 58, 57, 59], "load_image_node_id": 21}}}
+    activated = _run("activate-g1", "--from-stdin", input_text=json.dumps(activate_payload))
+    assert activated.returncode == 0, activated.stderr
+    assert json.loads(activated.stdout)["nodes"][2]["mode"] == 0
+
+    graph = json.loads((FIXTURES / "camera-img2img-api-minimal.json").read_text(encoding="utf-8"))
+    verified = _run("verify-img2img-path", "--from-stdin", input_text=json.dumps({"api_graph": graph, "profile": {"img2img": {"vae_encode_node_id": 59, "sampler_node_id": 27}}}))
+    assert verified.returncode == 0, verified.stderr
+    assert json.loads(verified.stdout)["traversed_node_ids"] == [27, 59]
+
+
+def test_plan_shot_and_plan_video_commands_are_pure():
+    shot_payload = {
+        "base_prompt_build_hash": "base",
+        "shot_prompt_build_hash": "shot",
+        "reference": {"artifact_type": "CharacterAngleView", "accepted": True, "content_hash": "ref", "view_label": "front"},
+        "desired_view": "front",
+        "execution_approved": True,
+    }
+    shot = _run("plan-shot", "--from-stdin", input_text=json.dumps(shot_payload))
+    assert shot.returncode == 0, shot.stderr
+    assert json.loads(shot.stdout)["stage"] == "shot-image"
+    video_payload = {
+        "shot": {"artifact_type": "ShotImage", "accepted": True, "content_hash": "shot"},
+        "prompt_build": {"target": "video", "dialect": "video-timeline", "prompt": "The subject moves as the camera dollies in.", "negative_prompt": "", "ready_to_execute": True},
+        "workflow_hash": "wf",
+        "profile_hash": "profile",
+        "execution_approved": True,
+    }
+    video = _run("plan-video", "--from-stdin", input_text=json.dumps(video_payload))
+    assert video.returncode == 0, video.stderr
+    assert json.loads(video.stdout)["parameters"]["frames"] == 24

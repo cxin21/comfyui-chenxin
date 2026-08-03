@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "ltx-yusu-director-v1",
+  "workflow_name": "LTX鍏ㄦ柊瀵兼紨鍙板伐浣滄祦.json",
+  "workflow_fingerprint": "cc9f26b0855e74202619d639afe0b4c9b1831a3c227e1ec6d1029d5b309c0c5a",
+  "api_graph_hash": "b34a6c69421c4e67783e208f18afe0d43b96d9a66a93e8f758444d262f627ff5",
+  "generation_modes": ["image-to-video"],
+  "runtime_classification": "local",
+  "director_node_id": 174,
+  "negative_node_id": 195,
+  "guide_node_id": 175,
+  "crop_guides_node_id": 176,
+  "output_node_id": 104,
+  "slots": {
+    "director": {"id": 174, "type": "YusuLTXDirector"},
+    "negative": {"id": 195, "type": "CLIPTextEncode"}
+  },
+  "baseline_frames": 24,
+  "baseline_fps": 24,
+  "allowed_mutations": [
+    "director.timeline_data",
+    "director.local_prompts",
+    "director.segment_lengths",
+    "director.guide_strength",
+    "director.transition_smoothness",
+    "director.start_second",
+    "director.end_second",
+    "director.duration_seconds",
+    "director.start_frame",
+    "director.end_frame",
+    "director.duration_frames",
+    "director.frame_rate"
+  ],
+  "immutable_inputs": {
+    "model": "ltx-2.3-22b-distilled-Q4_K_M.gguf",
+    "loras": [
+      "LTX\\Ltx2.3-Licon-VBVR-I2V-240K-R32.safetensors",
+      "LTX\\ltx-2.3-22b-ic-lora-refocus.safetensors"
+    ],
+    "sampler": "euler",
+    "scheduler": "linear_quadratic",
+    "resolution": {"width": 1280, "height": 736}
+  },
+  "expected_outputs": ["video"]
+}

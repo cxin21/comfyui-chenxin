@@ -133,7 +133,7 @@
 | `recipes/MODELS.md` | 2462 | 80 个模型提示词配方,带 YAML frontmatter(每个配方含 id/family/modality/dialect/license/triggers)。 |
 | `templates_index.json` | 6651 | 662 个工作流模板,按类别(3d=11 api=242 archived=23 audio=22 conditioning=26 get_started=5 image=92 upscale=22 utility=138 video=81)和模态(3d=36 image=435 video=152 audio=32 vector=2 mixed=5)分类。 |
 | `hardware/8gb.json` | 58 | VRAM 决策矩阵:15 个 allowed_quant,swap_blocks=40,sampler_defaults=euler/4/1.0,preference=[lightning_x2v, lightx2v, fcn, native]。 |
-| `runtime/` | — | v7 本地执行合同：TaskContext、CapabilityReport、workflow fingerprint、immutable pending bundle、ExecutionDraft、hash-bound approval event、canonical consumption namespace、one-shot consumption、approved ExecutionPlan、camera/Flux allowlist patch、normalized artifacts、RunRecord 与 JSON CLI。`plan` / `plan-multiview` 只产未批准 draft；`patch-flux` 只同步修改 Flux nodes 111/667；所有 stage 共用 exact `draft_hash` 审批与同一 root 的一次性消费。 |
+| `runtime/` | — | v7 本地执行合同：TaskContext、CapabilityReport、workflow fingerprint、immutable pending bundle、ExecutionDraft、hash-bound approval event、canonical consumption namespace、one-shot consumption、approved ExecutionPlan、camera/Flux allowlist patch、normalized artifacts、RunRecord 与 JSON CLI。Stage 1 `plan` 产未批准 draft；Stage 2 production draft 只能由本地授权 orchestrator 的 `build_multiview_draft_with_mcp` 在进程内实际调用 `get_workflow`/`strip_workflow`/`validate_workflow`/`check_workflow_runtime` 后生成。纯 JSON `plan-multiview` 不能把自填 receipt 变成 draft，纯 JSON `patch-flux` 也不能声称已提交，二者均 fail closed。Stage 2 必须依次受控 conversion→draft→外部审批→消费→受控本地 MCP enqueue；所有 stage 共用 exact `draft_hash` 审批与同一 root 的一次性消费。 |
 
 Prompt Forge v7 deterministic gate（live 测试默认跳过）：
 
@@ -146,7 +146,7 @@ python skills/prompt-forge/internals/evaluate.py
 
 真实 ComfyUI Experiment A/B 默认跳过。已有 A/B 使用 REST，只证明 selected history 图（指纹 `2efbc0fd43749828754dea7989f88806a944628e064d3c9c6876ee602726724f`）内部无漂移并匹配 workflow id/profile；它们是 render/graph characterization，不是 MCP 生产路径或完整审批证据。审查时只读重算的当前保存工作流指纹为 `7fa7a85e005182c6be42a3f3193add3fb41531ef0fae28e1cbd54a791e72e20a`，与历史指纹不同，不能混写为“current saved 未漂移”。未来 B 首轮只 exclusive-create immutable `pending-<draft_hash>.json` 后停止；bundle、approval event、`approve-plan` 与 `consume-approval` 必须绑定同一 existing canonical resolved `consumption_root`，parent/child/alias 不能更换消费 namespace。恢复还必须提供绑定 exact hash 的 `PROMPT_FORGE_APPROVAL_FILE`，并在 POST 前 atomic consume。缺 bundle、过期、篡改、root 不一致、资源/队列不安全或已消费均 fail closed。
 
-Experiment C 默认同样跳过。Stage 2 只接受 accepted/front-facing `CharacterBaseImage` 与对应 Stage 1 RunRecord，真实文件 SHA-256、lineage、canonical path/root 和 record output hash 必须一致。当前 verified Flux fingerprint 为 `fff6236efa6727ac6584d61f640a63f9602b2d07a545d216b96a870a681e6faf`；两个 base inputs 固定为 nodes `111/667`，pose/view prompt/model 字段不变且不注入 FLUX negative prompt。生产路径必须由真实 comfyui-mcp load/strip(or slice)/UI→API/runtime/validate 产生零 error executable graph，之后才可生成 pending C draft；REST 或失真转换不能充当证明。approval/consume/enqueue 复用 Stage 1 exact draft contract。normalized outputs 中 `DiagnosticImage`、`reference_eligible=false` 或 `semantic_conflict=true` 均不得进入 Stage 3 reference selection。
+Experiment C 默认同样跳过。Stage 2 只接受 accepted/front-facing `CharacterBaseImage` 与对应完整 Stage 1 RunRecord；accepted descriptor 必须精确匹配一条 raw history 的 `type=output`/subfolder/filename 并解析到同一 canonical PNG。真实文件 SHA-256、lineage、canonical path/root、raw history、approved plan 和 consumption sentinel 必须一致。当前 verified Flux fingerprint 为 `fff6236efa6727ac6584d61f640a63f9602b2d07a545d216b96a870a681e6faf`；两个 base inputs 固定为 nodes `111/667`，pose/view prompt/model 字段不变且不注入 FLUX negative prompt。实际 UI→API 调用为 `get_workflow(format=api)`，receipt 记录真实 tool name、arguments、response digest 与受信本地 orchestrator provenance。消费后仅受控本地 MCP enqueue 边界可先原子写入 consumption-bound submission intent、再重算 graph 并提交；in-progress/success/failed intent 均禁止再次调用，失败 receipt 必须保留并先查 server。receipt 与 raw history 的 `prompt[3].extra_data.prompt_forge_enqueue_request_id` 必须绑定同一 request id。纯 JSON `patch-flux` fail closed。Stage 2 RunRecord 再从 canonical output root 读取 PNG 字节计算 hash。Stage 3 选择还必须明确 `accepted=true`、`CharacterAngleView`、`reference_eligible=true`、`semantic_conflict=false` 与 `hash_verified=true`。生产路径必须由真实 comfyui-mcp load/strip(or slice)/UI→API/runtime/validate 产生零 error executable graph，之后才可生成 `pending-c-<draft_hash>.json`；receipt 是受信本地 orchestrator 的可审计观察，不是虚构的 MCP 加密签名。REST 或失真转换不能充当证明。当前 comfyui-mcp 0.49.0 转换仍为 70 warnings/86 validation errors，因此没有上传、enqueue 或通过的 Experiment C 结论。
 
 ---
 
@@ -217,4 +217,17 @@ MIT — 见 [`LICENSE`](LICENSE)。
 - 底层 MCP: [artokun/comfyui-mcp](https://github.com/artokun/comfyui-mcp)
 - 知识上游: [Comfy-Org/workflow_templates](https://github.com/Comfy-Org/workflow_templates)
 - Claude Code: https://claude.com/claude-code
+
+## Prompt Forge v7 Stage 3/4 execution boundary
+
+The character-to-video path is now represented as explicit, hash-bound stages:
+
+1. `accept-reference` records the human acceptance of one verified Flux angle.
+2. `plan-stage-execution` binds a Stage 3 camera img2img or Stage 4 Yusu Director plan to a fresh local capability report and the exact API graph.
+3. `approve-stage` and `consume-stage` require a newly displayed draft, an exact approval event, and an exclusive consumption record.
+4. `build-stage-submission` reconstructs the exact executable graph and request. `submit_stage(...)` is the only enqueue boundary, requires an injected trusted-local callable plus the canonical consumed-namespace receipt path, and reserves an exclusive submission intent before the call.
+5. `record-stage` accepts only a succeeded receipt, matching raw history (when supplied), and a verified output artifact.
+
+No approval event is synthesized from chat text, and no JSON-only command claims to have enqueued a job. The current local runtime evidence is asymmetric: the promoted Flux v2 workflow has a successful live run; the current LTX Director profile validates with zero errors; the current saved camera workflow still has conversion errors (7 warnings / 3 errors), so camera upload and enqueue remain fail-closed until a fresh zero-error API conversion is available.
+
 - Vault(Obsidian):`~/.claude/rules/obsidian-workflow.md`(workspace 规则)

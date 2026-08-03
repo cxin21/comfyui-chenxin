@@ -1,6 +1,11 @@
 import pytest
 
-from runtime.artifacts import ArtifactNormalizationError, normalize_image_outputs
+from runtime.artifacts import (
+    ArtifactNormalizationError,
+    accept_stage3_reference,
+    is_stage3_reference_eligible,
+    normalize_image_outputs,
+)
 
 
 def test_outputs_are_normalized_and_deduplicated():
@@ -84,6 +89,17 @@ def test_rejects_unsafe_or_invalid_image_descriptors(bad_image):
         )
 
 
+@pytest.mark.parametrize("subfolder", ["./", "runs//front", "runs\\\\front"])
+def test_rejects_noncanonical_image_subfolder_references(subfolder):
+    with pytest.raises(ArtifactNormalizationError, match="canonical"):
+        normalize_image_outputs(
+            {"524": {"images": [{"filename": "face.png", "subfolder": subfolder, "type": "output"}]}},
+            {"524": {"artifact_type": "CharacterAngleView", "view_label": "front"}},
+            "lineage-1",
+            "basehash",
+        )
+
+
 def test_unknown_history_output_is_a_non_reference_diagnostic_artifact():
     image = {"filename": "face.png", "subfolder": "", "type": "output"}
     profile = {"524": {"artifact_type": "CharacterAngleView", "view_label": "front"}}
@@ -142,3 +158,101 @@ def test_rejects_invalid_lineage_binding():
         normalize_image_outputs({"524": {"images": [image]}}, profile, "", "basehash")
     with pytest.raises(ArtifactNormalizationError, match="source_hash"):
         normalize_image_outputs({"524": {"images": [image]}}, profile, "lineage-1", "not a hash")
+
+
+def test_stage3_reference_eligibility_requires_acceptance_semantics_and_verified_hash():
+    artifact = {
+        "artifact_type": "CharacterAngleView",
+        "view_label": "front",
+        "accepted": False,
+        "reference_eligible": True,
+        "semantic_conflict": False,
+        "hash_verified": True,
+    }
+    assert is_stage3_reference_eligible(artifact) is False
+    artifact["accepted"] = True
+    assert is_stage3_reference_eligible(artifact) is True
+    artifact["hash_verified"] = False
+    assert is_stage3_reference_eligible(artifact) is False
+import subprocess
+
+import pytest
+
+from runtime.artifacts import ArtifactError, probe_video, verify_video_artifact
+
+
+def test_video_requires_expected_fps_and_frames():
+    result = verify_video_artifact(
+        {"filename": "clip.mp4", "size_bytes": 1000, "fps": 24, "frame_count": 24},
+        expected_fps=24,
+        expected_frames=24,
+    )
+    assert result["artifact_type"] == "VideoClip"
+
+
+def test_empty_video_fails():
+    with pytest.raises(ArtifactError, match="empty"):
+        verify_video_artifact(
+            {"filename": "clip.mp4", "size_bytes": 0, "fps": 24, "frame_count": 24},
+            expected_fps=24,
+            expected_frames=24,
+        )
+
+
+def test_ffprobe_reads_real_one_second_fixture(tmp_path):
+    target = tmp_path / "clip.mp4"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=black:s=64x64:r=24",
+            "-t",
+            "1",
+            "-pix_fmt",
+            "yuv420p",
+            str(target),
+        ],
+        check=True,
+    )
+    metadata = probe_video(target)
+    assert metadata["fps"] == 24
+    assert metadata["frame_count"] == 24
+
+
+def _eligible_reference():
+    return {
+        "artifact_type": "CharacterAngleView",
+        "view_label": "left_45",
+        "accepted": False,
+        "reference_eligible": True,
+        "semantic_conflict": False,
+        "hash_verified": True,
+        "content_hash": "a" * 64,
+        "lineage_id": "lineage-1",
+        "filename": "left.png",
+    }
+
+
+def test_stage3_reference_acceptance_is_explicit_and_self_hashed():
+    accepted = accept_stage3_reference(
+        _eligible_reference(), "user:test", "2026-08-03T01:00:00Z"
+    )
+    assert accepted["accepted"] is True
+    assert accepted["acceptance"]["artifact_hash"] == "a" * 64
+    unsigned = dict(accepted["acceptance"])
+    acceptance_id = unsigned.pop("acceptance_id")
+    import hashlib, json
+    assert acceptance_id == hashlib.sha256(
+        json.dumps(unsigned, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def test_stage3_reference_acceptance_rejects_conflicts_or_non_utc_time():
+    with pytest.raises(ArtifactNormalizationError, match="eligible"):
+        accept_stage3_reference({**_eligible_reference(), "semantic_conflict": True}, "user:test", "2026-08-03T01:00:00Z")
+    with pytest.raises(ArtifactNormalizationError, match="UTC"):
+        accept_stage3_reference(_eligible_reference(), "user:test", "2026-08-03T01:00:00")

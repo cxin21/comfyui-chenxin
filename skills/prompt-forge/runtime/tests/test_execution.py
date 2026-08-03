@@ -532,6 +532,39 @@ def test_run_record_derives_performed_from_matching_history_and_hashes_record():
     assert record["record_hash"] == content_hash(unsigned)
 
 
+def test_run_record_requires_explicit_retained_artifact_when_history_has_previews():
+    build = ready_build()
+    graph = api_graph()
+    plan = build_valid_plan(build)
+    history = history_response()
+    history["prompt-123"]["outputs"]["901"] = {
+        "images": [
+            {"filename": "preview.png", "subfolder": "", "type": "temp"},
+        ]
+    }
+    output_hashes = {
+        "character.png": "a" * 64,
+        "preview.png": "b" * 64,
+    }
+    with pytest.raises(ExecutionError, match="explicit artifact_descriptor"):
+        build_run_record(
+            task_context(), build, graph, plan, "prompt-123", "succeeded", {},
+            output_hashes, history=history,
+        )
+
+    descriptor = {
+        "node_id": "900",
+        "filename": "character.png",
+        "subfolder": "run-123",
+        "type": "output",
+    }
+    record = build_run_record(
+        task_context(), build, graph, plan, "prompt-123", "succeeded", {},
+        output_hashes, history=history, artifact_descriptor=descriptor,
+    )
+    assert record["artifact_descriptor"] == descriptor
+
+
 def test_comfy_history_error_status_characterizes_failed_terminal_record():
     build = ready_build()
     graph = api_graph()
