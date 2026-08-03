@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "flux2-klein-multiview-v1",
+  "workflow_name": "Flux2-Klein人物一键多视图工作流.json",
+  "workflow_fingerprint": "fff6236efa6727ac6584d61f640a63f9602b2d07a545d216b96a870a681e6faf",
+  "generation_modes": ["image-to-image"],
+  "runtime_classification": "local",
+  "slots": {
+    "base_image_primary": {"id": 111, "type": "LoadImage"},
+    "base_image_secondary": {"id": 667, "type": "LoadImage"}
+  },
+  "allowed_mutations": [
+    "base_image_primary.image",
+    "base_image_secondary.image"
+  ],
+  "immutable_roles": {
+    "pose_references": [368, 151, 152, 154, 360, 364, 148, 149, 147, 373, 150, 367]
+  },
+  "output_nodes": {
+    "524": {"artifact_type": "CharacterAngleView", "view_label": "front_closeup"},
+    "663": {"artifact_type": "CharacterAngleView", "view_label": "front"},
+    "761": {"artifact_type": "CharacterAngleView", "view_label": "right_45"},
+    "565": {"artifact_type": "CharacterAngleView", "view_label": "side_unknown"},
+    "609": {"artifact_type": "CharacterAngleView", "view_label": "side_unknown"},
+    "224": {"artifact_type": "CharacterSheet", "view_label": "sheet"},
+    "338": {"artifact_type": "CharacterSheet", "view_label": "sheet"},
+    "201": {"artifact_type": "CharacterSheet", "view_label": "sheet"}
+  },
+  "expected_outputs": ["image/png"]
+}
