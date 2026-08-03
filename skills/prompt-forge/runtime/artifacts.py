@@ -80,8 +80,53 @@ def _validated_image(image: object) -> tuple[str, str, str]:
     return image_type, subfolder, filename
 
 
+def _candidate(semantic: dict[str, str | None], node_id: str) -> dict[str, str | None]:
+    return {
+        "artifact_type": semantic["artifact_type"],
+        "view_label": semantic["view_label"],
+        "source_node_id": node_id,
+    }
+
+
+def _append_image(
+    collected: dict[tuple[str, str, str], dict],
+    image: object,
+    semantic: dict[str, str | None],
+    node_id: str,
+    lineage_id: str,
+    source_hash: str,
+) -> None:
+    image_type, subfolder, filename = _validated_image(image)
+    key = (image_type, subfolder, filename)
+    candidate = _candidate(semantic, node_id)
+    descriptor = collected.setdefault(key, {
+        "filename": filename,
+        "subfolder": subfolder,
+        "type": image_type,
+        "artifact_type": semantic["artifact_type"],
+        "view_label": semantic["view_label"],
+        "lineage_id": lineage_id,
+        "source_artifact_hash": source_hash,
+        "source_node_ids": [],
+        "semantic_candidates": [],
+    })
+    if node_id not in descriptor["source_node_ids"]:
+        descriptor["source_node_ids"].append(node_id)
+    if candidate not in descriptor["semantic_candidates"]:
+        descriptor["semantic_candidates"].append(candidate)
+
+
+def _node_images(node_output: object) -> list:
+    if not isinstance(node_output, dict):
+        raise ArtifactNormalizationError("output node entry must be an object")
+    images = node_output.get("images", [])
+    if not isinstance(images, list):
+        raise ArtifactNormalizationError("output node images must be a list")
+    return images
+
+
 def normalize_image_outputs(outputs, output_nodes, lineage_id, source_hash) -> list[dict]:
-    """Return sorted, schema-validated descriptors for profile-declared outputs.
+    """Return sorted, schema-validated descriptors for ComfyUI history outputs.
 
     View semantics are copied only from the verified profile map.  The physical
     ComfyUI location is never interpreted as a view direction.
@@ -92,35 +137,37 @@ def normalize_image_outputs(outputs, output_nodes, lineage_id, source_hash) -> l
     if not isinstance(outputs, dict):
         raise ArtifactNormalizationError("outputs must be a mapping of output node ids")
 
-    collected: dict[tuple[str, str, str, str, str], dict] = {}
-    for raw_node_id in sorted(outputs, key=str):
-        node_id = _require_identifier(raw_node_id, "output node id")
-        if node_id not in profile:
-            raise ArtifactNormalizationError(f"unknown output node: {node_id}")
-        node_output = outputs[raw_node_id]
-        if not isinstance(node_output, dict) or set(node_output) != {"images"}:
-            raise ArtifactNormalizationError("output node entry must contain only an images list")
-        images = node_output["images"]
-        if not isinstance(images, list):
-            raise ArtifactNormalizationError("output node images must be a list")
-        semantic = profile[node_id]
-        for image in images:
-            image_type, subfolder, filename = _validated_image(image)
-            key = (image_type, subfolder, filename, semantic["artifact_type"], semantic["view_label"])
-            descriptor = collected.setdefault(key, {
-                "filename": filename,
-                "subfolder": subfolder,
-                "type": image_type,
-                "artifact_type": semantic["artifact_type"],
-                "view_label": semantic["view_label"],
-                "lineage_id": safe_lineage_id,
-                "source_artifact_hash": safe_source_hash,
-                "source_node_ids": [],
-            })
-            if node_id not in descriptor["source_node_ids"]:
-                descriptor["source_node_ids"].append(node_id)
+    collected: dict[tuple[str, str, str], dict] = {}
 
-    return [
-        collected[key]
-        for key in sorted(collected, key=lambda item: (item[2], item[1], item[0], item[3], item[4]))
-    ]
+    # The verified profile's insertion order is the explicit semantic priority;
+    # it is never derived from an arbitrary generated filename.
+    for node_id, semantic in profile.items():
+        if node_id not in outputs:
+            continue
+        for image in _node_images(outputs[node_id]):
+            _append_image(collected, image, semantic, node_id, safe_lineage_id, safe_source_hash)
+
+    diagnostic = {"artifact_type": "DiagnosticImage", "view_label": None}
+    unknown_node_ids = sorted(
+        (_require_identifier(node_id, "output node id") for node_id in outputs if node_id not in profile),
+    )
+    for node_id in unknown_node_ids:
+        for image in _node_images(outputs[node_id]):
+            _append_image(collected, image, diagnostic, node_id, safe_lineage_id, safe_source_hash)
+
+    normalized: list[dict] = []
+    for key in sorted(collected, key=lambda item: (item[2], item[1], item[0])):
+        descriptor = collected[key]
+        descriptor["source_node_ids"].sort()
+        declared_conflicts = [
+            candidate for candidate in descriptor["semantic_candidates"]
+            if candidate["artifact_type"] != "DiagnosticImage"
+            and (candidate["artifact_type"], candidate["view_label"])
+            != (descriptor["artifact_type"], descriptor["view_label"])
+        ]
+        descriptor["semantic_conflict"] = bool(declared_conflicts)
+        descriptor["reference_eligible"] = (
+            descriptor["artifact_type"] == "CharacterAngleView"
+        )
+        normalized.append(descriptor)
+    return normalized
