@@ -15,7 +15,11 @@ The character-to-video pipeline is ordered and fail-closed:
 4. `build-stage-submission` reconstructs the exact graph/request. Only `submit_stage(...)` with an injected trusted-local enqueue callable and the canonical consumed-namespace receipt path may cross the external side-effect boundary; it first writes an exclusive submission-intent sentinel.
 5. `record-stage` requires a succeeded receipt, matching raw history when available, and a verified PNG/video artifact with lineage and technical metadata.
 
-Never synthesize approval from chat text, never treat a UI screenshot as an executable graph, and never claim a ComfyUI enqueue without a real response receipt. A current camera conversion error is a hard stop, not a reason to fall back to a hand-written API graph.
+Never synthesize approval from chat text, never treat a UI screenshot as an executable graph, and never claim a ComfyUI enqueue without a real response receipt. The camera source has one explicit `normalize-camera` bridge for the observed converter losses (LoRA widget text, disabled output switch and known orphan branches); it is an allowlisted, pinned repair of an MCP-produced graph, not a generic UI-to-API converter or a hand-written workflow. Any other conversion error remains a hard stop.
+
+### Camera source normalization
+
+For `文生图相机视角.json`, retain the exact UI workflow and the MCP-produced API/strip graph as source evidence. If MCP conversion reports the known missing `Lora Loader (LoraManager).text` or missing `images` on nodes `35/490`, call `runtime_cli.py normalize-camera` with `{api_graph, ui_workflow, profile}`. The command first requires UI node `26` to remain the profiled `Lora Loader (LoraManager)` and rejects a non-empty API LoRA text that conflicts with the UI literal; only the observed missing/`null` input is repaired. It verifies the pinned post-process chain `76 → 96 → 111`, reconnects both output sinks to node `111`, and removes only the pinned orphan set `[28, 41, 52, 62, 67, 70, 77]` after proving no removed node feeds a retained node. Then re-run MCP `validate_workflow(health=true)` and `check_workflow_runtime`; only zero errors, zero health warnings, `runtime=local`, an unchanged saved workflow, and a UI fingerprint matching the verified `camera-anima-v1` profile can proceed. The normalized graph hash—not the broken pre-normalization graph hash—must be used consistently in the draft, approval, submission, history, and RunRecord lineage.
 
 Prompt Forge 把用户意图编译为模型方言，并把本地 ComfyUI 执行绑定到可审计证据。默认只编译；生成是独立阶段。编译器始终保持 `execution.performed=false`。
 
@@ -61,11 +65,11 @@ python "<SKILL_ROOT>/internals/prompt_compile.py" --from-stdin
 
 执行模式先通过 `runtime/runtime_cli.py discover` 获取 10 分钟有效的 CapabilityReport，并从当前 MCP 工具注册表协商真实能力。至少确认：本地 URL、队列为空、硬件、节点、保存工作流，以及 MCP 是否具备 workflow load、UI→API conversion、strip/slice、runtime classification、validation、enqueue、monitor、artifact/history retrieval 等能力。
 
-REST 只可作为 health、queue、object info、saved workflow 和 history 的只读回退。能力缺失时说明缺口和安全替代方案，不虚构工具，不自行实现通用 UI→API 转换器。
+REST 只可作为 health、queue、object info、saved workflow 和 history 的只读回退。能力缺失时说明缺口和安全替代方案，不虚构工具，不自行实现通用 UI→API 转换器；相机只允许使用上面的 pinned normalization bridge。
 
 ### 4. MCP load / strip / validate
 
-由已协商到的 MCP 能力加载用户指定的保存工作流，并负责 UI→API 转换、strip/slice、runtime classification 与 executable validation。禁止让 Python runtime 猜 widget-to-input 映射。转换结果必须保留为未修改的 source API graph；saved workflow 保持不变。
+由已协商到的 MCP 能力加载用户指定的保存工作流，并负责 UI→API 转换、strip/slice、runtime classification 与 executable validation。禁止让 Python runtime 猜 widget-to-input 映射；相机的 `normalize-camera` 只执行 profile 中已观察、可审计的差异。受控 orchestrator 必须在相邻执行证据中保留未修改的 source API graph、source hash、normalized executable source 和归一化结果（runtime draft 至少绑定 source hash）；saved workflow 保持不变。若 caller 丢失 raw graph 或无法证明 normalized source 来自同一份 source，必须停止，不得用 normalized graph 反推来源。
 
 ### 5. Fingerprint
 
@@ -114,13 +118,13 @@ Stage 2 只接受已成功且 history 已核对的 Stage 1 RunRecord，以及独
 5. consume 成功后，受控本地 orchestrator 才能以获批 plan 构造 executable graph 并调用实际 `enqueue_workflow` MCP；它必须先 exclusive-create 以 consumption id 绑定的 submission-intent sentinel（同时绑定 request id、submission hash、graph hash 和 exact args），随后才可调用。已有 in-progress/success/failed sentinel 时不得再次调用；callable 失败时保留 typed failed receipt，并先查询 server 状态而非删除或盲目重试。它必须把 sentinel 的 stable request id 放入 `prompt[3].extra_data.prompt_forge_enqueue_request_id`，保留 exact tool arguments、response digest、provenance 和 receipt。纯 JSON CLI 的 `patch-flux` 没有此可信 callable，必须 fail closed，绝不声称已提交。
 6. terminal 后保留 raw history；history 内 prompt graph 必须 canonical-equal executable graph，且其请求 ID 必须从 `history[prompt_id]["prompt"][3]["extra_data"]["prompt_forge_enqueue_request_id"]`（兼容该 metadata dict 的直接字段）读取并等于 immutable consumption sentinel。Stage 1 accepted descriptor 必须恰好匹配一条 raw history `type=output`、subfolder、filename，并解析到相同 canonical artifact path。`record` 还必须消费 exact submission、enqueue receipt、sentinel 和 canonical ComfyUI output root；逐个重新读取 PNG、校验结构并计算 SHA-256。按 verified profile output map normalize image artifacts，全部绑定 Stage 1 `source_artifact_hash` 和 `lineage_id`，并标记 `hash_verified=true`；Stage 3 还必须有明确 `accepted=true`，并同时满足 `CharacterAngleView`、非冲突和 `reference_eligible=true`。未知 output 是 `DiagnosticImage`，默认不接受任何 Stage 2 artifact。相邻保留 approval、consumption、submission、enqueue receipt、raw history 和 artifact path/hash 证据。
 
-Experiment C 一次只提交一个 job、不保存 workflow、不删除 history/output、不改 models/nodes。信任边界是本地受控 orchestrator 与其实际调用的 MCP：receipt 是可审计的本地观察，不是虚构的 MCP 加密签名；跨不可信进程/主机不得把 receipt/self-hash 当认证。REST live 只能标记为 characterization，不能替代 MCP production proof。默认 live 测试 skip；当前 comfyui-mcp 0.49.0 转换仍有 70 warnings/86 validation errors，故不得创建 pending C draft、上传或 enqueue，也不得声称 Experiment C 通过。
+Experiment C（Flux 多视图）一次只提交一个 job、不保存 workflow、不删除 history/output、不改 models/nodes。相机的 `normalize-camera` bridge 不适用于 Flux；Flux 的 MCP conversion、profile fingerprint、双输入一致性和资源验证必须独立通过。信任边界是本地受控 orchestrator 与其实际调用的 MCP：receipt 是可审计的本地观察，不是虚构的 MCP 加密签名；跨不可信进程/主机不得把 receipt/self-hash 当认证。REST live 只能标记为 characterization，不能替代 MCP production proof。默认 live 测试 skip；未完成 exact approval/consumption/receipt/history 链前，仍不得上传或 enqueue，也不得声称 Experiment C 已完成。
 
 最终答复至少给出 prompt ID、seed、artifact 绝对路径、artifact hash、RunRecord 路径和 terminal status；没有这些证据时只报告已到达的阶段。
 
 ## CLI 退出合同
 
-`runtime_cli.py` 的 `discover`、`fingerprint`、`plan`、`plan-multiview`、`approve-plan`、`consume-approval`、`patch-camera`、`patch-flux`、`record` 均接受 UTF-8 JSON 文件或 stdin，只把 JSON 写到 stdout。`plan-multiview` 是明确的 JSON fail-closed 边界：没有受控本地 callable 时返回 exit `1` 与 typed rejection，不生成 draft；Stage 2 production planning 只能走本地授权 orchestrator 的 `build_multiview_draft_with_mcp`。`patch-flux` 同理不负责 production submit，受控提交只走 `submit_multiview`。`approve-plan`、`consume-approval` 和 `record` 还要求 caller `--run-dir`。stderr 只有单行 `[prompt-forge-runtime]` 诊断：`0` 成功，`1` draft 被运行时证据拒绝，`2` 输入、审批、重复消费或运行时失败。
+`runtime_cli.py` 的 `discover`、`fingerprint`、`plan`、`plan-multiview`、`approve-plan`、`consume-approval`、`patch-camera`、`normalize-camera`、`patch-flux`、`activate-g1`、`verify-img2img-path`、`record` 均接受 UTF-8 JSON 文件或 stdin，只把 JSON 写到 stdout。`normalize-camera` 只执行 pinned source bridge，不保存 workflow，也不 enqueue。`plan-multiview` 是明确的 JSON fail-closed 边界：没有受控本地 callable 时返回 exit `1` 与 typed rejection，不生成 draft；Stage 2 production planning 只能走本地授权 orchestrator 的 `build_multiview_draft_with_mcp`。`patch-flux` 同理不负责 production submit，受控提交只走 `submit_multiview`。`approve-plan`、`consume-approval` 和 `record` 还要求 caller `--run-dir`。stderr 只有单行 `[prompt-forge-runtime]` 诊断：`0` 成功，`1` draft 被运行时证据拒绝，`2` 输入、审批、重复消费或运行时失败。
 
 ## 常见错误
 

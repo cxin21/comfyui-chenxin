@@ -16,11 +16,6 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-LIVE_MARK = pytest.mark.skipif(
-    os.environ.get("PROMPT_FORGE_LIVE") != "1",
-    reason="set PROMPT_FORGE_LIVE=1 to enqueue real ComfyUI jobs",
-)
-
 from internals.prompt_compile import compile_prompt
 import runtime.execution as execution_module
 from runtime.adapters.camera import patch_character_base
@@ -35,6 +30,12 @@ from runtime.execution import (
 )
 from runtime.runtime_cli import _write_approval_consumption, _write_run_record
 from runtime.workflow_profile import resolve_slots, structure_fingerprint
+
+
+LIVE_MARK = pytest.mark.skipif(
+    os.environ.get("PROMPT_FORGE_LIVE") != "1",
+    reason="set PROMPT_FORGE_LIVE=1 to enqueue real ComfyUI jobs",
+)
 
 
 BASE_URL = "http://127.0.0.1:8188"
@@ -845,6 +846,7 @@ def _pending_bundle_fixture(now):
     ui_workflow = json.loads(
         (Path(__file__).parent / "fixtures/camera-ui-minimal.json").read_text(encoding="utf-8")
     )
+    profile["workflow_fingerprint"] = structure_fingerprint(ui_workflow)
     graph = json.loads(
         (Path(__file__).parent / "fixtures/camera-api-minimal.json").read_text(encoding="utf-8")
     )
@@ -1031,7 +1033,7 @@ def test_live_character_base_experiments_a_then_b():
         _latest_matching_history(source_history, saved_ui_workflow, profile)
     )
     assert source_entry["status"] == {"status_str": "success", "completed": True} or _successful(source_entry)
-    verified_resources = _verify_graph_resources(baseline_graph, _request_json("/object_info"))
+    _verify_graph_resources(baseline_graph, _request_json("/object_info"))
     prompts = _prompt_inputs(baseline_graph)
     seed_node, baseline_seed = _seed_location(baseline_graph)
     history_at_source = {

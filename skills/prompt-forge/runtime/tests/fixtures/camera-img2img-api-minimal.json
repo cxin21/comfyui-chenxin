@@ -7,6 +7,14 @@
     "class_type": "ImpactWildcardProcessor",
     "inputs": {"wildcard_text": "old negative", "populated_text": "old negative"}
   },
+  "26": {
+    "class_type": "Lora Loader (LoraManager)",
+    "inputs": {"model": ["22", 0], "clip": ["40", 0], "text": "<lora:anima:1.0>"}
+  },
+  "35": {
+    "class_type": "Image Saver Simple",
+    "inputs": {"metadata": ["89", 0], "images": ["111", 0]}
+  },
   "21": {
     "class_type": "LoadImage",
     "inputs": {"image": "ref.png"}
@@ -25,6 +33,26 @@
   },
   "27": {
     "class_type": "KSampler",
-    "inputs": {"latent_image": [59, 0], "steps": 20}
+    "inputs": {"latent_image": [75, 0], "steps": 20}
+  },
+  "75": {
+    "class_type": "ImpactSwitch",
+    "inputs": {"input": [59, 0]}
+  },
+  "76": {
+    "class_type": "VAEDecode",
+    "inputs": {"samples": ["27", 0], "vae": ["80", 0]}
+  },
+  "96": {
+    "class_type": "AdjustContrast",
+    "inputs": {"factor": 1.1, "images": ["76", 0]}
+  },
+  "111": {
+    "class_type": "ImageSharpen",
+    "inputs": {"sharpen_radius": 1, "sigma": 0.5, "alpha": 0.5, "image": ["96", 0]}
+  },
+  "490": {
+    "class_type": "PreviewImage",
+    "inputs": {"images": ["111", 0]}
   }
 }

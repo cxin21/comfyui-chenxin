@@ -1,8 +1,9 @@
-"""Opt-in Experiment C safety gate.
+"""Opt-in Experiment C safety gate for the Flux multi-view workflow.
 
-The actual ComfyUI MCP conversion is currently invalid (70 warnings / 86
-validation errors).  This test therefore never treats a pending draft as a
-successful experiment and never uploads or enqueues from test code.
+The camera normalization bridge is not applicable to Flux conversion. This
+test therefore keeps Flux conversion/preflight evidence independent, never
+treats a pending draft as a successful experiment, and never uploads or
+enqueues from test code.
 """
 
 from __future__ import annotations
@@ -61,7 +62,12 @@ except ExecutionError:
     raise SystemExit(0)
 raise SystemExit(1)
 """
-    result = subprocess.run([sys.executable, "-O", "-c", code], check=False)
+    env = os.environ.copy()
+    skill_root = str(Path(__file__).resolve().parents[2])
+    env["PYTHONPATH"] = os.pathsep.join(
+        value for value in (skill_root, env.get("PYTHONPATH")) if value
+    )
+    result = subprocess.run([sys.executable, "-O", "-c", code], check=False, env=env)
     assert result.returncode == 0
 
 

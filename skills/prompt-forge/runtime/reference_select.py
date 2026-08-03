@@ -75,13 +75,24 @@ def select_reference(desired_view: str, artifacts: list[dict]) -> dict:
         raise ReferenceSelectionError(f"unknown desired view: {desired_view!r}")
     accepted = _valid_artifacts(artifacts)
 
-    angle_candidates: list[tuple[int, int, tuple[str, str], dict]] = []
+    by_view: dict[str, list[dict]] = {}
     for artifact in accepted:
         if artifact.get("artifact_type") != "CharacterAngleView":
             continue
         view = _canonical_view(artifact.get("view_label"))
         if view not in VIEW_DEGREES:
             continue
+        by_view.setdefault(view, []).append(artifact)
+
+    angle_candidates: list[tuple[int, int, tuple[str, str], dict]] = []
+    for view, view_artifacts in by_view.items():
+        # Two accepted artifacts for one semantic angle are not safe to choose
+        # automatically: content-hash ordering cannot prove which identity is
+        # the intended reference.  Keep the deterministic tie-break only for
+        # distinct angles at the same distance.
+        if len(view_artifacts) != 1:
+            continue
+        artifact = view_artifacts[0]
         angle_candidates.append(
             (
                 0 if view == desired else 1,

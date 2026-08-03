@@ -17,7 +17,6 @@ from .multiview_evidence import (
     POSE_IDS as _MULTIVIEW_POSE_IDS,
     PROMOTION_RECEIPT_HASH as _MULTIVIEW_PROMOTION_RECEIPT_HASH,
     PROFILE_ID as _MULTIVIEW_PROFILE_ID,
-    SELECTORS as _MULTIVIEW_SELECTORS,
     SOURCE_API_GRAPH_HASH as _MULTIVIEW_SOURCE_API_GRAPH_HASH,
     SLOTS as _MULTIVIEW_SLOTS,
     MultiviewEvidenceError,
@@ -202,6 +201,13 @@ def _validate_character_base_profile(profile: object, profile_id: object) -> Non
         raise ExecutionError("character-base profile must be local")
     if profile.get("expected_outputs") != _CHARACTER_BASE_OUTPUTS:
         raise ExecutionError("character-base profile must expect only image/png")
+    from .adapters.camera import is_pinned_camera_normalization_profile, is_pinned_camera_profile
+
+    if not is_pinned_camera_normalization_profile(profile):
+        raise ExecutionError("character-base profile must carry the pinned camera normalization contract")
+    profile_fingerprint = profile.get("workflow_fingerprint")
+    if not isinstance(profile_fingerprint, str) or not _SHA256_RE.fullmatch(profile_fingerprint):
+        raise ExecutionError("character-base profile must carry a verified workflow fingerprint")
     slots = profile.get("slots")
     if not isinstance(slots, dict):
         raise ExecutionError("character-base profile requires slots")
@@ -211,6 +217,8 @@ def _validate_character_base_profile(profile: object, profile_id: object) -> Non
             raise ExecutionError(
                 f"character-base profile slot '{slot_name}' must be the fixed node {node_id} selector"
             )
+    if not is_pinned_camera_profile(profile):
+        raise ExecutionError("character-base profile is not the complete verified camera contract")
 
 
 def _require_idle_local_capability(report: object, now: datetime) -> None:
@@ -303,6 +311,8 @@ def build_execution_draft(
         raise ExecutionError(f"execution evidence is invalid: {exc}") from exc
     if workflow_fingerprint != actual_fingerprint:
         raise ExecutionError("workflow fingerprint does not match the actual UI workflow")
+    if profile.get("workflow_fingerprint") != actual_fingerprint:
+        raise ExecutionError("workflow fingerprint does not match the verified camera profile")
     prompt_slots = {
         "positive_prompt": resolved_slots.get("positive_prompt"),
         "negative_prompt": resolved_slots.get("negative_prompt"),
@@ -320,7 +330,16 @@ def build_execution_draft(
 
     # This call is validation, not execution: it deep-copies the graph and proves
     # nodes 24/25, their class types and all four prompt inputs exist.
-    from .adapters.camera import patch_character_base
+    from .adapters.camera import CameraAdapterError, normalize_camera_api_graph, patch_character_base
+
+    try:
+        normalized_source = normalize_camera_api_graph(api_graph, actual_ui_workflow, profile)
+    except CameraAdapterError as exc:
+        raise ExecutionError(f"camera source normalization failed: {exc}") from exc
+    if normalized_source != api_graph:
+        raise ExecutionError(
+            "camera source API graph must be normalized with normalize-camera before planning"
+        )
 
     patched_graph = patch_character_base(api_graph, prompt_build, prompt_slots)
     executable_graph_hash = content_hash(patched_graph)

@@ -58,6 +58,27 @@ def test_ambiguous_angle_is_never_auto_selected():
     assert result["selection_reason"] == "base-fallback"
 
 
+def test_duplicate_known_angle_is_treated_as_ambiguous():
+    artifacts = [
+        _artifacts()[0],
+        {
+            "artifact_type": "CharacterAngleView",
+            "view_label": "left_45",
+            "accepted": True,
+            "content_hash": "left-a",
+        },
+        {
+            "artifact_type": "CharacterAngleView",
+            "view_label": "left_45",
+            "accepted": True,
+            "content_hash": "left-b",
+        },
+    ]
+    result = select_reference("left_45", artifacts)
+    assert result["artifact"]["content_hash"] == "base"
+    assert result["selection_reason"] == "base-fallback"
+
+
 def test_selection_is_deterministic_for_equal_distance():
     artifacts = [
         {

@@ -26,13 +26,11 @@ def _valid_png_bytes():
     )
 
 
-def _camera_profile():
+def _camera_profile(*, production=False):
     profile = json.loads(
         (Path(__file__).parents[1] / "profiles" / "camera-anima.json").read_text(encoding="utf-8")
     )
-    # The compact fixture has no ImpactSwitch; production uses the pinned
-    # [27, 75, 59] path and is exercised by the dedicated camera tests.
-    profile["img2img"].pop("expected_path_node_ids", None)
+    profile["workflow_fingerprint"] = structure_fingerprint(_shot_ui())
     return profile
 
 
@@ -83,7 +81,7 @@ def _shot_plan(report):
         True,
         shot_prompt_build=prompt_build,
         identity_facts=["the_swordswoman"],
-        g1_proof={"vae_encode_node_id": 59, "sampler_node_id": 27, "traversed_node_ids": [27, 59]},
+        g1_proof={"vae_encode_node_id": 59, "sampler_node_id": 27, "traversed_node_ids": [27, 75, 59]},
         profile_hash=content_hash(_camera_profile()),
         capability_report_hash=content_hash(report),
         workflow_fingerprint=structure_fingerprint(_shot_ui()),
@@ -178,10 +176,87 @@ def test_shot_execution_draft_rebinds_graph_and_g1_without_mutating_sources():
     assert draft["execution_approved"] is False
     assert draft["source_api_graph_hash"] == content_hash(graph)
     assert draft["executable_api_graph_hash"] != draft["source_api_graph_hash"]
-    assert draft["g1_path_proof"]["traversed_node_ids"] == [27, 59]
+    assert draft["g1_path_proof"]["traversed_node_ids"] == [27, 75, 59]
     unsigned = dict(draft)
     unsigned.pop("draft_hash")
     assert draft["draft_hash"] == content_hash(unsigned)
+
+
+def test_shot_execution_draft_rejects_profile_fingerprint_drift():
+    report = _capability_report()
+    plan = _shot_plan(report)
+    graph = _shot_graph()
+    ui = _shot_ui()
+    profile = _camera_profile()
+    profile["workflow_fingerprint"] = "0" * 64
+    plan["profile_hash"] = content_hash(profile)
+    plan["plan_hash"] = content_hash({key: value for key, value in plan.items() if key != "plan_hash"})
+    with pytest.raises(stage_execution.StageExecutionError, match="verified camera profile"):
+        stage_execution.build_stage_execution_draft(
+            plan,
+            graph,
+            profile,
+            report,
+            ui_workflow=ui,
+            image_name="runs/lineage/ref.png",
+            reference_artifact=_accepted_reference(),
+        )
+
+
+def test_shot_execution_draft_rejects_profile_path_contract_drift():
+    report = _capability_report()
+    plan = _shot_plan(report)
+    graph = _shot_graph()
+    ui = _shot_ui()
+    profile = _camera_profile()
+    profile["img2img"]["expected_path_node_ids"] = [27, 59]
+    plan["profile_hash"] = content_hash(profile)
+    plan["plan_hash"] = content_hash({key: value for key, value in plan.items() if key != "plan_hash"})
+    with pytest.raises(stage_execution.StageExecutionError, match="pinned camera normalization profile"):
+        stage_execution.build_stage_execution_draft(
+            plan,
+            graph,
+            profile,
+            report,
+            ui_workflow=ui,
+            image_name="runs/lineage/ref.png",
+            reference_artifact=_accepted_reference(),
+        )
+
+
+def test_shot_execution_draft_rejects_unormalized_camera_source_graph():
+    report = _capability_report()
+    graph = _shot_graph()
+    graph.update(
+        {
+            "26": {"class_type": "Lora Loader (LoraManager)", "inputs": {"model": ["22", 0]}},
+            "35": {"class_type": "Image Saver Simple", "inputs": {"metadata": ["89", 0]}},
+            "490": {"class_type": "PreviewImage", "inputs": {}},
+            "76": {"class_type": "VAEDecode", "inputs": {"samples": ["51", 0], "vae": ["48", 0]}},
+            "96": {"class_type": "AdjustContrast", "inputs": {"images": ["76", 0]}},
+            "111": {"class_type": "ImageSharpen", "inputs": {"image": ["96", 0]}},
+            **{
+                str(node_id): {"class_type": "Optional", "inputs": {}}
+                for node_id in (28, 41, 52, 62, 67, 70, 77)
+            },
+        }
+    )
+    ui = _shot_ui()
+    profile = _camera_profile(production=True)
+    plan = _shot_plan(report)
+    plan["profile_hash"] = content_hash(profile)
+    plan["workflow_fingerprint"] = structure_fingerprint(ui)
+    plan["plan_hash"] = content_hash({key: value for key, value in plan.items() if key != "plan_hash"})
+    with pytest.raises(stage_execution.StageExecutionError, match="normalize-camera"):
+        stage_execution.build_stage_execution_draft(
+            plan,
+            graph,
+            profile,
+            report,
+            ui_workflow=ui,
+            image_name="runs/lineage/ref.png",
+            reference_artifact=_accepted_reference(),
+        )
 
 
 def test_stage_draft_rejects_stale_or_busy_capability():

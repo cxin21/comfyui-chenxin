@@ -13,10 +13,254 @@ _SLOTS = frozenset(("positive_prompt", "negative_prompt"))
 _INPUTS = ("wildcard_text", "populated_text")
 _NODE_CLASS = "ImpactWildcardProcessor"
 _REMOVED = "__PROMPT_FORGE_ALLOWLISTED_VALUE__"
+_CAMERA_API_NORMALIZATION = {
+    "schema_version": "1.0",
+    "literal_inputs": [
+        {"node_id": 26, "input_name": "text", "ui_node_id": 26, "widget_index": 1}
+    ],
+    "output_fallbacks": [
+        {"source_node_id": 111, "output_index": 0, "target_node_id": 35, "target_input": "images"},
+        {"source_node_id": 111, "output_index": 0, "target_node_id": 490, "target_input": "images"},
+    ],
+    "remove_nodes": [28, 41, 52, 62, 67, 70, 77],
+}
+_CAMERA_MARKER_IDS = frozenset(
+    {
+        26,
+        35,
+        490,
+        76,
+        96,
+        111,
+        *_CAMERA_API_NORMALIZATION["remove_nodes"],
+    }
+)
+_NORMALIZATION_CLASSES = {
+    26: "Lora Loader (LoraManager)",
+    35: "Image Saver Simple",
+    490: "PreviewImage",
+    76: "VAEDecode",
+    96: "AdjustContrast",
+    111: "ImageSharpen",
+}
+_POSTPROCESS_LINKS = (
+    (96, "images", 76, 0),
+    (111, "image", 96, 0),
+)
 
 
 class CameraAdapterError(ValueError):
     """Raised when a camera UI/API graph cannot be patched safely."""
+
+
+def is_pinned_camera_normalization_profile(profile: object) -> bool:
+    """Return whether a profile carries the exact production camera bridge."""
+    return (
+        isinstance(profile, dict)
+        and profile.get("profile_id") == "camera-anima-v1"
+        and profile.get("api_normalization") == _CAMERA_API_NORMALIZATION
+    )
+
+
+def is_pinned_camera_profile(profile: object) -> bool:
+    """Return whether a Stage 1/3 profile is a complete verified camera contract."""
+    if not is_pinned_camera_normalization_profile(profile):
+        return False
+    if not isinstance(profile, dict):
+        return False
+    if (
+        profile.get("schema_version") != "1.0"
+        or profile.get("runtime_classification") != "local"
+        or profile.get("expected_outputs") != ["image/png"]
+    ):
+        return False
+    workflow_fingerprint = profile.get("workflow_fingerprint")
+    if not isinstance(workflow_fingerprint, str) or len(workflow_fingerprint) != 64:
+        return False
+    if any(character not in "0123456789abcdef" for character in workflow_fingerprint):
+        return False
+    slots = profile.get("slots")
+    if not isinstance(slots, dict):
+        return False
+    expected_slots = {
+        "positive_prompt": {"id": 24, "type": "ImpactWildcardProcessor", "title": "POSITIVE"},
+        "negative_prompt": {"id": 25, "type": "ImpactWildcardProcessor", "title": "NEGATIVE"},
+    }
+    if any(slots.get(name) != selector for name, selector in expected_slots.items()):
+        return False
+    img2img = profile.get("img2img")
+    if not isinstance(img2img, dict):
+        return False
+    return (
+        img2img.get("group_id") == 3
+        and img2img.get("node_ids") == [21, 58, 57, 59]
+        and img2img.get("load_image_node_id") == 21
+        and img2img.get("vae_encode_node_id") == 59
+        and img2img.get("latent_switch_node_id") == 75
+        and img2img.get("sampler_node_id") == 27
+        and img2img.get("expected_path_node_ids") == [27, 75, 59]
+    )
+
+
+def normalize_camera_api_graph(
+    graph: dict,
+    ui_workflow: dict | None,
+    profile: dict,
+) -> dict:
+    """Repair only the known UI-to-API conversion losses of the camera source.
+
+    The live ComfyUI converter omits widget-only LoRA text and drops a muted
+    optional image-switch branch, leaving the real saver/preview nodes without
+    ``images``.  This function is an explicit, idempotent normalization bridge:
+    it copies the exact literal from the source UI, reconnects both output sinks
+    to the profiled post-processed image, and removes only the profiled orphan
+    nodes.
+    It never saves or mutates the user's workflow.
+
+    Profiles without this pinned contract remain unchanged so compact adapters
+    can be tested independently.  A profile carrying the contract but a graph
+    without its topology markers fails closed rather than guessing a topology.
+    """
+    if not isinstance(graph, dict):
+        raise CameraAdapterError("camera API graph must be an object")
+    if not isinstance(profile, dict):
+        raise CameraAdapterError("camera profile is required for API normalization")
+    config = profile.get("api_normalization")
+    if config is None:
+        present_markers = {
+            int(node_id) if isinstance(node_id, str) and node_id.isdigit() else node_id
+            for node_id in graph
+        }.intersection(_CAMERA_MARKER_IDS)
+        if profile.get("profile_id") == "camera-anima-v1" and present_markers:
+            raise CameraAdapterError("camera API normalization requires the pinned contract")
+        return copy.deepcopy(graph)
+    if not is_pinned_camera_normalization_profile(profile):
+        raise CameraAdapterError("camera API normalization profile is not the pinned contract")
+
+    literal = config["literal_inputs"][0]
+    literal_id = literal["node_id"]
+    literal_node = graph.get(str(literal_id))
+    fallback_ids = {
+        item["source_node_id"]
+        for item in config["output_fallbacks"]
+    } | {
+        item["target_node_id"]
+        for item in config["output_fallbacks"]
+    }
+    marker_ids = fallback_ids | {literal_id} | set(config["remove_nodes"])
+    present_markers = marker_ids.intersection(
+        int(node_id) if isinstance(node_id, str) and node_id.isdigit() else node_id
+        for node_id in graph
+    )
+    if not present_markers:
+        raise CameraAdapterError("camera API normalization source has no pinned topology markers")
+    if not isinstance(ui_workflow, dict):
+        raise CameraAdapterError("camera API normalization requires the source UI workflow")
+    ui_nodes = ui_workflow.get("nodes")
+    if not isinstance(ui_nodes, list):
+        raise CameraAdapterError("camera UI workflow requires nodes for API normalization")
+    ui_matches = [node for node in ui_nodes if isinstance(node, dict) and node.get("id") == literal["ui_node_id"]]
+    if len(ui_matches) != 1:
+        raise CameraAdapterError("camera UI LoRA node is missing or ambiguous")
+    if ui_matches[0].get("type") != _NORMALIZATION_CLASSES[literal_id]:
+        raise CameraAdapterError("camera UI LoRA node type is unexpected")
+    widget_values = ui_matches[0].get("widgets_values")
+    widget_index = literal["widget_index"]
+    if (
+        not isinstance(widget_values, list)
+        or not isinstance(widget_index, int)
+        or isinstance(widget_index, bool)
+        or widget_index < 0
+        or widget_index >= len(widget_values)
+        or not isinstance(widget_values[widget_index], str)
+        or not widget_values[widget_index].strip()
+    ):
+        raise CameraAdapterError("camera UI LoRA text widget is invalid")
+    ui_lora_text = widget_values[widget_index]
+
+    required_ids = set(_NORMALIZATION_CLASSES) | fallback_ids
+    missing_ids = sorted(node_id for node_id in required_ids if str(node_id) not in graph)
+    if missing_ids:
+        raise CameraAdapterError(
+            "camera API normalization source is incomplete: missing node(s) "
+            + ", ".join(str(node_id) for node_id in missing_ids)
+        )
+    for node_id, expected_class in _NORMALIZATION_CLASSES.items():
+        node = graph.get(str(node_id))
+        if not isinstance(node, dict) or node.get("class_type") != expected_class:
+            raise CameraAdapterError(f"camera API normalization node {node_id} has an unexpected class")
+        if not isinstance(node.get("inputs"), dict):
+            label = "target" if node_id in {item["target_node_id"] for item in config["output_fallbacks"]} else "source"
+            raise CameraAdapterError(f"camera API normalization {label} node {node_id} requires inputs")
+
+    for consumer_id, input_name, source_id, output_index in _POSTPROCESS_LINKS:
+        link = graph[str(consumer_id)]["inputs"].get(input_name)
+        if (
+            not isinstance(link, (list, tuple))
+            or len(link) < 2
+            or str(link[0]) != str(source_id)
+            or link[1] != output_index
+        ):
+            raise CameraAdapterError(
+                "camera API normalization post-process chain must be 76 -> 96 -> 111"
+            )
+
+    literal_inputs = literal_node["inputs"]
+    existing_text = literal_inputs.get(literal["input_name"])
+    if (
+        literal["input_name"] in literal_inputs
+        and existing_text is not None
+        and existing_text != ui_lora_text
+    ):
+        raise CameraAdapterError("camera API LoRA text conflicts with UI")
+    literal_text = existing_text == ui_lora_text
+    def _fallback_is_ready(item: dict) -> bool:
+        target = graph.get(str(item["target_node_id"]))
+        inputs = target.get("inputs") if isinstance(target, dict) else None
+        return isinstance(inputs, dict) and inputs.get(item["target_input"]) == [
+            str(item["source_node_id"]),
+            item["output_index"],
+        ]
+
+    fallback_ready = all(_fallback_is_ready(item) for item in config["output_fallbacks"])
+    remove_present = set(config["remove_nodes"]).intersection(present_markers)
+    if literal_text and fallback_ready and not remove_present:
+        return copy.deepcopy(graph)
+
+    patched = copy.deepcopy(graph)
+    patched[str(literal_id)]["inputs"][literal["input_name"]] = ui_lora_text
+    for item in config["output_fallbacks"]:
+        target = patched[str(item["target_node_id"])]
+        inputs = target.get("inputs")
+        if not isinstance(inputs, dict):
+            raise CameraAdapterError("camera API normalization target requires inputs")
+        expected_link = [str(item["source_node_id"]), item["output_index"]]
+        existing = inputs.get(item["target_input"])
+        if existing is not None and existing != expected_link:
+            raise CameraAdapterError("camera API normalization would overwrite a non-empty output")
+        inputs[item["target_input"]] = expected_link
+
+    remove_ids = set(config["remove_nodes"])
+    remove_keys = {str(node_id) for node_id in remove_ids}
+    for node_id in remove_ids:
+        for consumer_id, node in patched.items():
+            if str(consumer_id) in remove_keys or not isinstance(node, dict):
+                continue
+            inputs = node.get("inputs")
+            if not isinstance(inputs, dict):
+                continue
+            if any(
+                isinstance(value, (list, tuple))
+                and value
+                and str(value[0]) == str(node_id)
+                for value in inputs.values()
+            ):
+                raise CameraAdapterError(
+                    f"camera API normalization node {node_id} still feeds node {consumer_id}"
+                )
+    for node_id in remove_ids:
+        patched.pop(str(node_id), None)
+    return patched
 
 
 def _node_for_slot(graph: dict, slot_name: str, node_id: object) -> dict:

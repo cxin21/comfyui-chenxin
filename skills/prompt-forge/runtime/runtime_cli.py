@@ -12,7 +12,12 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from runtime.adapters.camera import activate_g1, patch_character_base, verify_img2img_path
+from runtime.adapters.camera import (
+    activate_g1,
+    normalize_camera_api_graph,
+    patch_character_base,
+    verify_img2img_path,
+)
 from runtime.adapters.flux_multiview import FluxAdapterError
 from runtime.adapters.yusu_timeline import patch_yusu_timeline
 from runtime.artifacts import accept_stage3_reference, verify_video_artifact
@@ -27,7 +32,6 @@ from runtime.execution import (
     build_execution_draft,
     build_multiview_draft,
     build_multiview_run_record,
-    build_multiview_submission,
     build_run_record,
 )
 from runtime.pipeline_state import advance_state, stage_is_reusable
@@ -112,6 +116,11 @@ def _parser() -> argparse.ArgumentParser:
 
     activate = commands.add_parser("activate-g1", help="activate the complete camera G1 group")
     _add_json_source(activate)
+
+    normalize_camera = commands.add_parser(
+        "normalize-camera", help="repair the pinned camera UI-to-API conversion bridge"
+    )
+    _add_json_source(normalize_camera)
 
     verify_path = commands.add_parser("verify-img2img-path", help="prove the G1 latent path")
     _add_json_source(verify_path)
@@ -284,6 +293,12 @@ def _dispatch(command: str, payload: dict, args) -> dict | tuple[dict, int]:
         if set(payload) != {"workflow", "image_name", "profile"}:
             raise CliUsageError("activate-g1 accepts workflow, image_name and profile")
         return activate_g1(payload["workflow"], payload["image_name"], payload["profile"])
+    if command == "normalize-camera":
+        if set(payload) != {"api_graph", "ui_workflow", "profile"}:
+            raise CliUsageError("normalize-camera accepts api_graph, ui_workflow and profile")
+        return normalize_camera_api_graph(
+            payload["api_graph"], payload["ui_workflow"], payload["profile"]
+        )
     if command == "verify-img2img-path":
         if set(payload) != {"api_graph", "profile"}:
             raise CliUsageError("verify-img2img-path accepts api_graph and profile")

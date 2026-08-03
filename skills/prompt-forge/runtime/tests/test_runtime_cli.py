@@ -52,6 +52,18 @@ def _profile():
         "schema_version": "1.0",
         "profile_id": "camera-anima-v1",
         "runtime_classification": "local",
+        "workflow_fingerprint": "96aac5b2fc5e565eadf4b9aba8d7c59016d327589fc40153be737b6187f27011",
+        "api_normalization": {
+            "schema_version": "1.0",
+            "literal_inputs": [
+                {"node_id": 26, "input_name": "text", "ui_node_id": 26, "widget_index": 1}
+            ],
+            "output_fallbacks": [
+                {"source_node_id": 111, "output_index": 0, "target_node_id": 35, "target_input": "images"},
+                {"source_node_id": 111, "output_index": 0, "target_node_id": 490, "target_input": "images"},
+            ],
+            "remove_nodes": [28, 41, 52, 62, 67, 70, 77],
+        },
         "allowed_mutations": ["untrusted.profile.value"],
         "slots": {
             "positive_prompt": {
@@ -65,6 +77,16 @@ def _profile():
                 "title": "NEGATIVE",
             },
             "camera_angle": {"id": 583},
+            "camera_extra": {"id": 585, "type": "CameraExtraConfigNode"},
+        },
+        "img2img": {
+            "group_id": 3,
+            "node_ids": [21, 58, 57, 59],
+            "load_image_node_id": 21,
+            "vae_encode_node_id": 59,
+            "latent_switch_node_id": 75,
+            "sampler_node_id": 27,
+            "expected_path_node_ids": [27, 75, 59],
         },
         "expected_outputs": ["image/png"],
     }
@@ -504,7 +526,56 @@ def test_activate_g1_and_verify_path_commands_do_not_enqueue():
     graph = json.loads((FIXTURES / "camera-img2img-api-minimal.json").read_text(encoding="utf-8"))
     verified = _run("verify-img2img-path", "--from-stdin", input_text=json.dumps({"api_graph": graph, "profile": {"img2img": {"vae_encode_node_id": 59, "sampler_node_id": 27}}}))
     assert verified.returncode == 0, verified.stderr
-    assert json.loads(verified.stdout)["traversed_node_ids"] == [27, 59]
+    assert json.loads(verified.stdout)["traversed_node_ids"] == [27, 75, 59]
+
+
+def test_normalize_camera_command_repairs_only_the_pinned_source_bridge():
+    graph = {
+        "26": {"class_type": "Lora Loader (LoraManager)", "inputs": {"model": ["22", 0]}},
+        "35": {"class_type": "Image Saver Simple", "inputs": {"metadata": ["89", 0]}},
+        "490": {"class_type": "PreviewImage", "inputs": {}},
+        "76": {"class_type": "VAEDecode", "inputs": {"samples": ["51", 0], "vae": ["48", 0]}},
+        "96": {"class_type": "AdjustContrast", "inputs": {"images": ["76", 0]}},
+        "111": {"class_type": "ImageSharpen", "inputs": {"image": ["96", 0]}},
+        **{
+            str(node_id): {"class_type": "Optional", "inputs": {}}
+            for node_id in (28, 41, 52, 62, 67, 70, 77)
+        },
+    }
+    ui = {
+        "nodes": [
+            {
+                "id": 26,
+                "type": "Lora Loader (LoraManager)",
+                "widgets_values": [{"version": 1}, "<lora:anima:1.0>"],
+            }
+        ]
+    }
+    profile = {
+        "schema_version": "1.0",
+        "profile_id": "camera-anima-v1",
+        "api_normalization": {
+            "schema_version": "1.0",
+            "literal_inputs": [
+                {"node_id": 26, "input_name": "text", "ui_node_id": 26, "widget_index": 1}
+            ],
+            "output_fallbacks": [
+                {"source_node_id": 111, "output_index": 0, "target_node_id": 35, "target_input": "images"},
+                {"source_node_id": 111, "output_index": 0, "target_node_id": 490, "target_input": "images"},
+            ],
+            "remove_nodes": [28, 41, 52, 62, 67, 70, 77],
+        },
+    }
+    result = _run(
+        "normalize-camera",
+        "--from-stdin",
+        input_text=json.dumps({"api_graph": graph, "ui_workflow": ui, "profile": profile}),
+    )
+    assert result.returncode == 0, result.stderr
+    normalized = json.loads(result.stdout)
+    assert normalized["26"]["inputs"]["text"] == "<lora:anima:1.0>"
+    assert normalized["35"]["inputs"]["images"] == ["111", 0]
+    assert "28" not in normalized
 
 
 def test_plan_shot_and_plan_video_commands_are_pure():

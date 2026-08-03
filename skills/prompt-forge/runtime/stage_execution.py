@@ -17,7 +17,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from .adapters.camera import CameraAdapterError, patch_img2img_graph, verify_img2img_path
+from .adapters.camera import (
+    CameraAdapterError,
+    is_pinned_camera_profile,
+    normalize_camera_api_graph,
+    patch_img2img_graph,
+    verify_img2img_path,
+)
 from .adapters.yusu_timeline import YusuTimelineError, patch_yusu_timeline, validate_yusu_sync
 from .artifacts import verify_video_artifact
 from .capabilities import report_is_fresh
@@ -308,15 +314,33 @@ def build_stage_execution_draft(
     if plan["stage"] == "shot-image":
         if not isinstance(ui_workflow, dict):
             raise StageExecutionError("Stage 3 requires the current camera UI workflow")
+        if not is_pinned_camera_profile(profile):
+            raise StageExecutionError(
+                "Stage 3 requires the pinned camera normalization profile"
+            )
         if image_name is None:
             raise StageExecutionError("Stage 3 requires the selected reference image name")
         if workflow_fingerprint is None:
             raise StageExecutionError("Stage 3 requires the current camera UI fingerprint")
         try:
+            normalized_source = normalize_camera_api_graph(source_api_graph, ui_workflow, profile)
+            if normalized_source != source_api_graph:
+                raise StageExecutionError(
+                    "Stage 3 source API graph must be normalized with normalize-camera before planning"
+                )
             actual_fingerprint = structure_fingerprint(ui_workflow)
             # Stage 3 requires a strict identity pin; it cannot be silently replaced.
             if workflow_fingerprint != actual_fingerprint:
                 raise StageExecutionError("camera UI workflow fingerprint does not match the stage plan")
+            profile_fingerprint = profile.get("workflow_fingerprint")
+            if (
+                not isinstance(profile_fingerprint, str)
+                or not re.fullmatch(r"[0-9a-f]{64}", profile_fingerprint)
+                or profile_fingerprint != actual_fingerprint
+            ):
+                raise StageExecutionError(
+                    "camera UI workflow fingerprint does not match the verified camera profile"
+                )
             executable = patch_img2img_graph(
                 source_api_graph,
                 plan.get("prompt_build"),

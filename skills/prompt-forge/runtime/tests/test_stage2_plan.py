@@ -11,7 +11,6 @@ from pathlib import Path
 
 import pytest
 
-from runtime.adapters.flux_multiview import patch_base_images
 from runtime.contracts import canonical_json, content_hash
 from runtime.execution import (
     ExecutionError,
@@ -19,9 +18,7 @@ from runtime.execution import (
     approve_execution_draft,
     build_approval_consumption,
     build_execution_draft,
-    build_multiview_draft,
     build_multiview_run_record,
-    build_multiview_submission,
     submit_multiview,
     build_run_record,
     load_pending_bundle,
@@ -38,7 +35,7 @@ V2_PROFILE_PATH = Path(__file__).parents[1] / "profiles" / "flux2-klein-multivie
 API_PATH = Path(__file__).parent / "fixtures" / "flux-api-minimal.json"
 CAMERA_API_PATH = Path(__file__).parent / "fixtures" / "camera-api-minimal.json"
 CAMERA_UI_PATH = Path(__file__).parent / "fixtures" / "camera-ui-minimal.json"
-CAMERA_FINGERPRINT = "82a18f487fa7a5e3e5387db598e7e039a7842e6989092731eda5c5d927693a43"
+CAMERA_FINGERPRINT = "96aac5b2fc5e565eadf4b9aba8d7c59016d327589fc40153be737b6187f27011"
 FINGERPRINT = "fff6236efa6727ac6584d61f640a63f9602b2d07a545d216b96a870a681e6faf"
 POSE_IDS = [368, 151, 152, 154, 360, 364, 148, 149, 147, 373, 150, 367]
 
@@ -610,10 +607,33 @@ def _stage1_chain(tmp_path):
         "schema_version": "1.0",
         "profile_id": "camera-anima-v1",
         "runtime_classification": "local",
+        "workflow_fingerprint": CAMERA_FINGERPRINT,
+        "api_normalization": {
+            "schema_version": "1.0",
+            "literal_inputs": [
+                {"node_id": 26, "input_name": "text", "ui_node_id": 26, "widget_index": 1}
+            ],
+            "output_fallbacks": [
+                {"source_node_id": 111, "output_index": 0, "target_node_id": 35, "target_input": "images"},
+                {"source_node_id": 111, "output_index": 0, "target_node_id": 490, "target_input": "images"},
+            ],
+            "remove_nodes": [28, 41, 52, 62, 67, 70, 77],
+        },
         "allowed_mutations": [],
         "slots": {
             "positive_prompt": {"id": 24, "type": "ImpactWildcardProcessor", "title": "POSITIVE"},
             "negative_prompt": {"id": 25, "type": "ImpactWildcardProcessor", "title": "NEGATIVE"},
+            "camera_angle": {"id": 583, "type": "CameraAngleNode"},
+            "camera_extra": {"id": 585, "type": "CameraExtraConfigNode"},
+        },
+        "img2img": {
+            "group_id": 3,
+            "node_ids": [21, 58, 57, 59],
+            "load_image_node_id": 21,
+            "vae_encode_node_id": 59,
+            "latent_switch_node_id": 75,
+            "sampler_node_id": 27,
+            "expected_path_node_ids": [27, 75, 59],
         },
         "expected_outputs": ["image/png"],
     }

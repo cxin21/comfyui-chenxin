@@ -2,6 +2,7 @@
   "schema_version": "1.0",
   "profile_id": "camera-anima-v1",
   "workflow_name": "文生图相机视角.json",
+  "workflow_fingerprint": "7fa7a85e005182c6be42a3f3193add3fb41531ef0fae28e1cbd54a791e72e20a",
   "generation_modes": ["text-to-image", "image-to-image"],
   "runtime_classification": "local",
   "slots": {
@@ -18,6 +19,17 @@
     "latent_switch_node_id": 75,
     "sampler_node_id": 27,
     "expected_path_node_ids": [27, 75, 59]
+  },
+  "api_normalization": {
+    "schema_version": "1.0",
+    "literal_inputs": [
+      {"node_id": 26, "input_name": "text", "ui_node_id": 26, "widget_index": 1}
+    ],
+    "output_fallbacks": [
+      {"source_node_id": 111, "output_index": 0, "target_node_id": 35, "target_input": "images"},
+      {"source_node_id": 111, "output_index": 0, "target_node_id": 490, "target_input": "images"}
+    ],
+    "remove_nodes": [28, 41, 52, 62, 67, 70, 77]
   },
   "allowed_mutations": [
     "positive_prompt.wildcard_text",
