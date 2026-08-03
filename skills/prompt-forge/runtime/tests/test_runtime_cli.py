@@ -16,6 +16,7 @@ import runtime.runtime_cli as runtime_cli
 WORKSPACE = Path(__file__).resolve().parents[4]
 SCRIPT = WORKSPACE / "skills/prompt-forge/runtime/runtime_cli.py"
 FIXTURES = Path(__file__).parent / "fixtures"
+CONSUMPTION_ROOT = Path(__file__).parent.resolve()
 
 
 def _run(*args, input_text=None):
@@ -114,7 +115,7 @@ def _plan_envelope():
     }
 
 
-def _approval_event(draft, **overrides):
+def _approval_event(draft, consumption_root=None, **overrides):
     now = datetime.now(timezone.utc)
     event = {
         "decision": "approved",
@@ -123,6 +124,9 @@ def _approval_event(draft, **overrides):
         "approved_at": (now - timedelta(seconds=1)).isoformat().replace("+00:00", "Z"),
         "expires_at": (now + timedelta(minutes=5)).isoformat().replace("+00:00", "Z"),
         "scope": "enqueue-once",
+        "consumption_root": str(
+            CONSUMPTION_ROOT if consumption_root is None else Path(consumption_root)
+        ),
         "actor": "user:test",
         "source": "cli-test",
     }
@@ -250,12 +254,12 @@ def test_plan_emits_unapproved_draft_without_accepting_approval_boolean(tmp_path
 def test_approve_plan_binds_exact_draft_and_exclusive_writes_evidence(tmp_path):
     draft = build_execution_draft(**_plan_envelope())
     payload = tmp_path / "approval.json"
-    event = _approval_event(draft)
+    run_dir = tmp_path / "runs"
+    run_dir.mkdir()
+    event = _approval_event(draft, run_dir.resolve())
     payload.write_text(
         json.dumps({"draft": draft, "approval_event": event}), encoding="utf-8"
     )
-    run_dir = tmp_path / "runs"
-
     first = _run("approve-plan", "--input", payload, "--run-dir", run_dir)
     second = _run("approve-plan", "--input", payload, "--run-dir", run_dir)
 
@@ -282,10 +286,12 @@ def test_approve_plan_binds_exact_draft_and_exclusive_writes_evidence(tmp_path):
 def test_approve_plan_wrong_or_stale_event_is_exit_two_without_files(tmp_path):
     draft = build_execution_draft(**_plan_envelope())
     run_dir = tmp_path / "runs"
+    run_dir.mkdir()
     for event in (
-        _approval_event(draft, draft_hash="0" * 64),
+        _approval_event(draft, run_dir.resolve(), draft_hash="0" * 64),
         _approval_event(
             draft,
+            run_dir.resolve(),
             displayed_at="2026-08-02T00:00:00Z",
             approved_at="2026-08-02T00:00:01Z",
             expires_at="2026-08-02T00:05:00Z",
@@ -300,18 +306,45 @@ def test_approve_plan_wrong_or_stale_event_is_exit_two_without_files(tmp_path):
         )
         assert result.returncode == 2
         assert result.stdout == ""
-    assert not run_dir.exists()
+    assert list(run_dir.iterdir()) == []
+
+
+def test_approve_plan_rejects_run_dir_outside_event_consumption_root(tmp_path):
+    draft = build_execution_draft(**_plan_envelope())
+    bound_root = tmp_path / "bound"
+    wrong_root = tmp_path / "wrong"
+    bound_root.mkdir()
+    wrong_root.mkdir()
+    event = _approval_event(draft, consumption_root=str(bound_root.resolve()))
+
+    result = _run(
+        "approve-plan",
+        "--from-stdin",
+        "--run-dir",
+        wrong_root,
+        input_text=json.dumps({"draft": draft, "approval_event": event}),
+    )
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "consumption root" in result.stderr
+    assert list(wrong_root.iterdir()) == []
 
 
 def test_consume_approval_is_atomic_and_never_idempotent(tmp_path):
     draft = build_execution_draft(**_plan_envelope())
-    plan = approve_execution_draft(draft, _approval_event(draft))
+    run_dir = tmp_path / "runs"
+    run_dir.mkdir()
+    event = _approval_event(draft, run_dir.resolve())
+    plan = approve_execution_draft(
+        draft,
+        event,
+        consumption_root=run_dir.resolve(),
+    )
     payload = {
         "approved_plan": plan,
         "enqueue_request_id": "stable-client-request-b",
     }
-    run_dir = tmp_path / "runs"
-
     first = _run(
         "consume-approval",
         "--from-stdin",
@@ -337,6 +370,42 @@ def test_consume_approval_is_atomic_and_never_idempotent(tmp_path):
     assert "already consumed" in second.stderr
 
 
+def test_same_approval_cannot_be_consumed_in_child_and_parent_run_dirs(tmp_path):
+    draft = build_execution_draft(**_plan_envelope())
+    parent = tmp_path / "runs"
+    child = parent / "child"
+    child.mkdir(parents=True)
+    event = _approval_event(draft, child.resolve())
+    plan = approve_execution_draft(
+        draft,
+        event,
+        consumption_root=child.resolve(),
+    )
+    payload = {
+        "approved_plan": plan,
+        "enqueue_request_id": "stable-client-request-b",
+    }
+    child_result = _run(
+        "consume-approval",
+        "--from-stdin",
+        "--run-dir",
+        child,
+        input_text=json.dumps(payload),
+    )
+    parent_result = _run(
+        "consume-approval",
+        "--from-stdin",
+        "--run-dir",
+        parent,
+        input_text=json.dumps(payload),
+    )
+
+    assert child_result.returncode == 0, child_result.stderr
+    assert parent_result.returncode == 2
+    assert parent_result.stdout == ""
+    assert "consumption root" in parent_result.stderr
+
+
 def test_malformed_json_is_exit_two_with_one_prefixed_stderr_line():
     result = _run("fingerprint", "--from-stdin", input_text="{")
 
@@ -350,7 +419,12 @@ def test_malformed_json_is_exit_two_with_one_prefixed_stderr_line():
 def test_record_uses_exclusive_create_and_identical_content_is_idempotent(tmp_path):
     plan_input = _plan_envelope()
     draft = build_execution_draft(**plan_input)
-    plan = approve_execution_draft(draft, _approval_event(draft))
+    event = _approval_event(draft)
+    plan = approve_execution_draft(
+        draft,
+        event,
+        consumption_root=event["consumption_root"],
+    )
     build = plan_input["prompt_build"]
     graph = plan_input["api_graph"]
     prompt_id = "prompt-cli-1"

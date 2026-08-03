@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 
 from .capabilities import report_is_fresh
 from .contracts import ContractError, canonical_json, content_hash, validate_task_context
@@ -70,6 +71,7 @@ _APPROVAL_EVENT_KEYS = frozenset(
         "approved_at",
         "expires_at",
         "scope",
+        "consumption_root",
         "actor",
         "source",
     )
@@ -294,11 +296,31 @@ def _parse_utc_timestamp(value: object, label: str) -> datetime:
     return parsed
 
 
+def _canonical_consumption_root(value: object, label: str) -> str:
+    if not isinstance(value, (str, Path)):
+        raise ExecutionError(f"{label} consumption root must be an absolute canonical path")
+    raw_text = str(value)
+    raw_path = Path(raw_text)
+    if not raw_path.is_absolute():
+        raise ExecutionError(f"{label} consumption root must be an absolute canonical path")
+    try:
+        resolved = raw_path.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise ExecutionError(f"{label} consumption root must be an existing directory") from exc
+    if not resolved.is_dir():
+        raise ExecutionError(f"{label} consumption root must be an existing directory")
+    canonical = str(resolved)
+    if raw_text != canonical:
+        raise ExecutionError(f"{label} consumption root must not use a path alias")
+    return canonical
+
+
 def _validate_approval_event(
     event: object,
     draft_hash: str,
     *,
     trusted_now: datetime | None,
+    expected_consumption_root: object | None,
 ) -> dict:
     if not isinstance(event, dict) or set(event) != _APPROVAL_EVENT_KEYS:
         raise ExecutionError("approval event schema is incomplete or contains unexpected fields")
@@ -308,6 +330,17 @@ def _validate_approval_event(
         raise ExecutionError("approval event draft_hash does not match the displayed draft")
     if event.get("scope") != "enqueue-once":
         raise ExecutionError("approval event scope must be enqueue-once")
+    event_root = _canonical_consumption_root(
+        event.get("consumption_root"), "approval event"
+    )
+    if expected_consumption_root is not None:
+        expected_root = _canonical_consumption_root(
+            expected_consumption_root, "expected"
+        )
+        if event_root != expected_root:
+            raise ExecutionError(
+                "approval event consumption root does not match the expected consumption root"
+            )
     for field in ("actor", "source"):
         value = event.get(field)
         if not isinstance(value, str) or not value.strip():
@@ -332,13 +365,19 @@ def _validate_approval_event(
     return copy.deepcopy(event)
 
 
-def approve_execution_draft(draft: dict, approval_event: dict) -> dict:
+def approve_execution_draft(
+    draft: dict,
+    approval_event: dict,
+    *,
+    consumption_root: str | Path,
+) -> dict:
     """Approve exactly one displayed draft with a fresh external event."""
     safe_draft = _validate_draft_hash(draft)
     safe_event = _validate_approval_event(
         approval_event,
         safe_draft["draft_hash"],
         trusted_now=_utc_now(),
+        expected_consumption_root=consumption_root,
     )
     plan = copy.deepcopy(safe_draft)
     plan["plan_state"] = "approved"
@@ -372,6 +411,7 @@ def _validate_approved_plan(plan: object, *, trusted_now: datetime | None) -> di
         plan.get("approval_event"),
         plan["draft_hash"],
         trusted_now=trusted_now,
+        expected_consumption_root=None,
     )
     if plan.get("approval_id") != content_hash(safe_event):
         raise ExecutionError("ExecutionPlan approval_id is not self-consistent")
@@ -417,6 +457,7 @@ def build_approval_consumption(approved_plan: dict, enqueue_request_id: str) -> 
         "approval_id": safe_plan["approval_id"],
         "plan_hash": safe_plan["plan_hash"],
         "draft_hash": safe_plan["draft_hash"],
+        "consumption_root": safe_plan["approval_event"]["consumption_root"],
         "enqueue_request_id": enqueue_request_id,
         "consumed_at": trusted_now.isoformat().replace("+00:00", "Z"),
     }

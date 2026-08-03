@@ -133,7 +133,7 @@
 | `recipes/MODELS.md` | 2462 | 80 个模型提示词配方,带 YAML frontmatter(每个配方含 id/family/modality/dialect/license/triggers)。 |
 | `templates_index.json` | 6651 | 662 个工作流模板,按类别(3d=11 api=242 archived=23 audio=22 conditioning=26 get_started=5 image=92 upscale=22 utility=138 video=81)和模态(3d=36 image=435 video=152 audio=32 vector=2 mixed=5)分类。 |
 | `hardware/8gb.json` | 58 | VRAM 决策矩阵:15 个 allowed_quant,swap_blocks=40,sampler_defaults=euler/4/1.0,preference=[lightning_x2v, lightx2v, fcn, native]。 |
-| `runtime/` | — | v7 本地执行合同：TaskContext、CapabilityReport、workflow fingerprint、immutable pending bundle、ExecutionDraft、hash-bound approval event、one-shot consumption、approved ExecutionPlan、camera allowlist patch、RunRecord 与 JSON CLI。`plan` 只产未批准 draft；恢复使用 frozen bundle；`approve-plan` 绑定 exact `draft_hash`；`consume-approval` 在 POST 前原子消费一次。 |
+| `runtime/` | — | v7 本地执行合同：TaskContext、CapabilityReport、workflow fingerprint、immutable pending bundle、ExecutionDraft、hash-bound approval event、canonical consumption namespace、one-shot consumption、approved ExecutionPlan、camera allowlist patch、RunRecord 与 JSON CLI。`plan` 只产未批准 draft；恢复使用 frozen bundle；`approve-plan` 绑定 exact `draft_hash` 与 resolved root；`consume-approval` 只能在同一 root 于 POST 前原子消费一次。 |
 
 Prompt Forge v7 deterministic gate（live 测试默认跳过）：
 
@@ -144,7 +144,7 @@ python -m pytest skills/prompt-forge/runtime/tests skills/prompt-forge/internals
 python skills/prompt-forge/internals/evaluate.py
 ```
 
-真实 ComfyUI Experiment A/B 默认跳过。已有 A/B 使用 REST，只证明 selected history 图（指纹 `2efbc0fd43749828754dea7989f88806a944628e064d3c9c6876ee602726724f`）内部无漂移并匹配 workflow id/profile；它们是 render/graph characterization，不是 MCP 生产路径或完整审批证据。审查时只读重算的当前保存工作流指纹为 `7fa7a85e005182c6be42a3f3193add3fb41531ef0fae28e1cbd54a791e72e20a`，与历史指纹不同，不能混写为“current saved 未漂移”。未来 B 首轮只 exclusive-create immutable `pending-<draft_hash>.json` 后停止；恢复必须显式提供 run-dir 内的 `PROMPT_FORGE_PENDING_BUNDLE` 和绑定 exact hash 的 `PROMPT_FORGE_APPROVAL_FILE`，并在 POST 前 atomic consume。缺 bundle、过期、篡改、资源/队列不安全或已消费均 fail closed。
+真实 ComfyUI Experiment A/B 默认跳过。已有 A/B 使用 REST，只证明 selected history 图（指纹 `2efbc0fd43749828754dea7989f88806a944628e064d3c9c6876ee602726724f`）内部无漂移并匹配 workflow id/profile；它们是 render/graph characterization，不是 MCP 生产路径或完整审批证据。审查时只读重算的当前保存工作流指纹为 `7fa7a85e005182c6be42a3f3193add3fb41531ef0fae28e1cbd54a791e72e20a`，与历史指纹不同，不能混写为“current saved 未漂移”。未来 B 首轮只 exclusive-create immutable `pending-<draft_hash>.json` 后停止；bundle、approval event、`approve-plan` 与 `consume-approval` 必须绑定同一 existing canonical resolved `consumption_root`，parent/child/alias 不能更换消费 namespace。恢复还必须提供绑定 exact hash 的 `PROMPT_FORGE_APPROVAL_FILE`，并在 POST 前 atomic consume。缺 bundle、过期、篡改、root 不一致、资源/队列不安全或已消费均 fail closed。
 
 ---
 

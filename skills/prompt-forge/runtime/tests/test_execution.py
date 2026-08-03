@@ -18,6 +18,7 @@ from runtime.workflow_profile import structure_fingerprint
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
+CONSUMPTION_ROOT = Path(__file__).parent.resolve()
 NOW = datetime(2026, 8, 3, 0, 0, tzinfo=timezone.utc)
 UI_FINGERPRINT = "82a18f487fa7a5e3e5387db598e7e039a7842e6989092731eda5c5d927693a43"
 API_GRAPH_HASH = "4a748ab19b5174f0569d3d6aa2480ff2117dbc3a209cb7cb27699ac105a4b1e5"
@@ -143,6 +144,7 @@ def approval_event(draft, **overrides):
         "approved_at": (NOW - timedelta(minutes=1)).isoformat().replace("+00:00", "Z"),
         "expires_at": (NOW + timedelta(minutes=5)).isoformat().replace("+00:00", "Z"),
         "scope": "enqueue-once",
+        "consumption_root": str(CONSUMPTION_ROOT),
         "actor": "user:test",
         "source": "test-fixture",
     }
@@ -152,7 +154,12 @@ def approval_event(draft, **overrides):
 
 def build_valid_plan(build=None, patches=None, **kwargs):
     draft = build_valid_draft(build, patches, **kwargs)
-    return approve_execution_draft(draft, approval_event(draft))
+    event = approval_event(draft)
+    return approve_execution_draft(
+        draft,
+        event,
+        consumption_root=event["consumption_root"],
+    )
 
 
 def task_context():
@@ -305,7 +312,11 @@ def test_approval_binds_exact_displayed_draft_and_hashes_event_and_plan():
     draft = build_valid_draft()
     event = approval_event(draft)
 
-    plan = approve_execution_draft(draft, event)
+    plan = approve_execution_draft(
+        draft,
+        event,
+        consumption_root=event["consumption_root"],
+    )
 
     assert plan["plan_state"] == "approved"
     assert plan["execution_approved"] is True
@@ -315,6 +326,50 @@ def test_approval_binds_exact_displayed_draft_and_hashes_event_and_plan():
     unsigned = dict(plan)
     del unsigned["plan_hash"]
     assert plan["plan_hash"] == content_hash(unsigned)
+
+
+def test_approval_requires_exact_existing_canonical_consumption_root(tmp_path):
+    draft = build_valid_draft()
+    root = tmp_path / "runs"
+    root.mkdir()
+    event = approval_event(draft, consumption_root=str(root.resolve()))
+
+    plan = approve_execution_draft(draft, event, consumption_root=root.resolve())
+
+    assert plan["approval_event"]["consumption_root"] == str(root.resolve())
+
+    other = tmp_path / "other"
+    other.mkdir()
+    with pytest.raises(ExecutionError, match="consumption root"):
+        approve_execution_draft(draft, event, consumption_root=other.resolve())
+    with pytest.raises(ExecutionError, match="consumption root"):
+        approve_execution_draft(
+            draft,
+            approval_event(draft, consumption_root="relative/runs"),
+            consumption_root=root.resolve(),
+        )
+    missing = tmp_path / "missing"
+    with pytest.raises(ExecutionError, match="existing"):
+        approve_execution_draft(
+            draft,
+            approval_event(draft, consumption_root=str(missing)),
+            consumption_root=missing,
+        )
+
+
+def test_approval_rejects_symlink_consumption_root_alias(tmp_path):
+    root = tmp_path / "runs"
+    root.mkdir()
+    alias = tmp_path / "runs-alias"
+    try:
+        alias.symlink_to(root, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"directory symlink unavailable: {exc}")
+    draft = build_valid_draft()
+    event = approval_event(draft, consumption_root=str(alias))
+
+    with pytest.raises(ExecutionError, match="canonical|alias|consumption root"):
+        approve_execution_draft(draft, event, consumption_root=alias)
 
 
 @pytest.mark.parametrize(
@@ -335,14 +390,24 @@ def test_approval_binds_exact_displayed_draft_and_hashes_event_and_plan():
 def test_approval_rejects_wrong_or_stale_event(event_changes, match):
     draft = build_valid_draft()
     with pytest.raises(ExecutionError, match=match):
-        approve_execution_draft(draft, approval_event(draft, **event_changes))
+        event = approval_event(draft, **event_changes)
+        approve_execution_draft(
+            draft,
+            event,
+            consumption_root=event.get("consumption_root", CONSUMPTION_ROOT),
+        )
 
 
 def test_approval_rejects_modified_or_stale_hashed_draft():
     draft = build_valid_draft()
     draft["patches"][0]["value"] = "modified after display"
+    event = approval_event(draft)
     with pytest.raises(ExecutionError, match="draft_hash"):
-        approve_execution_draft(draft, approval_event(draft))
+        approve_execution_draft(
+            draft,
+            event,
+            consumption_root=event["consumption_root"],
+        )
 
 
 def test_approval_rejects_event_with_missing_required_field():
@@ -350,7 +415,11 @@ def test_approval_rejects_event_with_missing_required_field():
     event = approval_event(draft)
     event.pop("actor")
     with pytest.raises(ExecutionError, match="schema"):
-        approve_execution_draft(draft, event)
+        approve_execution_draft(
+            draft,
+            event,
+            consumption_root=event["consumption_root"],
+        )
 
 
 def test_approval_consumption_is_bound_to_plan_and_stable_enqueue_request():
@@ -361,6 +430,7 @@ def test_approval_consumption_is_bound_to_plan_and_stable_enqueue_request():
     assert consumption["approval_id"] == plan["approval_id"]
     assert consumption["plan_hash"] == plan["plan_hash"]
     assert consumption["draft_hash"] == plan["draft_hash"]
+    assert consumption["consumption_root"] == plan["approval_event"]["consumption_root"]
     assert consumption["enqueue_request_id"] == "request-b-123"
     assert consumption["consumed_at"] == "2026-08-03T00:00:00Z"
     unsigned = dict(consumption)
@@ -582,6 +652,7 @@ def test_run_record_rejects_from_scratch_self_hashed_attacker_profile_plan():
             "approved_at": "2026-08-02T23:59:00Z",
             "expires_at": "2026-08-03T00:05:00Z",
             "scope": "enqueue-once",
+            "consumption_root": str(CONSUMPTION_ROOT),
             "actor": "attacker",
             "source": "attacker",
         },

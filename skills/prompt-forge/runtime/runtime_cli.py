@@ -18,6 +18,7 @@ from runtime.comfy_api import CapabilityError, ComfyApi
 from runtime.contracts import ContractError, canonical_json
 from runtime.execution import (
     ExecutionError,
+    _canonical_consumption_root,
     approve_execution_draft,
     build_approval_consumption,
     build_execution_draft,
@@ -158,10 +159,12 @@ def _write_approval_consumption(run_dir: Path, consumption: dict) -> Path:
     approval_id = consumption.get("approval_id")
     if not isinstance(approval_id, str) or re.fullmatch(r"[0-9a-f]{64}", approval_id) is None:
         raise ExecutionError("approval consumption requires a lowercase SHA-256 approval_id")
-    run_dir.mkdir(parents=True, exist_ok=True)
-    if not run_dir.is_dir():
-        raise OSError(f"run directory is not a directory: {run_dir}")
-    path = run_dir / f"{approval_id}.consumed.json"
+    canonical_run_dir = _canonical_consumption_root(run_dir, "CLI run-dir")
+    if consumption.get("consumption_root") != canonical_run_dir:
+        raise ExecutionError(
+            "approval consumption root does not match the CLI run-dir consumption root"
+        )
+    path = Path(canonical_run_dir) / f"{approval_id}.consumed.json"
     try:
         with path.open("x", encoding="utf-8", newline="\n") as handle:
             handle.write(canonical_json(consumption))
@@ -190,7 +193,11 @@ def _dispatch(command: str, payload: dict, args) -> dict | tuple[dict, int]:
         event = _require_object(payload.get("approval_event"), "approval_event")
         if set(payload) != {"draft", "approval_event"}:
             raise ExecutionError("approve-plan accepts only draft and approval_event")
-        approved = approve_execution_draft(draft, event)
+        approved = approve_execution_draft(
+            draft,
+            event,
+            consumption_root=args.run_dir,
+        )
         event_path = _write_execution_evidence(
             args.run_dir,
             event,

@@ -69,15 +69,15 @@ enqueue 前向用户展示最终 positive prompt、negative prompt、workflow/pr
 
 ### 8. 明确审批
 
-展示后才可从外部取得新的 approval event。事件必须精确绑定所展示的 `draft_hash`，且包含 `decision=approved`、UTC `displayed_at/approved_at/expires_at`、`scope=enqueue-once`、非空 `actor/source`；顺序为 `displayed_at <= approved_at <= trusted_now < expires_at`，总窗口不超过 600 秒。不要自动生成事件，不要把对话意图改写成事件，也不要交互式假确认。
+展示后才可从外部取得新的 approval event。事件必须精确绑定所展示的 `draft_hash`，且包含 `decision=approved`、UTC `displayed_at/approved_at/expires_at`、`scope=enqueue-once`、非空 `actor/source`，以及 caller run-dir 的 canonical resolved absolute `consumption_root`；该目录必须已存在，不能使用相对路径、parent/child 替换或 symlink/path alias。顺序为 `displayed_at <= approved_at <= trusted_now < expires_at`，总窗口不超过 600 秒。不要自动生成事件，不要把对话意图改写成事件，也不要交互式假确认。
 
 把 `{draft, approval_event}` 送入 `runtime_cli.py approve-plan --run-dir <dir>`。只有该命令返回的 `plan_state=approved`、`execution_approved=true` 计划可进入执行；approval event、approved plan 与 `approval_id` 必须在 caller run-dir 相邻保留。内容修改、错误 hash、事件过期、能力报告过期、workflow/profile 漂移或队列变化都使审批失效，必须重建、重展示并取得新事件。
 
-需要跨进程等待审批时，先把完整 immutable pending bundle 以 `pending-<draft_hash>.json` exclusive-create 到 caller run-dir：包含 draft、TaskContext/PromptBuild、profile、实际 history UI、source API graph/seed、exact patches、生成 draft 的 frozen CapabilityReport，以及前序实验的 prompt/history/artifact lineage。恢复必须显式提供绝对路径 `PROMPT_FORGE_PENDING_BUNDLE`，且路径位于同一 run-dir；从 bundle 内 frozen inputs 重建并核对 exact `draft_hash`，不得用新 CapabilityReport 替换后重建。bundle 被改、超过 600 秒、frozen report 失效或 approval 失效就停止。恢复路径不得重跑前序实验。
+需要跨进程等待审批时，先把完整 immutable pending bundle 以 `pending-<draft_hash>.json` exclusive-create 到 caller run-dir：包含 draft、TaskContext/PromptBuild、profile、实际 history UI、source API graph/seed、exact patches、生成 draft 的 frozen CapabilityReport、前序实验的 prompt/history/artifact lineage，以及 canonical `consumption_root`；root 纳入 `bundle_hash`。恢复必须显式提供绝对路径 `PROMPT_FORGE_PENDING_BUNDLE`，bundle 必须直接位于该 root，当前 resolved run-dir 必须与 bundle root 字符串完全相等；parent、child、另一个目录或 symlink/path alias 都拒绝。从 bundle 内 frozen inputs 重建并核对 exact `draft_hash`，不得用新 CapabilityReport 替换后重建。bundle 被改、超过 600 秒、frozen report 失效或 approval 失效就停止。恢复路径不得重跑前序实验。
 
 ### 9. Enqueue
 
-批准后获取新的只读 CapabilityReport，只用于确认当前资源、runtime classification 和队列安全；它不能替换 frozen report 或改变获批 draft。生成稳定 `enqueue_request_id`，把 `{approved_plan, enqueue_request_id}` 送入 `runtime_cli.py consume-approval --run-dir <dir>`。只有 atomic exclusive-create `<approval_id>.consumed.json` 成功后才能 POST；该文件已存在时一律拒绝，即使内容相同也不得幂等复用。
+批准后获取新的只读 CapabilityReport，只用于确认当前资源、runtime classification 和队列安全；它不能替换 frozen report 或改变获批 draft。生成稳定 `enqueue_request_id`，把 `{approved_plan, enqueue_request_id}` 送入 `runtime_cli.py consume-approval --run-dir <consumption_root>`。`approve-plan` 与 `consume-approval` 的 `--run-dir` 都必须 exact 等于 approval event 和 bundle 绑定的 canonical root；sentinel 只能写入该 namespace。只有 atomic exclusive-create `<approval_id>.consumed.json` 成功后才能 POST；该文件已存在时一律拒绝，即使内容相同也不得幂等复用。
 
 consume 成功后使用实际协商到的 MCP enqueue/monitor 能力提交 executable API graph，并把同一 `enqueue_request_id` 传给服务端。一次只提交一个 job。POST 超时、断连或返回不确定时不得删除 consumption 或盲目重试；服务器可能已经接收，必须先按 request/client id 查询 history。等待 terminal success/failure 后才开始下一实验。不要调用保存工作流、安装、删除或清理接口。生产路径必须有真实 MCP 能力协商证据；live REST A/B 只属于 render/graph characterization，不能证明 MCP 路径合规。
 

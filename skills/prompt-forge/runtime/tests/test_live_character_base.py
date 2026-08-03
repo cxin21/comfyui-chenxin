@@ -52,6 +52,7 @@ _PENDING_BUNDLE_KEYS = frozenset(
         "schema_version",
         "bundle_type",
         "created_at",
+        "consumption_root",
         "draft",
         "task_context",
         "prompt_build",
@@ -67,7 +68,7 @@ _PENDING_BUNDLE_KEYS = frozenset(
     }
 )
 _PENDING_INPUT_KEYS = _PENDING_BUNDLE_KEYS.difference(
-    {"schema_version", "bundle_type", "created_at", "bundle_hash"}
+    {"schema_version", "bundle_type", "created_at", "consumption_root", "bundle_hash"}
 )
 
 
@@ -473,6 +474,14 @@ def _validate_pending_bundle(bundle):
     )
     assert bundle["schema_version"] == "1.0"
     assert bundle["bundle_type"] == "character-base-b-pending"
+    root_text = bundle["consumption_root"]
+    assert isinstance(root_text, str) and Path(root_text).is_absolute(), (
+        "pending bundle consumption root must be absolute"
+    )
+    root_path = Path(root_text).resolve(strict=True)
+    assert root_path.is_dir() and str(root_path) == root_text, (
+        "pending bundle consumption root must be an existing canonical directory"
+    )
     unsigned = dict(bundle)
     claimed_hash = unsigned.pop("bundle_hash")
     assert claimed_hash == content_hash(unsigned), "pending bundle_hash is not self-consistent"
@@ -534,17 +543,20 @@ def _validate_pending_bundle(bundle):
 
 def _write_pending_bundle(run_dir, frozen_inputs):
     assert isinstance(frozen_inputs, dict) and set(frozen_inputs) == _PENDING_INPUT_KEYS
+    raw_root = Path(run_dir)
+    raw_root.mkdir(parents=True, exist_ok=True)
+    run_root = raw_root.resolve(strict=True)
+    assert str(raw_root) == str(run_root), "pending bundle consumption root must be canonical"
     report = frozen_inputs["capability_report"]
     bundle = {
         "schema_version": "1.0",
         "bundle_type": "character-base-b-pending",
         "created_at": report["generated_at"],
+        "consumption_root": str(run_root),
         **copy.deepcopy(frozen_inputs),
     }
     bundle["bundle_hash"] = content_hash(bundle)
     _validate_pending_bundle(bundle)
-    run_root = Path(run_dir).resolve()
-    run_root.mkdir(parents=True, exist_ok=True)
     path = run_root / f'pending-{bundle["draft"]["draft_hash"]}.json'
     try:
         with path.open("x", encoding="utf-8", newline="\n") as handle:
@@ -559,10 +571,19 @@ def _load_pending_bundle(bundle_path, run_dir):
     raw_path = Path(bundle_path)
     assert raw_path.is_absolute(), "PROMPT_FORGE_PENDING_BUNDLE must be an absolute path"
     assert raw_path.exists(), "PROMPT_FORGE_PENDING_BUNDLE does not exist"
-    run_root = Path(run_dir).resolve(strict=True)
+    raw_root = Path(run_dir)
+    assert raw_root.is_absolute(), "caller run-dir consumption root must be absolute"
+    run_root = raw_root.resolve(strict=True)
+    assert str(raw_root) == str(run_root), (
+        "caller run-dir consumption root must be canonical and must not use an alias"
+    )
     resolved = raw_path.resolve(strict=True)
-    assert resolved.is_relative_to(run_root), "pending bundle must remain under caller run-dir"
+    assert str(raw_path) == str(resolved), "pending bundle path must not use an alias"
     bundle = json.loads(resolved.read_text(encoding="utf-8"))
+    assert bundle.get("consumption_root") == str(run_root), (
+        "pending bundle consumption root must exactly match caller run-dir"
+    )
+    assert resolved.parent == run_root, "pending bundle must be directly inside consumption root"
     return _validate_pending_bundle(bundle)
 
 
@@ -601,7 +622,11 @@ def _load_external_approval(draft, run_dir):
     )
     event_path = Path(approval_file).resolve(strict=True)
     event = json.loads(event_path.read_text(encoding="utf-8"))
-    plan = approve_execution_draft(draft, event)
+    plan = approve_execution_draft(
+        draft,
+        event,
+        consumption_root=run_dir,
+    )
     retained_event = _write_json_evidence(
         run_dir / f'{plan["approval_id"]}.approval.json', event
     )
@@ -702,10 +727,15 @@ def _resume_live_b(run_dir, output_dir):
         bundle["source_api_graph"], _request_json("/object_info")
     )
 
+    consumption_root = Path(bundle["consumption_root"])
     plan, displayed_path, event_path, approved_plan_path = _load_external_approval(
-        draft, run_dir
+        draft, consumption_root
     )
-    plan = approve_execution_draft(draft, plan["approval_event"])
+    plan = approve_execution_draft(
+        draft,
+        plan["approval_event"],
+        consumption_root=consumption_root,
+    )
     executable = patch_character_base(
         bundle["source_api_graph"],
         bundle["prompt_build"],
@@ -717,7 +747,7 @@ def _resume_live_b(run_dir, output_dir):
     if not enqueue_request_id:
         enqueue_request_id = f"prompt-forge-{uuid.uuid4()}"
     consumption = build_approval_consumption(plan, enqueue_request_id)
-    consumption_path = _write_approval_consumption(run_dir, consumption)
+    consumption_path = _write_approval_consumption(consumption_root, consumption)
 
     # Consumption is intentionally not rolled back if POST raises or times out:
     # the server may already have accepted the request. Recovery must inspect
@@ -736,7 +766,7 @@ def _resume_live_b(run_dir, output_dir):
         set(experiment_a["artifact_hashes"]),
     )
     record, record_path, raw_history_path = _production_record(
-        run_dir,
+        consumption_root,
         bundle["task_context"],
         bundle["prompt_build"],
         bundle["source_api_graph"],
@@ -918,6 +948,44 @@ def test_pending_bundle_resume_rejects_missing_expired_or_modified_bundle(tmp_pa
     bundle_path.write_text(json.dumps(modified), encoding="utf-8")
     with pytest.raises(AssertionError, match="bundle_hash"):
         _load_pending_bundle(bundle_path, tmp_path)
+
+
+def test_parent_run_dir_cannot_load_bundle_bound_to_child(tmp_path, monkeypatch):
+    now = datetime(2026, 8, 3, 0, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(execution_module, "_utc_now", lambda: now)
+    parent = tmp_path / "runs"
+    child = parent / "child"
+    _, bundle_path = _write_pending_bundle(child, _pending_bundle_fixture(now))
+
+    with pytest.raises(AssertionError, match="consumption root"):
+        _load_pending_bundle(bundle_path, parent)
+
+
+def test_child_run_dir_cannot_load_bundle_bound_to_parent(tmp_path, monkeypatch):
+    now = datetime(2026, 8, 3, 0, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(execution_module, "_utc_now", lambda: now)
+    parent = tmp_path / "runs"
+    child = parent / "child"
+    _, bundle_path = _write_pending_bundle(parent, _pending_bundle_fixture(now))
+    child.mkdir()
+
+    with pytest.raises(AssertionError, match="consumption root"):
+        _load_pending_bundle(bundle_path, child)
+
+
+def test_symlink_run_dir_alias_cannot_load_pending_bundle(tmp_path, monkeypatch):
+    now = datetime(2026, 8, 3, 0, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(execution_module, "_utc_now", lambda: now)
+    root = tmp_path / "runs"
+    _, bundle_path = _write_pending_bundle(root, _pending_bundle_fixture(now))
+    alias = tmp_path / "runs-alias"
+    try:
+        alias.symlink_to(root, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"directory symlink unavailable: {exc}")
+
+    with pytest.raises(AssertionError, match="canonical|alias|consumption root"):
+        _load_pending_bundle(bundle_path, alias)
 
 
 @pytest.mark.parametrize(
