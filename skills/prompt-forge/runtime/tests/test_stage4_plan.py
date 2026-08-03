@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from runtime.stages import StageError, build_video_plan
+from runtime.stages import (
+    LTX_BASELINE_OUTPUT_HEIGHT,
+    LTX_BASELINE_OUTPUT_WIDTH,
+    StageError,
+    build_video_plan,
+    ltx_output_frame_count,
+)
 
 
 def _shot(accepted=True):
@@ -28,8 +34,26 @@ def test_video_plan_locks_one_second_baseline():
     plan = build_video_plan(_shot(), _build(), "wfhash", "profilehash", True)
     assert plan["stage"] == "video"
     assert plan["parameters"]["frames"] == 24
+    assert plan["parameters"]["output_frames"] == 25
     assert plan["parameters"]["fps"] == 24
+    assert plan["parameters"]["output_width"] == LTX_BASELINE_OUTPUT_WIDTH == 1024
+    assert plan["parameters"]["output_height"] == LTX_BASELINE_OUTPUT_HEIGHT == 704
     assert plan["source_shot_hash"] == "shot"
+
+
+def test_video_plan_rejects_unprofiled_output_canvas():
+    with pytest.raises(StageError, match="1024x704"):
+        build_video_plan(
+            _shot(), _build(), "wfhash", "profilehash", True,
+            output_width=1280,
+            output_height=720,
+        )
+
+
+def test_ltx_output_frame_count_uses_the_8n_plus_1_lattice():
+    assert ltx_output_frame_count(1) == 9
+    assert ltx_output_frame_count(24) == 25
+    assert ltx_output_frame_count(25) == 25
 
 
 def test_video_plan_rejects_second_negative_system():

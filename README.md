@@ -225,10 +225,10 @@ The character-to-video path is now represented as explicit, hash-bound stages:
 1. `accept-reference` records the human acceptance of one verified Flux angle.
 2. `plan-stage-execution` binds a Stage 3 camera img2img or Stage 4 Yusu Director plan to a fresh local capability report and the exact API graph.
 3. `approve-stage` and `consume-stage` require a newly displayed draft, an exact approval event, and an exclusive consumption record.
-4. `build-stage-submission` reconstructs the exact executable graph and request. `submit_stage(...)` is the only enqueue boundary, requires an injected trusted-local callable plus the canonical consumed-namespace receipt path, and reserves an exclusive submission intent before the call.
+4. `build-stage-submission` reconstructs the exact executable graph and request. `submit_stage(...)` is the only enqueue boundary, requires an injected trusted-local callable plus the canonical consumed-namespace receipt path, and reserves an exclusive submission intent before the call. `runtime.comfy_submit.ComfyPromptSubmitter` is only the local UTF-8 transport injected into that boundary; calling it directly does not prove approval, consumption, or idempotency.
 5. `record-stage` accepts only a succeeded receipt, matching raw history (when supplied), and a verified output artifact.
 
-No approval event is synthesized from chat text, and no JSON-only command claims to have enqueued a job. The current local runtime evidence is asymmetric: the promoted Flux v2 workflow has a successful live run; the current LTX Director profile validates with zero errors; the current saved camera workflow still has conversion errors (7 warnings / 3 errors), so camera upload and enqueue remain fail-closed until a fresh zero-error API conversion is available.
+No approval event is synthesized from chat text, and no JSON-only command claims to have enqueued a job. The local runtime evidence now covers the complete exploratory chain: Stage 1 front-base acceptance, Stage 2 multiview generation, Stage 3 camera img2img, and Stage 4 LTX video. The camera UI-to-API converter still reports the observed 7 warnings / 3 errors, so Stage 3 uses the pinned normalization bridge and submits the normalized graph with the original UI workflow attached as UTF-8 provenance; unrelated conversion drift remains fail-closed.
 
 ### Production profile correction (2026-08-03)
 
@@ -240,16 +240,24 @@ is retained for comparison because its current converter output contains
 unresolved custom-node buses and dangling references; it is not a safe fallback.
 No Stage 2 upload or enqueue is authorized without a fresh zero-error MCP
 conversion receipt, exact profile/API hash, explicit approval, and terminal
-artifact evidence. Stage 3 and Stage 4 live artifacts have not been generated
-in the current verification run.
+artifact evidence. A local exploratory run has now produced real evidence:
+Stage 2 prompt `3d8627ab-ec60-46b2-b648-77d8662412ed` completed successfully;
+Stage 3 prompt `fe64ee38-a437-44de-9c15-1de7d9bc1f75` produced
+`2026-08-03-231455_anima-aesthetic-v1.1_2026080304.png`; Stage 4 prompt
+`dd6f2956-1041-461c-a000-a766fb0c125f` produced `屿僳_00004_.mp4`.
+The local evidence is retained under `.live-artifacts/` (ignored from Git).
 The flat output map also avoids a false claim: node `761` is `rear_45`, node
 `609` is `rear`, and node `565` remains `side_unknown` because it emits a
 left/right batch whose per-image semantics are not yet pinned.
 Stage 4 additionally pins the Director graph's base model, all three LTX LoRAs,
 Euler sampler, `linear_quadratic` scheduler, and active `1280x720` resolution;
-the inactive custom `1280x736` widget is not treated as the output size. Any
-drift in these immutable nodes fails closed before timeline patching, and the
-full LTX profile digest is pinned so a caller cannot remove a contract and
-replace it with a self-authored profile hash.
+the inactive custom `1280x736` widget is not treated as the output size. Because
+the guide frame is 1216x832 and the Director uses `maintain aspect ratio` plus
+32-pixel snapping, the effective output contract is explicitly `1024x704`;
+the Stage 4 artifact verifier now checks width, height, 24 fps, and the LTX
+`8n+1` decoded frame rule (24 logical frames -> 25 output frames). Any drift in
+these inputs or output dimensions fails closed before the run record is accepted,
+and the full LTX profile digest is pinned so a caller cannot remove a contract
+and replace it with a self-authored profile hash.
 
 - Vault(Obsidian):`~/.claude/rules/obsidian-workflow.md`(workspace 规则)

@@ -35,6 +35,7 @@ from .execution import (
 )
 from .workflow_profile import structure_fingerprint
 from .multiview_evidence import MultiviewEvidenceError, validate_png_file
+from .stages import LTX_BASELINE_OUTPUT_HEIGHT, LTX_BASELINE_OUTPUT_WIDTH, ltx_output_frame_count
 
 
 class StageExecutionError(ValueError):
@@ -46,7 +47,7 @@ _PROMPT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _STAGES = frozenset(("shot-image", "video"))
 _LTX_PROFILE_ID = "ltx-yusu-director-v1"
 _LTX_WORKFLOW_NAME = "LTX全新导演台工作流.json"
-_LTX_PROFILE_HASH = "5f24f63df7241031bbc6e340759d974a117c685821c792f0b79478d3f8eaf664"
+_LTX_PROFILE_HASH = "6a5789c245525a1d04607f06f8e029b6ffef398fa49c625832cfd80411a22df9"
 
 _DRAFT_KEYS = frozenset(
     {
@@ -98,6 +99,7 @@ _SUBMISSION_KEYS = frozenset(
         "enqueue_request_id",
         "source_api_graph_hash",
         "executable_api_graph_hash",
+        "workflow_fingerprint",
         "api_graph",
         "request",
         "submission_hash",
@@ -187,8 +189,17 @@ def _stage_plan(plan: object, expected_stage: str | None = None) -> dict:
         _sha(plan.get("workflow_hash"), "stage plan workflow_hash")
         _sha(plan.get("source_shot_hash"), "stage plan source_shot_hash")
         parameters = plan.get("parameters")
-        if not isinstance(parameters, dict) or parameters.get("frames") != 24 or parameters.get("fps") != 24:
-            raise StageExecutionError("Stage 4 requires the fixed 24-frame/24-fps baseline")
+        if (
+            not isinstance(parameters, dict)
+            or parameters.get("frames") != 24
+            or parameters.get("output_frames") != ltx_output_frame_count(24)
+            or parameters.get("fps") != 24
+            or parameters.get("output_width") != LTX_BASELINE_OUTPUT_WIDTH
+            or parameters.get("output_height") != LTX_BASELINE_OUTPUT_HEIGHT
+        ):
+            raise StageExecutionError(
+                "Stage 4 requires the fixed 24-frame/25-output-frame/24-fps/1024x704 baseline"
+            )
     return copy.deepcopy(plan)
 
 
@@ -371,6 +382,12 @@ def build_stage_execution_draft(
             or profile.get("workflow_name") != _LTX_WORKFLOW_NAME
             or profile.get("runtime_classification") != "local"
             or profile.get("generation_modes") != ["image-to-video"]
+            or profile.get("output_frame_rule") != "8n+1"
+            or profile.get("baseline_output_frames") != ltx_output_frame_count(24)
+            or profile.get("effective_output_resolution")
+            != {"width": LTX_BASELINE_OUTPUT_WIDTH, "height": LTX_BASELINE_OUTPUT_HEIGHT}
+            or profile.get("effective_resize_method") != "maintain aspect ratio"
+            or profile.get("output_divisible_by") != 32
         ):
             raise StageExecutionError(
                 "Stage 4 requires the exact local LTX Director workflow profile"
@@ -618,6 +635,7 @@ def build_stage_submission(
     *,
     profile: dict,
     capability_report: dict,
+    ui_workflow: dict | None = None,
     reference_image_name: str | None = None,
     reference_artifact: dict | None = None,
     image_ref: dict | None = None,
@@ -632,7 +650,21 @@ def build_stage_submission(
     if not isinstance(source_api_graph, dict) or content_hash(source_api_graph) != plan["source_api_graph_hash"]:
         raise StageExecutionError("source API graph does not match the approved plan")
     stage_plan = plan["stage_plan"]
+    workflow_fingerprint = plan.get("workflow_fingerprint")
+    if not isinstance(workflow_fingerprint, str):
+        raise StageExecutionError("stage submission requires the approved workflow fingerprint")
+    if ui_workflow is not None:
+        if not isinstance(ui_workflow, dict):
+            raise StageExecutionError("stage submission UI workflow must be an object")
+        try:
+            actual_ui_fingerprint = structure_fingerprint(ui_workflow)
+        except (TypeError, ValueError, KeyError) as exc:
+            raise StageExecutionError("stage submission UI workflow is malformed") from exc
+        if actual_ui_fingerprint != workflow_fingerprint:
+            raise StageExecutionError("stage submission UI workflow fingerprint does not match the approved plan")
     if plan["stage"] == "shot-image":
+        if not isinstance(ui_workflow, dict):
+            raise StageExecutionError("Stage 3 submission requires the current camera UI workflow")
         if reference_image_name is None:
             raise StageExecutionError("Stage 3 submission requires a reference image name")
         accepted_reference = _validate_reference_acceptance(reference_artifact, stage_plan.get("reference_hash"))
@@ -674,8 +706,11 @@ def build_stage_submission(
             "prompt_forge_execution_plan_hash": plan["execution_plan_hash"],
             "prompt_forge_consumption_id": consumption["consumption_id"],
             "prompt_forge_enqueue_request_id": consumption["enqueue_request_id"],
+            "prompt_forge_workflow_fingerprint": workflow_fingerprint,
         },
     }
+    if ui_workflow is not None:
+        request["extra_data"]["extra_pnginfo"] = {"workflow": copy.deepcopy(ui_workflow)}
     submission = {
         "schema_version": "1.0",
         "stage": plan["stage"],
@@ -688,6 +723,7 @@ def build_stage_submission(
         "enqueue_request_id": consumption["enqueue_request_id"],
         "source_api_graph_hash": plan["source_api_graph_hash"],
         "executable_api_graph_hash": plan["executable_api_graph_hash"],
+        "workflow_fingerprint": workflow_fingerprint,
         "api_graph": executable,
         "request": request,
     }
@@ -764,7 +800,15 @@ def submit_stage(
         or submission.get("stage") not in _STAGES
     ):
         raise StageExecutionError("stage submission is invalid")
-    for field in ("execution_plan_hash", "draft_hash", "approval_id", "consumption_id", "source_api_graph_hash", "executable_api_graph_hash"):
+    for field in (
+        "execution_plan_hash",
+        "draft_hash",
+        "approval_id",
+        "consumption_id",
+        "source_api_graph_hash",
+        "executable_api_graph_hash",
+        "workflow_fingerprint",
+    ):
         _sha(submission.get(field), f"stage submission {field}")
     _text(submission.get("enqueue_request_id"), "stage submission enqueue_request_id")
     if not isinstance(submission.get("api_graph"), dict) or not isinstance(submission.get("request"), dict):
@@ -905,6 +949,7 @@ def _validate_stage_submission(submission: object, plan: dict) -> dict:
         or submission.get("execution_plan_hash") != plan["execution_plan_hash"]
         or submission.get("draft_hash") != plan["draft_hash"]
         or submission.get("approval_id") != plan["approval_id"]
+        or submission.get("workflow_fingerprint") != plan.get("workflow_fingerprint")
     ):
         raise StageExecutionError("stage submission does not match the approved plan")
     try:
@@ -920,6 +965,7 @@ def _validate_stage_submission(submission: object, plan: dict) -> dict:
         "consumption_id",
         "source_api_graph_hash",
         "executable_api_graph_hash",
+        "workflow_fingerprint",
     ):
         _sha(submission.get(field), f"stage submission {field}")
     _text(submission.get("enqueue_request_id"), "stage submission enqueue_request_id")
@@ -947,9 +993,30 @@ def _validate_submission_request(submission: dict) -> None:
         "prompt_forge_execution_plan_hash": submission.get("execution_plan_hash"),
         "prompt_forge_consumption_id": submission.get("consumption_id"),
         "prompt_forge_enqueue_request_id": submission.get("enqueue_request_id"),
+        "prompt_forge_workflow_fingerprint": submission.get("workflow_fingerprint"),
     }
-    if request.get("extra_data") != expected_extra:
+    extra_data = request.get("extra_data")
+    if not isinstance(extra_data, dict):
         raise StageExecutionError("stage submission request provenance does not match submission")
+    if any(extra_data.get(key) != value for key, value in expected_extra.items()):
+        raise StageExecutionError("stage submission request provenance does not match submission")
+    unexpected = set(extra_data) - set(expected_extra) - {"extra_pnginfo"}
+    if unexpected:
+        raise StageExecutionError("stage submission request provenance contains unexpected fields")
+    pnginfo = extra_data.get("extra_pnginfo")
+    if pnginfo is not None and (
+        not isinstance(pnginfo, dict) or not isinstance(pnginfo.get("workflow"), dict)
+    ):
+        raise StageExecutionError("stage submission request UI provenance is invalid")
+    if pnginfo is not None:
+        try:
+            actual_ui_fingerprint = structure_fingerprint(pnginfo["workflow"])
+        except (TypeError, ValueError, KeyError) as exc:
+            raise StageExecutionError("stage submission request UI workflow is malformed") from exc
+        if actual_ui_fingerprint != submission.get("workflow_fingerprint"):
+            raise StageExecutionError(
+                "stage submission request UI provenance fingerprint does not match the approved workflow"
+            )
 
 
 def _validate_artifact_bytes(artifact: dict, stage_plan: dict) -> dict:
@@ -988,7 +1055,9 @@ def _validate_artifact_bytes(artifact: dict, stage_plan: dict) -> dict:
         verified = verify_video_artifact(
             metadata,
             stage_plan["parameters"]["fps"],
-            stage_plan["parameters"]["frames"],
+            stage_plan["parameters"]["output_frames"],
+            expected_width=stage_plan["parameters"]["output_width"],
+            expected_height=stage_plan["parameters"]["output_height"],
             source_shot_hash=stage_plan["source_shot_hash"],
             artifact_path=resolved,
         )

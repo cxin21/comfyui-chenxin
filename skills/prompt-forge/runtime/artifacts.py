@@ -347,6 +347,8 @@ def verify_video_artifact(
     expected_fps: int,
     expected_frames: int,
     *,
+    expected_width: int | None = None,
+    expected_height: int | None = None,
     lineage_id: str | None = None,
     source_shot_hash: str | None = None,
     artifact_path: Path | None = None,
@@ -358,16 +360,57 @@ def verify_video_artifact(
         raise ArtifactError("expected fps must be a positive integer")
     if not isinstance(expected_frames, int) or isinstance(expected_frames, bool) or expected_frames <= 0:
         raise ArtifactError("expected frame count must be a positive integer")
+    if (expected_width is None) != (expected_height is None):
+        raise ArtifactError("expected video width and height must be provided together")
+    for value, label in ((expected_width, "expected video width"), (expected_height, "expected video height")):
+        if value is not None and (not isinstance(value, int) or isinstance(value, bool) or value <= 0):
+            raise ArtifactError(f"{label} must be a positive integer")
+
+    resolved: Path | None = None
+    probed: dict | None = None
+    if artifact_path is not None:
+        if not isinstance(artifact_path, Path):
+            raise ArtifactError("video artifact_path must be a pathlib.Path")
+        try:
+            resolved = artifact_path.resolve(strict=True)
+        except (OSError, RuntimeError) as exc:
+            raise ArtifactError("video artifact_path does not exist") from exc
+        if not resolved.is_file():
+            raise ArtifactError("video artifact_path is not a file")
+        # A caller-supplied metadata object is only a claim.  Once bytes are
+        # available, ffprobe is the authority for technical acceptance.
+        probed = probe_video(resolved)
+
     filename = metadata.get("filename")
     if not isinstance(filename, str) or not filename.strip() or filename != filename.strip():
         raise ArtifactError("video filename is invalid")
     size_bytes = metadata.get("size_bytes")
     if not isinstance(size_bytes, int) or isinstance(size_bytes, bool) or size_bytes <= 0:
         raise ArtifactError("video artifact is empty")
+    if probed is not None:
+        for key in ("filename", "size_bytes", "fps", "frame_count", "width", "height"):
+            declared = metadata.get(key)
+            actual = probed.get(key)
+            if declared is not None and declared != actual:
+                raise ArtifactError(f"declared video {key} does not match the artifact bytes")
+        # Use the probed values below, even when the declaration omitted an
+        # optional field such as width or height.
+        filename = probed["filename"]
+        size_bytes = probed["size_bytes"]
+        metadata = probed
     if metadata.get("fps") != expected_fps:
         raise ArtifactError("video fps does not match the expected plan")
     if metadata.get("frame_count") != expected_frames:
         raise ArtifactError("video frame count does not match the expected plan")
+    width = metadata.get("width")
+    height = metadata.get("height")
+    if expected_width is not None:
+        if not isinstance(width, int) or isinstance(width, bool) or width <= 0:
+            raise ArtifactError("video width is missing or invalid")
+        if not isinstance(height, int) or isinstance(height, bool) or height <= 0:
+            raise ArtifactError("video height is missing or invalid")
+        if width != expected_width or height != expected_height:
+            raise ArtifactError("video dimensions do not match the expected plan")
 
     result = {
         "schema_version": "1.0",
@@ -378,6 +421,10 @@ def verify_video_artifact(
         "fps": expected_fps,
         "frame_count": expected_frames,
     }
+    if isinstance(width, int) and not isinstance(width, bool) and width > 0:
+        result["width"] = width
+    if isinstance(height, int) and not isinstance(height, bool) and height > 0:
+        result["height"] = height
     if lineage_id is not None:
         if not isinstance(lineage_id, str) or not _SAFE_IDENTIFIER_RE.fullmatch(lineage_id):
             raise ArtifactError("video lineage_id is invalid")
@@ -386,14 +433,8 @@ def verify_video_artifact(
         if not isinstance(source_shot_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", source_shot_hash):
             raise ArtifactError("video source_shot_hash is invalid")
         result["source_shot_hash"] = source_shot_hash
-    if artifact_path is not None:
-        if not isinstance(artifact_path, Path):
-            raise ArtifactError("video artifact_path must be a pathlib.Path")
-        try:
-            resolved = artifact_path.resolve(strict=True)
-        except (OSError, RuntimeError) as exc:
-            raise ArtifactError("video artifact_path does not exist") from exc
-        if not resolved.is_file() or resolved.name != filename:
+    if resolved is not None:
+        if resolved.name != filename:
             raise ArtifactError("video artifact_path does not match metadata")
         result["artifact_path"] = str(resolved)
         result["content_hash"] = _sha256_file(resolved)

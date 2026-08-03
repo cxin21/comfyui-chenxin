@@ -377,7 +377,7 @@ def _dispatch(command: str, payload: dict, args) -> dict | tuple[dict, int]:
             raise CliUsageError("build-stage-submission is missing required evidence")
         optional = {
             key: payload[key]
-            for key in ("reference_image_name", "reference_artifact", "image_ref")
+            for key in ("ui_workflow", "reference_image_name", "reference_artifact", "image_ref")
             if key in payload
         }
         return build_stage_submission(
@@ -396,6 +396,8 @@ def _dispatch(command: str, payload: dict, args) -> dict | tuple[dict, int]:
             metadata,
             expected_fps,
             expected_frames,
+            expected_width=payload.get("expected_width"),
+            expected_height=payload.get("expected_height"),
             lineage_id=payload.get("lineage_id"),
             source_shot_hash=payload.get("source_shot_hash"),
             artifact_path=artifact_path,

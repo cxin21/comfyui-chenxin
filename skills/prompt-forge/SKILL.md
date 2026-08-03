@@ -12,7 +12,7 @@ The character-to-video pipeline is ordered and fail-closed:
 1. `accept-reference` is the only transition that makes a verified Flux angle reusable by Stage 3.
 2. `plan-stage-execution` binds the Stage 3 camera img2img or Stage 4 Yusu Director graph to a fresh local capability report, profile hash, and immutable PromptBuild lineage.
 3. `approve-stage` requires a newly displayed exact draft hash; `consume-stage` uses an exclusive one-time consumption record.
-4. `build-stage-submission` reconstructs the exact graph/request. Only `submit_stage(...)` with an injected trusted-local enqueue callable and the canonical consumed-namespace receipt path may cross the external side-effect boundary; it first writes an exclusive submission-intent sentinel.
+4. `build-stage-submission` reconstructs the exact graph/request. Only `submit_stage(...)` with an injected trusted-local enqueue callable and the canonical consumed-namespace receipt path may cross the external side-effect boundary; it first writes an exclusive submission-intent sentinel. `runtime.comfy_submit.ComfyPromptSubmitter` is transport-only and must be injected there; calling its POST method directly bypasses approval and idempotency evidence.
 5. `record-stage` requires a succeeded receipt, matching raw history when available, and a verified PNG/video artifact with lineage and technical metadata.
 
 Never synthesize approval from chat text, never treat a UI screenshot as an executable graph, and never claim a ComfyUI enqueue without a real response receipt. The camera source has one explicit `normalize-camera` bridge for the observed converter losses (LoRA widget text, disabled output switch and known orphan branches); it is an allowlisted, pinned repair of an MCP-produced graph, not a generic UI-to-API converter or a hand-written workflow. Any other conversion error remains a hard stop.
@@ -43,9 +43,13 @@ Director graph's model, all three LTX LoRAs (including the guide LoRA), Euler
 sampler, `linear_quadratic` scheduler, and the active `1280x720` selector. The
 saved `custom_height=736` value is intentionally not treated as active because
 the selector's `use_custom_resolution` is false; drift in any pinned node is
-rejected before the timeline patch. The complete profile digest is pinned in
-the Stage 4 execution boundary, so a caller cannot remove a contract and
-replace it with a self-authored profile hash.
+rejected before the timeline patch. The selector is a target box: the fixed
+Stage 3 camera canvas plus `maintain aspect ratio` and 32-pixel snapping produce
+an effective `1024x704` video canvas, which is part of the profile and is checked
+from ffprobe metadata at artifact acceptance. LTX's 24 logical timeline frames
+decode on the `8n+1` lattice to 25 output frames. The complete profile digest is
+pinned in the Stage 4 execution boundary, so a caller cannot remove a contract
+and replace it with a self-authored profile hash.
 
 Prompt Forge 把用户意图编译为模型方言，并把本地 ComfyUI 执行绑定到可审计证据。默认只编译；生成是独立阶段。编译器始终保持 `execution.performed=false`。
 

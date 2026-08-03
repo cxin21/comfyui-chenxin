@@ -15,6 +15,27 @@ class StageError(ValueError):
 
 _G1_NODE_IDS = [21, 58, 57, 59]
 
+# The profiled LTX Director graph requests a 1280x720 target box, but its
+# maintain-aspect-ratio image adapter snaps the 1216x832 Stage 3 camera frame
+# to the model's 32-pixel lattice.  The resulting production baseline is
+# therefore 1024x704.  Keep this explicit so a changed upstream canvas cannot
+# silently alter the video contract.
+LTX_BASELINE_OUTPUT_WIDTH = 1024
+LTX_BASELINE_OUTPUT_HEIGHT = 704
+
+
+def ltx_output_frame_count(duration_frames: int) -> int:
+    """Return LTX's decoded pixel-frame count for a timeline duration.
+
+    Yusu's LTX Director converts a logical duration to the model's temporal
+    ``8n+1`` pixel-frame lattice.  A 24-frame timeline therefore decodes to
+    25 frames; treating the two numbers as identical makes a valid render
+    fail artifact verification.
+    """
+    if not isinstance(duration_frames, int) or isinstance(duration_frames, bool) or duration_frames <= 0:
+        raise StageError("LTX duration_frames must be a positive integer")
+    return max(9, ((duration_frames - 1 + 7) // 8) * 8 + 1)
+
 
 def _required_text(value: object, label: str) -> str:
     if not isinstance(value, str) or not value.strip():
@@ -199,6 +220,17 @@ def build_video_plan(*args, **kwargs):
         raise StageError("video baseline must use 24 frames")
     if not isinstance(fps, int) or isinstance(fps, bool) or fps != 24:
         raise StageError("video baseline must use 24 fps")
+    output_width = kwargs.get("output_width", LTX_BASELINE_OUTPUT_WIDTH)
+    output_height = kwargs.get("output_height", LTX_BASELINE_OUTPUT_HEIGHT)
+    if (
+        not isinstance(output_width, int)
+        or isinstance(output_width, bool)
+        or output_width != LTX_BASELINE_OUTPUT_WIDTH
+        or not isinstance(output_height, int)
+        or isinstance(output_height, bool)
+        or output_height != LTX_BASELINE_OUTPUT_HEIGHT
+    ):
+        raise StageError("video baseline output must use the profiled 1024x704 canvas")
     plan = {
         "schema_version": "1.0",
         "stage": "video",
@@ -216,7 +248,15 @@ def build_video_plan(*args, **kwargs):
         "prompt_intent_hash": content_hash(intent) if intent is not None else None,
         "director_node_id": 174,
         "negative_node_id": 195,
-        "parameters": {"frames": frames, "fps": fps, "start_frame": 0, "end_frame": frames - 1},
+        "parameters": {
+            "frames": frames,
+            "output_frames": ltx_output_frame_count(frames),
+            "fps": fps,
+            "output_width": output_width,
+            "output_height": output_height,
+            "start_frame": 0,
+            "end_frame": frames - 1,
+        },
         "patches": [
             {"slot": "director.timeline_data", "node_id": 174, "value": "segment-0001"},
             {"slot": "director.local_prompts", "node_id": 174, "value": prompt_build["prompt"]},

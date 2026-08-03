@@ -32,6 +32,7 @@ def _contract_graph():
     profile = _contract_profile()
     for node_id, node in profile["immutable_node_inputs"].items():
         graph[node_id] = copy.deepcopy(node)
+    graph["174"]["inputs"].update(profile["director_immutable_inputs"])
     return graph
 
 
@@ -100,6 +101,30 @@ def test_immutable_ltx_inputs_are_pinned_and_drift_is_rejected():
     graph["196"]["inputs"]["unet_name"] = "drifted-model.gguf"
     with pytest.raises(YusuTimelineError, match="immutable node 196"):
         validate_yusu_immutable_inputs(graph, profile)
+
+
+def test_director_output_inputs_are_pinned_and_drift_is_rejected():
+    profile = _contract_profile()
+    graph = _contract_graph()
+    validate_yusu_immutable_inputs(graph, profile)
+
+    graph["174"]["inputs"]["resize_method"] = "crop"
+    with pytest.raises(YusuTimelineError, match="director immutable input resize_method"):
+        validate_yusu_immutable_inputs(graph, profile)
+
+
+def test_immutable_numeric_inputs_accept_json_int_float_round_trip():
+    profile = _contract_profile()
+    graph = _contract_graph()
+    graph["135"] = {
+        "class_type": "BasicScheduler",
+        "inputs": {"denoise": 1.0},
+    }
+    profile["immutable_node_inputs"]["135"] = {
+        "class_type": "BasicScheduler",
+        "inputs": {"denoise": 1},
+    }
+    validate_yusu_immutable_inputs(graph, profile)
 
 
 def test_pinned_ltx_profile_contains_live_workflow_identity():

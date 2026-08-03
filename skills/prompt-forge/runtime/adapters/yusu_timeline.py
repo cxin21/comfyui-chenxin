@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import numbers
 from pathlib import PurePosixPath
 
 from ..contracts import canonical_json
@@ -56,6 +57,21 @@ def _node(graph: dict, node_id: int, label: str) -> dict:
     return value
 
 
+def _immutable_values_match(actual: object, expected: object) -> bool:
+    """Compare pinned inputs while accepting JSON's int/float equivalence."""
+    if (
+        isinstance(actual, numbers.Real)
+        and not isinstance(actual, bool)
+        and isinstance(expected, numbers.Real)
+        and not isinstance(expected, bool)
+    ):
+        return actual == expected
+    try:
+        return canonical_json(actual) == canonical_json(expected)
+    except (TypeError, ValueError) as exc:
+        raise YusuTimelineError("Yusu immutable input is not canonical JSON") from exc
+
+
 def validate_yusu_immutable_inputs(graph: dict, profile: dict) -> None:
     """Reject drift in the profiled model, LoRA, sampler, scheduler, and resolution nodes."""
     if not isinstance(graph, dict):
@@ -63,9 +79,13 @@ def validate_yusu_immutable_inputs(graph: dict, profile: dict) -> None:
     if not isinstance(profile, dict):
         raise YusuTimelineError("Yusu profile must be an object")
     contracts = profile.get("immutable_node_inputs")
-    if contracts is None:
+    director_contract = profile.get("director_immutable_inputs")
+    if contracts is None and director_contract is None:
         return
-    if not isinstance(contracts, dict) or not contracts:
+    director_id, _, _, _ = _profile_ids(profile)
+    if contracts is None:
+        contracts = {}
+    if not isinstance(contracts, dict):
         raise YusuTimelineError("Yusu immutable_node_inputs must be a non-empty object")
     for node_id, expected in contracts.items():
         node = graph.get(str(node_id))
@@ -84,11 +104,31 @@ def validate_yusu_immutable_inputs(graph: dict, profile: dict) -> None:
             if input_name not in actual_inputs:
                 raise YusuTimelineError(f"Yusu immutable node {node_id} input {input_name} drifted")
             try:
-                matches = canonical_json(actual_inputs[input_name]) == canonical_json(expected_value)
-            except (TypeError, ValueError) as exc:
-                raise YusuTimelineError(f"Yusu immutable node {node_id} input {input_name} is not canonical JSON") from exc
+                matches = _immutable_values_match(actual_inputs[input_name], expected_value)
+            except YusuTimelineError as exc:
+                raise YusuTimelineError(
+                    f"Yusu immutable node {node_id} input {input_name} is not canonical JSON"
+                ) from exc
             if not matches:
                 raise YusuTimelineError(f"Yusu immutable node {node_id} input {input_name} drifted")
+
+    if director_contract is not None:
+        if not isinstance(director_contract, dict) or not director_contract:
+            raise YusuTimelineError("Yusu director_immutable_inputs must be a non-empty object")
+        director = _node(graph, director_id, "director")
+        for input_name, expected_value in director_contract.items():
+            if not isinstance(input_name, str) or not input_name:
+                raise YusuTimelineError("Yusu director immutable input name is invalid")
+            if input_name not in director["inputs"]:
+                raise YusuTimelineError(f"Yusu director immutable input {input_name} is missing")
+            try:
+                matches = _immutable_values_match(director["inputs"][input_name], expected_value)
+            except YusuTimelineError as exc:
+                raise YusuTimelineError(
+                    f"Yusu director immutable input {input_name} is not canonical JSON"
+                ) from exc
+            if not matches:
+                raise YusuTimelineError(f"Yusu director immutable input {input_name} drifted")
 
 
 def _safe_image_ref(image_ref: object) -> dict:

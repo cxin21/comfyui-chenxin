@@ -1,10 +1,17 @@
+import hashlib
+import json
+import subprocess
+
 import pytest
 
 from runtime.artifacts import (
+    ArtifactError,
     ArtifactNormalizationError,
     accept_stage3_reference,
     is_stage3_reference_eligible,
     normalize_image_outputs,
+    probe_video,
+    verify_video_artifact,
 )
 
 
@@ -174,13 +181,6 @@ def test_stage3_reference_eligibility_requires_acceptance_semantics_and_verified
     assert is_stage3_reference_eligible(artifact) is True
     artifact["hash_verified"] = False
     assert is_stage3_reference_eligible(artifact) is False
-import subprocess
-
-import pytest
-
-from runtime.artifacts import ArtifactError, probe_video, verify_video_artifact
-
-
 def test_video_requires_expected_fps_and_frames():
     result = verify_video_artifact(
         {"filename": "clip.mp4", "size_bytes": 1000, "fps": 24, "frame_count": 24},
@@ -188,6 +188,40 @@ def test_video_requires_expected_fps_and_frames():
         expected_frames=24,
     )
     assert result["artifact_type"] == "VideoClip"
+
+
+def test_video_dimensions_are_part_of_the_optional_technical_contract():
+    result = verify_video_artifact(
+        {
+            "filename": "clip.mp4",
+            "size_bytes": 1000,
+            "fps": 24,
+            "frame_count": 25,
+            "width": 1024,
+            "height": 704,
+        },
+        expected_fps=24,
+        expected_frames=25,
+        expected_width=1024,
+        expected_height=704,
+    )
+    assert result["width"] == 1024
+    assert result["height"] == 704
+    with pytest.raises(ArtifactError, match="dimensions"):
+        verify_video_artifact(
+            {
+                "filename": "clip.mp4",
+                "size_bytes": 1000,
+                "fps": 24,
+                "frame_count": 25,
+                "width": 1024,
+                "height": 704,
+            },
+            expected_fps=24,
+            expected_frames=25,
+            expected_width=1280,
+            expected_height=704,
+        )
 
 
 def test_empty_video_fails():
@@ -223,6 +257,40 @@ def test_ffprobe_reads_real_one_second_fixture(tmp_path):
     assert metadata["frame_count"] == 24
 
 
+def test_video_verification_does_not_trust_declared_metadata(tmp_path):
+    target = tmp_path / "clip.mp4"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=black:s=64x64:r=24",
+            "-t",
+            "1",
+            "-pix_fmt",
+            "yuv420p",
+            str(target),
+        ],
+        check=True,
+    )
+    metadata = probe_video(target)
+    metadata["frame_count"] = 25
+    metadata["width"] = 1024
+    metadata["height"] = 704
+    with pytest.raises(ArtifactError, match="declared video frame_count"):
+        verify_video_artifact(
+            metadata,
+            expected_fps=24,
+            expected_frames=25,
+            expected_width=1024,
+            expected_height=704,
+            artifact_path=target,
+        )
+
+
 def _eligible_reference():
     return {
         "artifact_type": "CharacterAngleView",
@@ -245,7 +313,6 @@ def test_stage3_reference_acceptance_is_explicit_and_self_hashed():
     assert accepted["acceptance"]["artifact_hash"] == "a" * 64
     unsigned = dict(accepted["acceptance"])
     acceptance_id = unsigned.pop("acceptance_id")
-    import hashlib, json
     assert acceptance_id == hashlib.sha256(
         json.dumps(unsigned, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()

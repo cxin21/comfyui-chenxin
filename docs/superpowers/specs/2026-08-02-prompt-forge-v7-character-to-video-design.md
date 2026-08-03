@@ -385,7 +385,11 @@ The current workflow contains:
 - `YusuLTXDirector`, node `174`;
 - `YusuLTXDirectorGuide`, node `175`;
 - fixed negative `CLIPTextEncode`, node `195`;
-- 24 fps and a current one-second / 24-frame timeline;
+- 24 fps and a current one-second / 24-frame logical timeline; Yusu decodes
+  this on its `8n+1` lattice as 25 output frames;
+- an active `1280x720` target selector whose fixed 1216x832 guide input,
+  `maintain aspect ratio`, and 32-pixel snap yield an effective `1024x704`
+  output canvas;
 - local LTX 2.3 GGUF, text encoders, VAEs and three referenced LTX LoRAs.
 
 The guide image and local prompt are not independent scalar inputs. They are
@@ -401,14 +405,15 @@ embedded in the `timeline_data` JSON stored by `YusuLTXDirector`. A dedicated
 - total start/end/duration frames and seconds.
 
 The adapter must parse and reserialize JSON; string replacement is forbidden.
-The default minimal experiment uses one image segment, one prompt, 24 frames at
-24 fps and the existing workflow models/settings.
+The default minimal experiment uses one image segment, one prompt, 24 logical
+frames at 24 fps, the existing workflow models/settings, and therefore expects
+25 decoded frames at 1024x704.
 
 **Output artifact:** `VideoClip`.
 
 Acceptance checks:
 
-- video decodes and has the planned frame count/fps;
+- video decodes with 25 output frames at 24 fps and the planned 1024x704 canvas;
 - first-frame identity matches the ShotImage;
 - instructed primary motion occurs;
 - no unrequested new subject or shot cut appears;

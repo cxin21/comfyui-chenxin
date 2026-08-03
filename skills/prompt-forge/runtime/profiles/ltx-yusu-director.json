@@ -17,6 +17,11 @@
   },
   "baseline_frames": 24,
   "baseline_fps": 24,
+  "output_frame_rule": "8n+1",
+  "baseline_output_frames": 25,
+  "effective_output_resolution": {"width": 1024, "height": 704},
+  "effective_resize_method": "maintain aspect ratio",
+  "output_divisible_by": 32,
   "allowed_mutations": [
     "director.timeline_data",
     "director.local_prompts",
@@ -94,6 +99,12 @@
         "retake_mode": false
       }
     }
+  },
+  "director_immutable_inputs": {
+    "resize_method": "maintain aspect ratio",
+    "divisible_by": 32,
+    "use_ic_video_size": false,
+    "img_compression": 0
   },
   "expected_outputs": ["video"]
 }

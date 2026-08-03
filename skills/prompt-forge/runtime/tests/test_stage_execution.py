@@ -127,6 +127,7 @@ def _video_graph():
     profile = _yusu_profile()
     for node_id, node in profile.get("immutable_node_inputs", {}).items():
         graph[node_id] = copy.deepcopy(node)
+    graph["174"]["inputs"].update(profile["director_immutable_inputs"])
     return graph
 
 
@@ -331,18 +332,47 @@ def test_stage_consumption_and_submission_require_canonical_evidence(tmp_path):
         path,
         profile=_camera_profile(),
         capability_report=report,
+        ui_workflow=_shot_ui(),
         reference_image_name="ref.png",
         reference_artifact=_accepted_reference(),
     )
     assert submission["api_graph"]["21"]["inputs"]["image"] == "ref.png"
     assert submission["stage"] == "shot-image"
     assert submission["request"]["client_id"] == "shot-request-1"
+    assert submission["request"]["extra_data"]["extra_pnginfo"]["workflow"] == _shot_ui()
     with pytest.raises(stage_execution.StageExecutionError, match="missing"):
         stage_execution.build_stage_submission(
             approved, _shot_graph(), consumption, path.with_name("wrong.json"),
             profile=_camera_profile(), capability_report=report, reference_image_name="ref.png",
+            ui_workflow=_shot_ui(),
             reference_artifact=_accepted_reference(),
         )
+
+
+def test_stage_submission_rejects_tampered_ui_provenance(tmp_path):
+    report = _capability_report()
+    draft = stage_execution.build_stage_execution_draft(
+        _shot_plan(report), _shot_graph(), _camera_profile(), report,
+        ui_workflow=_shot_ui(), image_name="ref.png", reference_artifact=_accepted_reference(),
+    )
+    approved = stage_execution.approve_stage_execution_draft(draft, _event(draft, tmp_path), tmp_path)
+    consumption = stage_execution.build_stage_consumption(approved, "shot-request-provenance")
+    path = stage_execution.write_stage_consumption(tmp_path, consumption)
+    submission = stage_execution.build_stage_submission(
+        approved,
+        _shot_graph(),
+        consumption,
+        path,
+        profile=_camera_profile(),
+        capability_report=report,
+        ui_workflow=_shot_ui(),
+        reference_image_name="ref.png",
+        reference_artifact=_accepted_reference(),
+    )
+    tampered = copy.deepcopy(submission)
+    tampered["request"]["extra_data"]["extra_pnginfo"]["workflow"]["nodes"][0]["title"] = "tampered"
+    with pytest.raises(stage_execution.StageExecutionError, match="UI provenance fingerprint"):
+        stage_execution._validate_submission_request(tampered)
 
 
 def test_video_submission_patches_yusu_timeline_and_preserves_workflow_negative(tmp_path):
@@ -464,6 +494,7 @@ def test_submit_stage_uses_injected_callable_once_and_writes_receipt(tmp_path):
     submission = stage_execution.build_stage_submission(
         approved, _shot_graph(), consumption, consumption_path,
         profile=_camera_profile(), capability_report=report, reference_image_name="ref.png",
+        ui_workflow=_shot_ui(),
         reference_artifact=_accepted_reference(),
     )
     calls = []
@@ -551,6 +582,7 @@ def test_stage_run_record_binds_receipt_history_and_png_bytes(tmp_path):
     submission = stage_execution.build_stage_submission(
         approved, source_graph, consumption, consumption_path,
         profile=_camera_profile(), capability_report=report, reference_image_name="ref.png",
+        ui_workflow=_shot_ui(),
         reference_artifact=_accepted_reference(),
     )
     receipt = stage_execution.submit_stage(

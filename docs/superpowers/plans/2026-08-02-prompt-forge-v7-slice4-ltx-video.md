@@ -409,8 +409,8 @@ resource preflight and explicit approval. Add `plan-video`, `patch-yusu`,
 The live test changes one logical variable in the validated LTX workflow: replace
 the one timeline segment with the accepted ShotImage and video PromptBuild.
 Preserve model, LoRAs, sampler, scheduler, resolution and fixed negative node.
-Assert terminal success, 24 frames at 24 fps, non-empty video, exact guide/prompt
-hashes and `VIDEO_READY`.
+Assert terminal success, 25 decoded frames at 24 fps on the effective 1024x704
+canvas, non-empty video, exact guide/prompt hashes and `VIDEO_READY`.
 
 If preflight reports insufficient free VRAM, verify queue is empty, request the
 adapter's normal cache-release operation, regenerate CapabilityReport and record
