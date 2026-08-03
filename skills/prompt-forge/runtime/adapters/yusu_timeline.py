@@ -56,6 +56,41 @@ def _node(graph: dict, node_id: int, label: str) -> dict:
     return value
 
 
+def validate_yusu_immutable_inputs(graph: dict, profile: dict) -> None:
+    """Reject drift in the profiled model, LoRA, sampler, scheduler, and resolution nodes."""
+    if not isinstance(graph, dict):
+        raise YusuTimelineError("Yusu API graph must be an object")
+    if not isinstance(profile, dict):
+        raise YusuTimelineError("Yusu profile must be an object")
+    contracts = profile.get("immutable_node_inputs")
+    if contracts is None:
+        return
+    if not isinstance(contracts, dict) or not contracts:
+        raise YusuTimelineError("Yusu immutable_node_inputs must be a non-empty object")
+    for node_id, expected in contracts.items():
+        node = graph.get(str(node_id))
+        if not isinstance(expected, dict):
+            raise YusuTimelineError(f"Yusu immutable node {node_id} contract is malformed")
+        expected_type = expected.get("class_type")
+        expected_inputs = expected.get("inputs")
+        if not isinstance(expected_type, str) or not expected_type or not isinstance(expected_inputs, dict):
+            raise YusuTimelineError(f"Yusu immutable node {node_id} contract is malformed")
+        if not isinstance(node, dict) or node.get("class_type") != expected_type:
+            raise YusuTimelineError(f"Yusu immutable node {node_id} class_type drifted")
+        actual_inputs = node.get("inputs")
+        if not isinstance(actual_inputs, dict):
+            raise YusuTimelineError(f"Yusu immutable node {node_id} inputs are malformed")
+        for input_name, expected_value in expected_inputs.items():
+            if input_name not in actual_inputs:
+                raise YusuTimelineError(f"Yusu immutable node {node_id} input {input_name} drifted")
+            try:
+                matches = canonical_json(actual_inputs[input_name]) == canonical_json(expected_value)
+            except (TypeError, ValueError) as exc:
+                raise YusuTimelineError(f"Yusu immutable node {node_id} input {input_name} is not canonical JSON") from exc
+            if not matches:
+                raise YusuTimelineError(f"Yusu immutable node {node_id} input {input_name} drifted")
+
+
 def _safe_image_ref(image_ref: object) -> dict:
     if not isinstance(image_ref, dict):
         raise YusuTimelineError("Yusu image reference must be an object")
@@ -126,6 +161,7 @@ def patch_yusu_timeline(
         raise YusuTimelineError("Yusu fps must be a positive integer")
     image = _safe_image_ref(image_ref)
     director_id, negative_id, baseline_frames, baseline_fps = _profile_ids(profile)
+    validate_yusu_immutable_inputs(graph, profile)
     if frames != baseline_frames or fps != baseline_fps:
         raise YusuTimelineError("Yusu timeline must use the profiled baseline frame rate and length")
     director = _node(graph, director_id, "director")
@@ -167,6 +203,7 @@ def patch_yusu_timeline(
 def validate_yusu_sync(graph: dict, profile: dict) -> None:
     """Validate timeline JSON and every derived scalar field."""
     director_id, negative_id, frames, fps = _profile_ids(profile)
+    validate_yusu_immutable_inputs(graph, profile)
     director = _node(graph, director_id, "director")
     negative = _node(graph, negative_id, "negative")
     if director.get("class_type") != "YusuLTXDirector":

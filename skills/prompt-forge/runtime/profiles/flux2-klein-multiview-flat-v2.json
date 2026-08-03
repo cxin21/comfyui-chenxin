@@ -51,7 +51,7 @@
     },
     "761": {
       "artifact_type": "CharacterAngleView",
-      "view_label": "right_45"
+      "view_label": "rear_45"
     },
     "565": {
       "artifact_type": "CharacterAngleView",
@@ -59,7 +59,7 @@
     },
     "609": {
       "artifact_type": "CharacterAngleView",
-      "view_label": "side_unknown"
+      "view_label": "rear"
     },
     "224": {
       "artifact_type": "CharacterSheet",

@@ -21,6 +21,32 @@ Never synthesize approval from chat text, never treat a UI screenshot as an exec
 
 For `文生图相机视角.json`, retain the exact UI workflow and the MCP-produced API/strip graph as source evidence. If MCP conversion reports the known missing `Lora Loader (LoraManager).text` or missing `images` on nodes `35/490`, call `runtime_cli.py normalize-camera` with `{api_graph, ui_workflow, profile}`. The command first requires UI node `26` to remain the profiled `Lora Loader (LoraManager)` and rejects a non-empty API LoRA text that conflicts with the UI literal; only the observed missing/`null` input is repaired. It verifies the pinned post-process chain `76 → 96 → 111`, reconnects both output sinks to node `111`, and removes only the pinned orphan set `[28, 41, 52, 62, 67, 70, 77]` after proving no removed node feeds a retained node. Then re-run MCP `validate_workflow(health=true)` and `check_workflow_runtime`; only zero errors, zero health warnings, `runtime=local`, an unchanged saved workflow, and a UI fingerprint matching the verified `camera-anima-v1` profile can proceed. The normalized graph hash—not the broken pre-normalization graph hash—must be used consistently in the draft, approval, submission, history, and RunRecord lineage.
 
+### Production workflow selection (2026-08-03)
+
+The production Stage 2 profile is `flux2-klein-multiview-flat-v2` and loads
+`PromptForge-Flux2-Klein-multiview-flat-v2.json`. Its live UI fingerprint is
+`9dc2b01e2aea0b051113b187b134d007f452df6c83cfcbbd8d325eaa4c29e4da`; the
+current API graph validates with zero errors and zero health warnings and is
+classified as local. The similarly named original
+`Flux2-Klein人物一键多视图工作流.json` remains an audit/reference candidate,
+not the production path, because its current converter output contains
+unresolved custom-node buses and dangling references. Do not silently fall back
+to that graph: if the promoted flat profile is unavailable or its fingerprint,
+API hash, runtime, or validation evidence drifts, stop before upload or enqueue.
+The promoted output map labels node `761` as `rear_45` and node `609` as `rear`;
+node `565` emits a mixed side-view batch and remains `side_unknown` until
+per-image batch semantics are explicitly profiled.
+Stage 4 accepts only profile `ltx-yusu-director-v1` with the exact UTF-8 saved
+workflow name `LTX全新导演台工作流.json`; a caller-authored or mojibake profile
+is rejected before the Yusu timeline is patched. The profile also pins the live
+Director graph's model, all three LTX LoRAs (including the guide LoRA), Euler
+sampler, `linear_quadratic` scheduler, and the active `1280x720` selector. The
+saved `custom_height=736` value is intentionally not treated as active because
+the selector's `use_custom_resolution` is false; drift in any pinned node is
+rejected before the timeline patch. The complete profile digest is pinned in
+the Stage 4 execution boundary, so a caller cannot remove a contract and
+replace it with a self-authored profile hash.
+
 Prompt Forge 把用户意图编译为模型方言，并把本地 ComfyUI 执行绑定到可审计证据。默认只编译；生成是独立阶段。编译器始终保持 `execution.performed=false`。
 
 ## 不可突破的边界
@@ -108,6 +134,11 @@ consume 成功后使用实际协商到的 MCP enqueue/monitor 能力提交 execu
 旧格式 RunRecord 若只有 `execution_approved=true`、没有绑定 displayed `draft_hash` 的严格 approval event，只能作为历史 render/graph/history 证据；它连当次展示后审批都不能证明，更不能授权新执行。不得追溯补造事件或把旧记录升级为 production approval evidence。
 
 ### Stage 2：Flux 多视图交接
+
+> The numbered Stage 2 notes below describe the original workflow evidence. For
+> production execution, the promoted flat-v2 profile and its zero-warning MCP
+> conversion described above are authoritative; the legacy fingerprint is not a
+> fallback.
 
 Stage 2 只接受已成功且 history 已核对的 Stage 1 RunRecord，以及独立接受的 `CharacterBaseImage` descriptor。descriptor 必须包含真实 PNG 的 lowercase SHA-256、与 RunRecord 相同的 `source_record_hash`、安全 `lineage_id`、canonical `artifact_root/artifact_path`，并明确 `visual_acceptance.front_facing=true` 与 `identity_visible=true`。路径必须实际位于 root 内，文件字节 hash、RunRecord output hash 与 descriptor hash 必须三者相等。`DiagnosticImage`、未接受 artifact、错误 type、空/伪 hash、lineage 不一致或未通过 front-facing acceptance 一律拒绝。
 

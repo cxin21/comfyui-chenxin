@@ -28,7 +28,7 @@ WORKFLOW_NAME = "PromptForge-Flux2-Klein-multiview-flat-v2.json"
 FINGERPRINT = "9dc2b01e2aea0b051113b187b134d007f452df6c83cfcbbd8d325eaa4c29e4da"
 SOURCE_API_GRAPH_HASH = "450e6e6570a7c21aee6bc2bd32d19ac579e3460de9ccc1eca456b0dd960eec36"
 PROMOTION_RECEIPT_HASH = "f6bb0a07c6d0f25723a2c139d76cb2c710a04b77ebeb2a08672ec41009564ba0"
-PROFILE_DIGEST_V2 = "828f2f40c62fc7a4331fed7f3c077061971cce32629a10231012a27e306999d1"
+PROFILE_DIGEST_V2 = "8ba6e83db893e44f1f48369b4a46df6104e00ab921744031e41656d37602b091"
 OUTPUTS = ["image/png"]
 SLOTS = {"base_image_primary": 111, "base_image_secondary": 667}
 SELECTORS = {
@@ -36,12 +36,22 @@ SELECTORS = {
     "base_image_secondary": {"id": 667, "type": "LoadImage"},
 }
 POSE_IDS = [368, 151, 152, 154, 360, 364, 148, 149, 147, 373, 150, 367]
-OUTPUT_NODES = {
+OUTPUT_NODES_V1 = {
     "524": {"artifact_type": "CharacterAngleView", "view_label": "front_closeup"},
     "663": {"artifact_type": "CharacterAngleView", "view_label": "front"},
     "761": {"artifact_type": "CharacterAngleView", "view_label": "right_45"},
     "565": {"artifact_type": "CharacterAngleView", "view_label": "side_unknown"},
     "609": {"artifact_type": "CharacterAngleView", "view_label": "side_unknown"},
+    "224": {"artifact_type": "CharacterSheet", "view_label": "sheet"},
+    "338": {"artifact_type": "CharacterSheet", "view_label": "sheet"},
+    "201": {"artifact_type": "CharacterSheet", "view_label": "sheet"},
+}
+OUTPUT_NODES = {
+    "524": {"artifact_type": "CharacterAngleView", "view_label": "front_closeup"},
+    "663": {"artifact_type": "CharacterAngleView", "view_label": "front"},
+    "761": {"artifact_type": "CharacterAngleView", "view_label": "rear_45"},
+    "565": {"artifact_type": "CharacterAngleView", "view_label": "side_unknown"},
+    "609": {"artifact_type": "CharacterAngleView", "view_label": "rear"},
     "224": {"artifact_type": "CharacterSheet", "view_label": "sheet"},
     "338": {"artifact_type": "CharacterSheet", "view_label": "sheet"},
     "201": {"artifact_type": "CharacterSheet", "view_label": "sheet"},
@@ -171,7 +181,8 @@ def validate_profile(profile: object, profile_id: object) -> None:
         raise MultiviewEvidenceError("Flux profile requires the verified nodes 111/667 selectors")
     if profile.get("immutable_roles") != {"pose_references": POSE_IDS}:
         raise MultiviewEvidenceError("Flux profile requires the exact immutable pose references")
-    if profile.get("output_nodes") != OUTPUT_NODES:
+    expected_output_nodes = OUTPUT_NODES if profile_id == PROFILE_ID else OUTPUT_NODES_V1
+    if profile.get("output_nodes") != expected_output_nodes:
         raise MultiviewEvidenceError("Flux profile requires the exact trusted output-node map")
     if content_hash(profile) != expected_digest:
         raise MultiviewEvidenceError("Flux profile does not match the trusted digest")

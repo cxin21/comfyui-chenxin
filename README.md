@@ -230,4 +230,26 @@ The character-to-video path is now represented as explicit, hash-bound stages:
 
 No approval event is synthesized from chat text, and no JSON-only command claims to have enqueued a job. The current local runtime evidence is asymmetric: the promoted Flux v2 workflow has a successful live run; the current LTX Director profile validates with zero errors; the current saved camera workflow still has conversion errors (7 warnings / 3 errors), so camera upload and enqueue remain fail-closed until a fresh zero-error API conversion is available.
 
+### Production profile correction (2026-08-03)
+
+Stage 2 production uses `PromptForge-Flux2-Klein-multiview-flat-v2.json`, not
+the legacy `Flux2-Klein人物一键多视图工作流.json`. The promoted flat graph has
+fingerprint `9dc2b01e2aea0b051113b187b134d007f452df6c83cfcbbd8d325eaa4c29e4da`,
+validates with zero errors/health warnings, and is local-only. The legacy graph
+is retained for comparison because its current converter output contains
+unresolved custom-node buses and dangling references; it is not a safe fallback.
+No Stage 2 upload or enqueue is authorized without a fresh zero-error MCP
+conversion receipt, exact profile/API hash, explicit approval, and terminal
+artifact evidence. Stage 3 and Stage 4 live artifacts have not been generated
+in the current verification run.
+The flat output map also avoids a false claim: node `761` is `rear_45`, node
+`609` is `rear`, and node `565` remains `side_unknown` because it emits a
+left/right batch whose per-image semantics are not yet pinned.
+Stage 4 additionally pins the Director graph's base model, all three LTX LoRAs,
+Euler sampler, `linear_quadratic` scheduler, and active `1280x720` resolution;
+the inactive custom `1280x736` widget is not treated as the output size. Any
+drift in these immutable nodes fails closed before timeline patching, and the
+full LTX profile digest is pinned so a caller cannot remove a contract and
+replace it with a self-authored profile hash.
+
 - Vault(Obsidian):`~/.claude/rules/obsidian-workflow.md`(workspace 规则)

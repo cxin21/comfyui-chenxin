@@ -44,6 +44,9 @@ class StageExecutionError(ValueError):
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _PROMPT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _STAGES = frozenset(("shot-image", "video"))
+_LTX_PROFILE_ID = "ltx-yusu-director-v1"
+_LTX_WORKFLOW_NAME = "LTX全新导演台工作流.json"
+_LTX_PROFILE_HASH = "5f24f63df7241031bbc6e340759d974a117c685821c792f0b79478d3f8eaf664"
 
 _DRAFT_KEYS = frozenset(
     {
@@ -363,6 +366,24 @@ def build_stage_execution_draft(
     else:
         if not isinstance(image_ref, dict):
             raise StageExecutionError("Stage 4 requires a shot image reference")
+        if (
+            profile.get("profile_id") != _LTX_PROFILE_ID
+            or profile.get("workflow_name") != _LTX_WORKFLOW_NAME
+            or profile.get("runtime_classification") != "local"
+            or profile.get("generation_modes") != ["image-to-video"]
+        ):
+            raise StageExecutionError(
+                "Stage 4 requires the exact local LTX Director workflow profile"
+            )
+        if profile_digest != _LTX_PROFILE_HASH:
+            raise StageExecutionError("Stage 4 requires the trusted LTX profile contract")
+        profile_fingerprint = profile.get("workflow_fingerprint")
+        if (
+            workflow_fingerprint is None
+            or not re.fullmatch(r"[0-9a-f]{64}", profile_fingerprint or "")
+            or workflow_fingerprint != profile_fingerprint
+        ):
+            raise StageExecutionError("Stage 4 workflow fingerprint does not match the LTX profile")
         _validate_image_ref(image_ref, plan.get("source_shot_hash"))
         try:
             if plan.get("workflow_hash") is not None and plan["workflow_hash"] != source_hash:

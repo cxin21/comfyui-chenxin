@@ -9,6 +9,7 @@ import pytest
 from runtime.adapters.yusu_timeline import (
     YusuTimelineError,
     patch_yusu_timeline,
+    validate_yusu_immutable_inputs,
     validate_yusu_sync,
 )
 
@@ -20,6 +21,18 @@ PROFILE_FILE = Path(__file__).parents[1] / "profiles" / "ltx-yusu-director.json"
 
 def _graph():
     return json.loads(FIXTURE.read_text(encoding="utf-8"))
+
+
+def _contract_profile():
+    return json.loads(PROFILE_FILE.read_text(encoding="utf-8"))
+
+
+def _contract_graph():
+    graph = _graph()
+    profile = _contract_profile()
+    for node_id, node in profile["immutable_node_inputs"].items():
+        graph[node_id] = copy.deepcopy(node)
+    return graph
 
 
 def test_one_segment_is_patched_and_derived_fields_match():
@@ -79,9 +92,20 @@ def test_unsafe_image_reference_is_rejected():
         patch_yusu_timeline(_graph(), {"imageFile": "../shot.png", "imageB64": "/api/view?a"}, "move", 24, 24, PROFILE)
 
 
+def test_immutable_ltx_inputs_are_pinned_and_drift_is_rejected():
+    profile = _contract_profile()
+    graph = _contract_graph()
+    validate_yusu_immutable_inputs(graph, profile)
+
+    graph["196"]["inputs"]["unet_name"] = "drifted-model.gguf"
+    with pytest.raises(YusuTimelineError, match="immutable node 196"):
+        validate_yusu_immutable_inputs(graph, profile)
+
+
 def test_pinned_ltx_profile_contains_live_workflow_identity():
     profile = json.loads(PROFILE_FILE.read_text(encoding="utf-8"))
     assert profile["profile_id"] == "ltx-yusu-director-v1"
+    assert profile["workflow_name"] == "LTX全新导演台工作流.json"
     assert profile["workflow_fingerprint"] == "cc9f26b0855e74202619d639afe0b4c9b1831a3c227e1ec6d1029d5b309c0c5a"
     assert profile["director_node_id"] == 174
     assert profile["negative_node_id"] == 195

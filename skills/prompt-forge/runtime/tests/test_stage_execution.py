@@ -123,7 +123,11 @@ def _video_build():
 
 
 def _video_graph():
-    return json.loads((FIXTURES / "yusu-api-minimal.json").read_text(encoding="utf-8"))
+    graph = json.loads((FIXTURES / "yusu-api-minimal.json").read_text(encoding="utf-8"))
+    profile = _yusu_profile()
+    for node_id, node in profile.get("immutable_node_inputs", {}).items():
+        graph[node_id] = copy.deepcopy(node)
+    return graph
 
 
 def _video_plan(graph):
@@ -133,7 +137,7 @@ def _video_plan(graph):
         content_hash(graph),
         content_hash(_yusu_profile()),
         True,
-        workflow_fingerprint="f" * 64,
+        workflow_fingerprint=_yusu_profile()["workflow_fingerprint"],
     )
 
 
@@ -361,6 +365,91 @@ def test_video_submission_patches_yusu_timeline_and_preserves_workflow_negative(
     timeline = json.loads(submission["api_graph"]["174"]["inputs"]["timeline_data"])
     assert timeline["segments"][0]["imageFile"] == "shots/shot.png"
     assert submission["api_graph"]["195"] == graph["195"]
+
+
+def test_video_execution_rejects_wrong_ltx_profile():
+    graph = _video_graph()
+    plan = _video_plan(graph)
+    image_ref = {
+        "artifact_type": "ShotImage",
+        "accepted": True,
+        "content_hash": plan["source_shot_hash"],
+        "imageFile": "shots/shot.png",
+        "imageB64": "/api/view?filename=shot.png",
+    }
+    report = _capability_report()
+    plan["capability_report_hash"] = content_hash(report)
+    profile = _yusu_profile()
+    # The final assignment below intentionally invalidates the profile.
+    profile["workflow_name"] = "wrong-ltx-mojibake.json"
+    plan["profile_hash"] = content_hash(profile)
+    plan["plan_hash"] = content_hash({key: value for key, value in plan.items() if key != "plan_hash"})
+    with pytest.raises(stage_execution.StageExecutionError, match="exact local LTX"):
+        stage_execution.build_stage_execution_draft(
+            plan, graph, profile, report, image_ref=image_ref,
+        )
+
+
+def test_video_execution_rejects_unpinned_ltx_contract():
+    graph = _video_graph()
+    plan = _video_plan(graph)
+    image_ref = {
+        "artifact_type": "ShotImage",
+        "accepted": True,
+        "content_hash": plan["source_shot_hash"],
+        "imageFile": "shots/shot.png",
+        "imageB64": "/api/view?filename=shot.png",
+    }
+    report = _capability_report()
+    profile = _yusu_profile()
+    profile["immutable_node_inputs"].pop("175")
+    plan["profile_hash"] = content_hash(profile)
+    plan["capability_report_hash"] = content_hash(report)
+    plan["plan_hash"] = content_hash({key: value for key, value in plan.items() if key != "plan_hash"})
+    with pytest.raises(stage_execution.StageExecutionError, match="trusted LTX"):
+        stage_execution.build_stage_execution_draft(
+            plan, graph, profile, report, image_ref=image_ref,
+        )
+
+
+def test_video_execution_rejects_profile_fingerprint_drift():
+    graph = _video_graph()
+    plan = _video_plan(graph)
+    plan["workflow_fingerprint"] = "0" * 64
+    image_ref = {
+        "artifact_type": "ShotImage",
+        "accepted": True,
+        "content_hash": plan["source_shot_hash"],
+        "imageFile": "shots/shot.png",
+        "imageB64": "/api/view?filename=shot.png",
+    }
+    report = _capability_report()
+    plan["capability_report_hash"] = content_hash(report)
+    plan["plan_hash"] = content_hash({key: value for key, value in plan.items() if key != "plan_hash"})
+    with pytest.raises(stage_execution.StageExecutionError, match="workflow fingerprint"):
+        stage_execution.build_stage_execution_draft(
+            plan, graph, _yusu_profile(), report, image_ref=image_ref,
+        )
+
+
+def test_video_execution_rejects_ltx_sampler_drift():
+    graph = _video_graph()
+    graph["128"]["inputs"]["sampler_name"] = "ddim"
+    plan = _video_plan(graph)
+    image_ref = {
+        "artifact_type": "ShotImage",
+        "accepted": True,
+        "content_hash": plan["source_shot_hash"],
+        "imageFile": "shots/shot.png",
+        "imageB64": "/api/view?filename=shot.png",
+    }
+    report = _capability_report()
+    plan["capability_report_hash"] = content_hash(report)
+    plan["plan_hash"] = content_hash({key: value for key, value in plan.items() if key != "plan_hash"})
+    with pytest.raises(stage_execution.StageExecutionError, match="immutable node 128"):
+        stage_execution.build_stage_execution_draft(
+            plan, graph, _yusu_profile(), report, image_ref=image_ref,
+        )
 
 
 def test_submit_stage_uses_injected_callable_once_and_writes_receipt(tmp_path):

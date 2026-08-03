@@ -63,6 +63,15 @@ def test_v2_profile_is_pinned_without_replacing_v1():
     assert v2["promotion_receipt_hash"] == multiview_evidence.PROMOTION_RECEIPT_HASH
 
 
+def test_v2_output_map_does_not_claim_the_rear_view_is_right_45():
+    profile = json.loads(V2_PROFILE_PATH.read_text(encoding="utf-8"))
+    assert profile["output_nodes"]["761"]["view_label"] == "rear_45"
+    assert profile["output_nodes"]["609"]["view_label"] == "rear"
+    # Node 565 emits a batch containing both left/right side prompts; keep it
+    # explicitly ambiguous until per-image batch semantics are profiled.
+    assert profile["output_nodes"]["565"]["view_label"] == "side_unknown"
+
+
 def test_live_promotion_receipt_hash_binds_fresh_run_and_normalization():
     receipt = {
         "schema_version": "2.0",
@@ -268,6 +277,7 @@ def _v2_promotion_evidence():
         workflow_fingerprint="4" * 64,
         source_api_graph_hash=content_hash(graph),
         promotion_receipt_hash=content_hash(receipt),
+        output_nodes=copy.deepcopy(multiview_evidence.OUTPUT_NODES),
     )
     return profile, receipt, ui_workflow, graph, validation, runtime
 

@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "profile_id": "ltx-yusu-director-v1",
-  "workflow_name": "LTX鍏ㄦ柊瀵兼紨鍙板伐浣滄祦.json",
+  "workflow_name": "LTX全新导演台工作流.json",
   "workflow_fingerprint": "cc9f26b0855e74202619d639afe0b4c9b1831a3c227e1ec6d1029d5b309c0c5a",
   "api_graph_hash": "b34a6c69421c4e67783e208f18afe0d43b96d9a66a93e8f758444d262f627ff5",
   "generation_modes": ["image-to-video"],
@@ -35,11 +35,65 @@
     "model": "ltx-2.3-22b-distilled-Q4_K_M.gguf",
     "loras": [
       "LTX\\Ltx2.3-Licon-VBVR-I2V-240K-R32.safetensors",
-      "LTX\\ltx-2.3-22b-ic-lora-refocus.safetensors"
+      "LTX\\ltx-2.3-22b-ic-lora-refocus.safetensors",
+      "LTX\\LTX-2.3-Licon-MSR-V1.safetensors"
     ],
     "sampler": "euler",
     "scheduler": "linear_quadratic",
-    "resolution": {"width": 1280, "height": 736}
+    "resolution": {"width": 1280, "height": 720}
+  },
+  "immutable_node_inputs": {
+    "196": {
+      "class_type": "UnetLoaderGGUF",
+      "inputs": {"unet_name": "ltx-2.3-22b-distilled-Q4_K_M.gguf"}
+    },
+    "80": {
+      "class_type": "LoraLoaderModelOnly",
+      "inputs": {
+        "lora_name": "LTX\\Ltx2.3-Licon-VBVR-I2V-240K-R32.safetensors",
+        "strength_model": 0.7
+      }
+    },
+    "114": {
+      "class_type": "LoraLoaderModelOnly",
+      "inputs": {
+        "lora_name": "LTX\\ltx-2.3-22b-ic-lora-refocus.safetensors",
+        "strength_model": 0.7
+      }
+    },
+    "128": {
+      "class_type": "KSamplerSelect",
+      "inputs": {"sampler_name": "euler"}
+    },
+    "135": {
+      "class_type": "BasicScheduler",
+      "inputs": {"scheduler": "linear_quadratic", "steps": 8, "denoise": 1}
+    },
+    "139": {
+      "class_type": "TTResolutionSelector",
+      "inputs": {
+        "use_custom_resolution": false,
+        "resolution": "1280x720 (16:9) (\u6a2a\u5c4f)",
+        "custom_width": 1280,
+        "custom_height": 736
+      }
+    },
+    "175": {
+      "class_type": "YusuLTXDirectorGuide",
+      "inputs": {
+        "ic_lora_name": "LTX\\LTX-2.3-Licon-MSR-V1.safetensors",
+        "ic_lora_strength": 1,
+        "scale_by": 1,
+        "upscale_method": "bicubic",
+        "image_attention_strength": 1,
+        "crop": "center",
+        "auto_snap_ic_grid": true,
+        "use_tiled_encode": false,
+        "tile_size": 256,
+        "tile_overlap": 64,
+        "retake_mode": false
+      }
+    }
   },
   "expected_outputs": ["video"]
 }
