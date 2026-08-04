@@ -16,7 +16,8 @@ from pathlib import Path
 
 import pytest
 
-from runtime.execution import ExecutionError, validate_multiview_mcp_preflight
+from runtime.contracts import content_hash
+from runtime.execution import ExecutionError, _bind_multiview_view_plan, validate_multiview_mcp_preflight
 
 
 LIVE = os.environ.get("PROMPT_FORGE_LIVE") == "1"
@@ -69,6 +70,32 @@ raise SystemExit(1)
     )
     result = subprocess.run([sys.executable, "-O", "-c", code], check=False, env=env)
     assert result.returncode == 0
+
+
+def test_stage2_view_binding_hashes_switches_outputs_and_orientation_evidence():
+    profile = {
+        "schema_version": "1.0", "profile_id": "flux2-klein-view-selection-v1",
+        "base_profile_id": "flux2-klein-multiview-flat-v2", "workflow_id": "prompt-forge-flat-v2",
+        "workflow_name": "PromptForge-Flux2-Klein-multiview-flat-v2.json",
+        "workflow_fingerprint": "9dc2b01e2aea0b051113b187b134d007f452df6c83cfcbbd8d325eaa4c29e4da",
+        "source_api_graph_hash": "450e6e6570a7c21aee6bc2bd32d19ac579e3460de9ccc1eca456b0dd960eec36",
+        "slots": {"base_image_primary": {"id": 111, "type": "LoadImage"}, "base_image_secondary": {"id": 667, "type": "LoadImage"}},
+        "view_plan": {"switches": {"731": {"input": "boolean", "type": "ImpactBoolean"}}, "prompt_slots": {}, "seed_slots": {}, "dimension_slots": {}},
+        "immutable_roles": {"pose_references": [368, 151, 152, 154, 360, 364, 148, 149, 147, 373, 150, 367]},
+        "output_nodes": {"663": {"artifact_type": "CharacterAngleView", "view_label": "front"}, "609": {"artifact_type": "CharacterAngleView", "view_label": "rear"}},
+    }
+    view_plan = {"views": ["front", "rear"], "switches": {"731": True}, "orientation_evidence": {"front": {"source": "profile-output-map", "verified": True}, "rear": {"source": "profile-output-map", "verified": True}}}
+    binding = _bind_multiview_view_plan(view_plan, profile)
+    assert binding["view_plan_hash"] == content_hash(view_plan)
+    assert binding["requested_views"] == ["front", "rear"]
+    assert binding["output_map"] == {"609": {"artifact_type": "CharacterAngleView", "view_label": "rear"}, "663": {"artifact_type": "CharacterAngleView", "view_label": "front"}}
+    assert binding["switch_patch"] == {"731": True}
+    assert binding["orientation_evidence"] == view_plan["orientation_evidence"]
+
+
+def test_stage2_view_binding_rejects_grouped_flux_profile():
+    with pytest.raises(ExecutionError, match="flat-v2|flat v2"):
+        _bind_multiview_view_plan({"views": ["front"]}, {"profile_id": "flux2-klein-view-selection-v1", "base_profile_id": "flux2-klein-multiview-v1", "workflow_id": "grouped-reference-only", "workflow_name": "Flux2-Klein人物一键多视图工作流.json"})
 
 
 @LIVE_MARK

@@ -51,6 +51,10 @@ _CHARACTER_BASE_SELECTORS = {
     },
 }
 _MULTIVIEW_STAGE = "character-multiview"
+_VIEW_SELECTION_FINGERPRINT = "9dc2b01e2aea0b051113b187b134d007f452df6c83cfcbbd8d325eaa4c29e4da"
+_VIEW_SELECTION_SOURCE_API_GRAPH_HASH = "450e6e6570a7c21aee6bc2bd32d19ac579e3460de9ccc1eca456b0dd960eec36"
+_VIEW_SELECTION_PROFILE_HASH = "d225a4be9a9fb9e41cb4c823ebf824d500e5b30f016c9c6c00d5728162f9ebda"
+_VIEW_SELECTION_PROFILE_PATH = Path(__file__).parent / "profiles" / "flux2-klein-view-selection.json"
 _PATCH_KEYS = frozenset(("slot", "input", "value"))
 _TERMINAL_STATUSES = frozenset(("succeeded", "failed"))
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -138,6 +142,13 @@ _MULTIVIEW_DRAFT_KEYS = frozenset(
         "workflow_fingerprint",
         "source_api_graph_hash",
         "executable_api_graph_hash",
+        "view_selection_profile_hash",
+        "view_plan_hash",
+        "view_plan",
+        "requested_views",
+        "output_map",
+        "switch_patch",
+        "orientation_evidence",
         "patches",
         "immutable_inputs",
         "local_only",
@@ -776,6 +787,57 @@ def _validate_multiview_profile(profile: object, profile_id: object) -> None:
         raise ExecutionError(str(exc)) from exc
 
 
+def _load_view_selection_profile() -> dict:
+    try:
+        profile = json.loads(_VIEW_SELECTION_PROFILE_PATH.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ExecutionError("flat-v2 view-selection profile is unreadable") from exc
+    if not isinstance(profile, dict) or content_hash(profile) != _VIEW_SELECTION_PROFILE_HASH:
+        raise ExecutionError("flat-v2 view-selection profile hash is outside the production pin")
+    return profile
+
+
+def _default_multiview_view_plan(selection_profile: dict) -> dict:
+    outputs = selection_profile.get("output_nodes")
+    if not isinstance(outputs, dict):
+        raise ExecutionError("flat-v2 view-selection output map is invalid")
+    views = [item["view_label"] for _, item in sorted(outputs.items()) if isinstance(item, dict) and isinstance(item.get("view_label"), str)]
+    return {"views": views, "orientation_evidence": {view: {"source": "unresolved-output" if view == "side_unknown" else "profile-output-map", "verified": view != "side_unknown"} for view in views}}
+
+
+def _bind_multiview_view_plan(view_plan: dict, selection_profile: dict) -> dict:
+    """Bind the exact requested views to the pinned flat-v2 output contract."""
+    from .adapters.flux_multiview import FluxAdapterError, validate_view_plan
+    try:
+        safe = validate_view_plan(view_plan, selection_profile)
+    except FluxAdapterError as exc:
+        raise ExecutionError(str(exc)) from exc
+    if selection_profile.get("workflow_fingerprint") != _VIEW_SELECTION_FINGERPRINT or selection_profile.get("source_api_graph_hash") != _VIEW_SELECTION_SOURCE_API_GRAPH_HASH:
+        raise ExecutionError("flat-v2 view-selection profile does not match the production graph pin")
+    return {
+        "view_selection_profile_hash": content_hash(selection_profile), "view_plan_hash": content_hash(view_plan),
+        "view_plan": copy.deepcopy(view_plan), "requested_views": safe["views"], "output_map": safe["output_map"],
+        "switch_patch": safe["switches"], "orientation_evidence": safe["orientation_evidence"],
+    }
+
+
+def _multiview_executable_from_plan(api_graph: dict, plan: dict) -> dict:
+    selection_profile = _load_view_selection_profile()
+    if content_hash(selection_profile) != plan.get("view_selection_profile_hash"):
+        raise ExecutionError("Stage 2 view-selection profile does not match the approved plan")
+    expected = _bind_multiview_view_plan(plan.get("view_plan"), selection_profile)
+    for field in ("view_selection_profile_hash", "view_plan_hash", "view_plan", "requested_views", "output_map", "switch_patch", "orientation_evidence"):
+        if plan.get(field) != expected[field]:
+            raise ExecutionError(f"Stage 2 {field} is not bound to the approved view plan")
+    executable_plan = copy.deepcopy(expected["view_plan"])
+    executable_plan["base_image"] = plan["uploaded_filename"]
+    from .adapters.flux_multiview import FluxAdapterError, patch_view_plan
+    try:
+        return patch_view_plan(api_graph, executable_plan, selection_profile)
+    except FluxAdapterError as exc:
+        raise ExecutionError(f"Stage 2 API graph is invalid: {exc}") from exc
+
+
 def validate_multiview_mcp_preflight(
     *,
     conversion_receipt: object,
@@ -839,6 +901,7 @@ def _build_multiview_draft_from_validated_mcp(
     conversion_receipt: dict,
     promotion_receipt: dict,
     upload_receipt: dict,
+    view_plan: dict | None = None,
 ) -> dict:
     """Pure validator/builder reached only after the controlled MCP call boundary."""
     safe_record, safe_artifact = _validated_stage1_source(
@@ -872,9 +935,16 @@ def _build_multiview_draft_from_validated_mcp(
 
     filename = _multiview_upload_name(safe_artifact["lineage_id"], safe_artifact["content_hash"])
     safe_upload_receipt = _validate_multiview_upload_receipt(upload_receipt, safe_artifact)
-    from .adapters.flux_multiview import FluxAdapterError, patch_base_images
+    selection_profile = _load_view_selection_profile()
+    selected_view_plan = _default_multiview_view_plan(selection_profile) if view_plan is None else copy.deepcopy(view_plan)
+    if isinstance(selected_view_plan, dict) and selected_view_plan.get("base_image") is not None:
+        raise ExecutionError("production Stage 2 owns the synchronized base-image slots")
+    view_binding = _bind_multiview_view_plan(selected_view_plan, selection_profile)
+    executable_view_plan = copy.deepcopy(selected_view_plan)
+    executable_view_plan["base_image"] = filename
+    from .adapters.flux_multiview import FluxAdapterError, patch_view_plan
     try:
-        executable = patch_base_images(api_graph, filename, slots)
+        executable = patch_view_plan(api_graph, executable_view_plan, selection_profile)
     except FluxAdapterError as exc:
         raise ExecutionError(f"Flux API graph is invalid: {exc}") from exc
     source_hash = content_hash(api_graph)
@@ -939,6 +1009,7 @@ def _build_multiview_draft_from_validated_mcp(
         "workflow_fingerprint": actual_fingerprint,
         "source_api_graph_hash": source_hash,
         "executable_api_graph_hash": executable_hash,
+        **view_binding,
         "patches": _multiview_patches(filename, safe_artifact["content_hash"]),
         "immutable_inputs": _multiview_immutable_inputs(api_graph, profile),
         "local_only": True,
@@ -973,6 +1044,7 @@ def build_multiview_draft_with_mcp(
     promotion_receipt: dict,
     upload_receipt: dict,
     mcp_tools: dict,
+    view_plan: dict | None = None,
 ) -> dict:
     """Build a production Stage 2 draft from calls made inside this process.
 
@@ -1114,6 +1186,7 @@ def build_multiview_draft_with_mcp(
         conversion_receipt=conversion_receipt,
         promotion_receipt=promotion_receipt,
         upload_receipt=upload_receipt,
+        view_plan=view_plan,
     )
 
 
@@ -1141,6 +1214,8 @@ def _validate_multiview_draft_contract(draft: dict) -> None:
         "workflow_fingerprint",
         "source_api_graph_hash",
         "executable_api_graph_hash",
+        "view_selection_profile_hash",
+        "view_plan_hash",
     ):
         if not isinstance(draft.get(field), str) or not _SHA256_RE.fullmatch(draft[field]):
             raise ExecutionError("Stage 2 draft lineage hashes must be lowercase SHA-256 digests")
@@ -1164,6 +1239,13 @@ def _validate_multiview_draft_contract(draft: dict) -> None:
         raise ExecutionError("Stage 2 draft output/runtime policy is invalid")
     if draft.get("patches") != _multiview_patches(expected_filename, draft["source_artifact_hash"]):
         raise ExecutionError("Stage 2 draft exact dual image patches are invalid")
+    selection_profile = _load_view_selection_profile()
+    if draft.get("view_selection_profile_hash") != content_hash(selection_profile):
+        raise ExecutionError("Stage 2 draft view-selection profile hash is invalid")
+    expected_binding = _bind_multiview_view_plan(draft.get("view_plan"), selection_profile)
+    for field in ("view_plan_hash", "requested_views", "output_map", "switch_patch", "orientation_evidence"):
+        if draft.get(field) != expected_binding[field]:
+            raise ExecutionError(f"Stage 2 draft {field} is invalid")
     immutable = draft.get("immutable_inputs")
     pose_ids = {368, 151, 152, 154, 360, 364, 148, 149, 147, 373, 150, 367}
     if not isinstance(immutable, list) or {item.get("node_id") for item in immutable if isinstance(item, dict)} != pose_ids:
@@ -1291,6 +1373,12 @@ def _pending_frozen_inputs(draft: dict) -> dict:
                 "promotion_receipt_hash": draft["promotion_receipt_hash"],
                 "upload_receipt_hash": draft["upload_receipt_hash"],
                 "saved_workflow_id": draft["saved_workflow_id"],
+                "view_selection_profile_hash": draft["view_selection_profile_hash"],
+                "view_plan_hash": draft["view_plan_hash"],
+                "requested_views": copy.deepcopy(draft["requested_views"]),
+                "output_map": copy.deepcopy(draft["output_map"]),
+                "switch_patch": copy.deepcopy(draft["switch_patch"]),
+                "orientation_evidence": copy.deepcopy(draft["orientation_evidence"]),
             }
         )
     else:
@@ -1993,16 +2081,7 @@ def build_multiview_submission(
     )
     if immutable_inputs != safe_plan["immutable_inputs"]:
         raise ExecutionError("Flux submission immutable pose inputs do not match approved plan")
-    from .adapters.flux_multiview import FluxAdapterError, patch_base_images
-
-    try:
-        executable = patch_base_images(
-            source_api_graph,
-            safe_plan["uploaded_filename"],
-            _MULTIVIEW_SLOTS,
-        )
-    except FluxAdapterError as exc:
-        raise ExecutionError(f"Flux submission API graph is invalid: {exc}") from exc
+    executable = _multiview_executable_from_plan(source_api_graph, safe_plan)
     if content_hash(executable) != safe_plan["executable_api_graph_hash"]:
         raise ExecutionError("Flux submission executable graph does not match approved plan")
     submission = {
@@ -2824,11 +2903,7 @@ def build_multiview_run_record(
     if content_hash(api_graph) != safe_plan["source_api_graph_hash"]:
         raise ExecutionError("Stage 2 plan source graph does not match API graph")
 
-    from .adapters.flux_multiview import FluxAdapterError, patch_base_images
-    try:
-        executable = patch_base_images(api_graph, safe_plan["uploaded_filename"], _MULTIVIEW_SLOTS)
-    except FluxAdapterError as exc:
-        raise ExecutionError(f"Stage 2 API graph is invalid: {exc}") from exc
+    executable = _multiview_executable_from_plan(api_graph, safe_plan)
     if content_hash(executable) != safe_plan["executable_api_graph_hash"]:
         raise ExecutionError("Stage 2 executable graph does not match approved plan")
     if safe_plan["patches"] != _multiview_patches(
