@@ -28,6 +28,7 @@ from .multiview_evidence import (
     validate_upload_receipt as _evidence_validate_upload_receipt,
 )
 from .prompt_quality import validate_anima_prompt_build
+from .reference_select import EXPLICIT_ORIENTATION_SOURCES
 from .workflow_profile import ProfileError, resolve_slots, structure_fingerprint
 
 
@@ -88,6 +89,13 @@ def validate_stage_handoff(stage_plan: object, artifact: object) -> dict:
             "front_upper": "front",
         }.get(view_label.strip().casefold(), view_label.strip().casefold())
         observed_view = proof["observed_view"].strip().casefold()
+        if (
+            canonical_label == "side_unknown"
+            and proof["source"] not in EXPLICIT_ORIENTATION_SOURCES
+        ):
+            raise ExecutionError(
+                "side_unknown requires explicit directional orientation evidence"
+            )
         if canonical_label != "side_unknown" and canonical_label != observed_view:
             raise ExecutionError("stage handoff orientation proof conflicts with view_label")
         selection = stage_plan.get("reference_selection")

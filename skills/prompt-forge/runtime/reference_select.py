@@ -24,7 +24,7 @@ VIEW_ALIASES = {
     "front_upper": "front",
 }
 
-_EXPLICIT_ORIENTATION_SOURCES = frozenset(
+EXPLICIT_ORIENTATION_SOURCES = frozenset(
     ("camera-calibration", "embedded-metadata", "manual-review", "user-confirmation")
 )
 
@@ -60,7 +60,7 @@ def prove_view_orientation(artifact: dict, expected_view: str, *, evidence: dict
         raise ReferenceSelectionError("orientation evidence does not prove the expected view")
     artifact_view = _canonical_view(artifact.get("view_label"))
     if artifact_view == "side_unknown":
-        if source not in _EXPLICIT_ORIENTATION_SOURCES:
+        if source not in EXPLICIT_ORIENTATION_SOURCES:
             raise ReferenceSelectionError("side_unknown requires explicit directional orientation evidence")
     elif artifact_view not in VIEW_DEGREES or artifact_view != expected:
         raise ReferenceSelectionError("artifact orientation conflicts with orientation evidence")
@@ -206,7 +206,7 @@ def select_reference_for_shot(desired_view: str, view_plan: dict, artifacts: lis
         ):
             continue
         if normalized_artifact_label == "side_unknown":
-            if source not in _EXPLICIT_ORIENTATION_SOURCES:
+            if source not in EXPLICIT_ORIENTATION_SOURCES:
                 continue
         elif normalized_artifact_label != proven_view:
             continue

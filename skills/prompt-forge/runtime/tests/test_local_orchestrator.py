@@ -181,6 +181,72 @@ def test_handoff_rejects_cross_story_lineage_and_acceptance_before_any_enqueue(m
     assert _FakeSubmitter.calls == []
 
 
+def test_handoff_rejects_side_unknown_with_fake_orientation_source_before_any_enqueue(
+    monkeypatch, tmp_path
+):
+    plan = {
+        "stage": "shot-image",
+        "reference_hash": "a" * 64,
+        "task_context_hash": "b" * 64,
+        "source_story_hash": "c" * 64,
+        "art_bible_hash": "d" * 64,
+        "lineage_id": "lineage-1",
+        "reference_view": "side_unknown",
+        "desired_view": "right",
+        "reference_selection": {
+            "selected_view": "right",
+            "desired_view": "right",
+        },
+        "orientation_proof": {
+            "schema_version": "1.0",
+            "expected_view": "right",
+            "observed_view": "right",
+            "source": "manual-review",
+            "verified": True,
+        },
+    }
+    reference = {
+        "artifact_type": "CharacterAngleView",
+        "view_label": "side_unknown",
+        "accepted": True,
+        "reference_eligible": True,
+        "semantic_conflict": False,
+        "hash_verified": True,
+        "content_hash": "a" * 64,
+        "task_context_hash": "b" * 64,
+        "source_story_hash": "c" * 64,
+        "art_bible_hash": "d" * 64,
+        "lineage_id": "lineage-1",
+        "orientation_proof": {
+            "schema_version": "1.0",
+            "expected_view": "right",
+            "observed_view": "right",
+            "source": "fake",
+            "verified": True,
+        },
+    }
+    api_calls = []
+    monkeypatch.setattr(
+        "runtime.local_orchestrator.ComfyApi",
+        lambda *args, **kwargs: api_calls.append((args, kwargs)),
+    )
+    _FakeSubmitter.calls = []
+
+    with pytest.raises(StageExecutionError, match="explicit directional orientation evidence"):
+        submit_stage_via_local_rest(
+            plan,
+            {},
+            {},
+            tmp_path / "consumed.json",
+            profile={},
+            capability_report={},
+            reference_artifact=reference,
+        )
+
+    assert api_calls == []
+    assert _FakeSubmitter.calls == []
+
+
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [
