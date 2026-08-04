@@ -3,6 +3,7 @@
 import copy
 import hashlib
 import json
+import re
 
 
 QUADRANTS = {
@@ -15,6 +16,9 @@ QUADRANTS = {
     "agent_known_user_unknown": ("capabilities", "risks", "alternatives"),
     "shared_unknown": ("hypotheses", "experiments"),
 }
+
+
+SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 class ContractError(ValueError):
