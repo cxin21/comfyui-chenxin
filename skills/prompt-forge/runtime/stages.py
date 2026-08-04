@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import re
+from datetime import datetime, timezone
 
 from .asset_plans import (
     AssetPlanError,
@@ -11,7 +12,7 @@ from .asset_plans import (
     build_environment_board_plan,
     build_prop_board_plan,
 )
-from .artifacts import is_ltx_input_eligible
+from .artifacts import has_shot_derivative_metadata, is_ltx_input_eligible
 from .contracts import ContractError, content_hash, validate_json_compatible
 from .prompt_quality import validate_anima_prompt_build, validate_ltx_prompt_build
 from .reference_select import (
@@ -589,6 +590,17 @@ def _validated_reference_acceptance(reference: dict, content_digest: str) -> Non
         or not acceptance["accepted_at"].strip()
     ):
         raise StageError("Stage 3 reference acceptance is not self-consistent")
+    try:
+        accepted_at = datetime.fromisoformat(
+            acceptance["accepted_at"].replace("Z", "+00:00")
+        )
+    except ValueError as exc:
+        raise StageError("Stage 3 reference acceptance timestamp is invalid") from exc
+    if (
+        accepted_at.tzinfo is None
+        or accepted_at.utcoffset() != timezone.utc.utcoffset(accepted_at)
+    ):
+        raise StageError("Stage 3 reference acceptance timestamp must be UTC")
     unsigned = dict(acceptance)
     acceptance_id = unsigned.pop("acceptance_id")
     if (
@@ -699,10 +711,13 @@ def _scene_aware_shot_bindings(
         raise StageError(f"an accepted prop board is required for {missing_props[0]}")
 
     lineage_id = reference.get("lineage_id")
-    if lineage_id is not None:
-        for board in [character, environment_board, *prop_boards.values()]:
-            if board is not None and board.get("lineage_id") != lineage_id:
-                raise StageError("asset board lineage_id does not match the selected reference")
+    if not isinstance(lineage_id, str) or not re.fullmatch(
+        r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", lineage_id
+    ):
+        raise StageError("Stage 3 reference lineage_id is invalid")
+    for board in [character, environment_board, *prop_boards.values()]:
+        if board is not None and board.get("lineage_id") != lineage_id:
+            raise StageError("asset board lineage_id does not match the selected reference")
 
     selection_record = {
         "selection_reason": selection["selection_reason"],
@@ -854,6 +869,13 @@ def build_video_plan(*args, **kwargs):
         raise StageError("video plan requires shot, PromptBuild, workflow hash, profile hash and approval")
     shot, prompt_build, workflow_hash, profile_hash, execution_approved = args[:5]
     base_eligible = is_ltx_input_eligible(shot)
+    forged_clean_metadata = (
+        isinstance(shot, dict)
+        and shot.get("artifact_type") == "ShotImage"
+        and has_shot_derivative_metadata(shot)
+    )
+    if forged_clean_metadata:
+        raise StageError("clean ShotImage cannot carry derivative metadata")
     context_eligible = isinstance(shot, dict) and all(
         isinstance(shot.get(field), str)
         and bool(re.fullmatch(r"[0-9a-f]{64}", shot[field]))

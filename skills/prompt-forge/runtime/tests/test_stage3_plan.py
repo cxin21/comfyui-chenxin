@@ -381,3 +381,59 @@ def test_scene_aware_shot_plan_rejects_forged_reference_acceptance_hash():
             ),
             props=[_board("PropBoard", "prop-archive-key", "f" * 64, intent)],
         )
+
+
+def test_scene_aware_shot_plan_rejects_non_utc_reference_acceptance():
+    intent = _shot_intent()
+    reference = _bound_reference(intent)
+    reference["acceptance"]["accepted_at"] = "2026-08-04T08:00:00"
+    unsigned = dict(reference["acceptance"])
+    unsigned.pop("acceptance_id")
+    reference["acceptance"]["acceptance_id"] = content_hash(unsigned)
+    reference["acceptance_id"] = reference["acceptance"]["acceptance_id"]
+
+    with pytest.raises(StageError, match="UTC"):
+        build_shot_plan(
+            "base",
+            "shot",
+            reference,
+            "right",
+            True,
+            shot_intent=intent,
+            character_board=_board("CharacterBoard", "character-lee", "b" * 64, intent),
+            environment=_board(
+                "EnvironmentBoard", "environment-workshop", "e" * 64, intent
+            ),
+            props=[_board("PropBoard", "prop-archive-key", "f" * 64, intent)],
+        )
+
+
+@pytest.mark.parametrize("missing_source", ["reference", "character", "environment", "prop"])
+def test_scene_aware_shot_plan_requires_shared_lineage_on_every_source(missing_source):
+    intent = _shot_intent()
+    reference = _bound_reference(intent)
+    character = _board("CharacterBoard", "character-lee", "b" * 64, intent)
+    environment = _board(
+        "EnvironmentBoard", "environment-workshop", "e" * 64, intent
+    )
+    prop = _board("PropBoard", "prop-archive-key", "f" * 64, intent)
+    sources = {
+        "reference": reference,
+        "character": character,
+        "environment": environment,
+        "prop": prop,
+    }
+    sources[missing_source].pop("lineage_id")
+
+    with pytest.raises(StageError, match="lineage_id"):
+        build_shot_plan(
+            "base",
+            "shot",
+            reference,
+            "right",
+            True,
+            shot_intent=intent,
+            character_board=character,
+            environment=environment,
+            props=[prop],
+        )

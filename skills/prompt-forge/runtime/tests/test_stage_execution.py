@@ -671,6 +671,23 @@ def test_video_execution_rejects_derivative_source_hash_drift():
         )
 
 
+def test_video_execution_rejects_forged_clean_shot_derivative_metadata():
+    graph = _video_graph()
+    plan = _video_plan(graph)
+    report = _capability_report()
+    plan["capability_report_hash"] = content_hash(report)
+    plan["plan_hash"] = content_hash(
+        {key: value for key, value in plan.items() if key != "plan_hash"}
+    )
+    image_ref = _video_image_ref(plan)
+    image_ref["derivative_type"] = "detailer"
+
+    with pytest.raises(stage_execution.StageExecutionError, match="accepted ShotImage"):
+        stage_execution.build_stage_execution_draft(
+            plan, graph, _yusu_profile(), report, image_ref=image_ref
+        )
+
+
 def test_video_execution_rejects_wrong_ltx_profile():
     graph = _video_graph()
     plan = _video_plan(graph)

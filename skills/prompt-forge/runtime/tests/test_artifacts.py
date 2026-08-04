@@ -215,6 +215,53 @@ def test_clean_shot_master_is_not_misclassified_as_a_derivative():
     assert is_ltx_input_eligible(shot) is False
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("parent_artifact_hash", None),
+        ("source_artifact_hash", None),
+        ("parent_artifact_type", "ShotImage"),
+        ("source_artifact_type", "ShotImage"),
+        ("derivative_type", "detailer"),
+        ("derived_from", "shot-master"),
+        ("is_variant", False),
+        ("derivative_profile_id", "detailer-v1"),
+    ],
+)
+def test_clean_shot_master_rejects_any_derivative_metadata(field, value):
+    shot = {
+        "artifact_type": "ShotImage",
+        "accepted": True,
+        "content_hash": "a" * 64,
+        field: value,
+    }
+
+    assert is_ltx_input_eligible(shot) is False
+
+
+def test_forged_clean_shot_derivative_metadata_cannot_build_video_plan():
+    shot = {
+        "artifact_type": "ShotImage",
+        "accepted": True,
+        "content_hash": "a" * 64,
+        "task_context_hash": "b" * 64,
+        "source_story_hash": "c" * 64,
+        "art_bible_hash": "d" * 64,
+        "lineage_id": "lineage-1",
+        "derivative_type": "detailer",
+    }
+    build = {
+        "ready_to_execute": True,
+        "target": "video",
+        "dialect": "video-timeline",
+        "prompt": "The subject moves as the camera dollies in.",
+        "negative_prompt": "",
+    }
+
+    with pytest.raises(ValueError, match="derivative metadata"):
+        build_video_plan(shot, build, "e" * 64, "f" * 64, True)
+
+
 def test_video_plan_preserves_separately_accepted_derivative_lineage():
     shot = {
         "artifact_type": "ShotRefined",

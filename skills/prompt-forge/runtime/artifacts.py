@@ -30,6 +30,24 @@ _SHOT_DERIVATIVE_TYPES = {
     "ShotStyleVariant": "style",
     "ShotCutout": "cutout",
 }
+_SHOT_DERIVATIVE_METADATA_KEYS = frozenset(
+    {
+        "derivative_type",
+        "source_artifact_hash",
+        "source_artifact_type",
+        "parent_artifact_hash",
+        "parent_artifact_type",
+        "derived_from",
+        "is_variant",
+        "derivative_profile_id",
+    }
+)
+
+
+def has_shot_derivative_metadata(artifact: object) -> bool:
+    return isinstance(artifact, dict) and not _SHOT_DERIVATIVE_METADATA_KEYS.isdisjoint(
+        artifact
+    )
 
 
 def _require_identifier(value: object, field_name: str) -> str:
@@ -125,7 +143,7 @@ def is_ltx_input_eligible(artifact: object) -> bool:
         return False
     artifact_type = artifact.get("artifact_type")
     if artifact_type == "ShotImage":
-        return artifact.get("parent_artifact_hash") is None
+        return not has_shot_derivative_metadata(artifact)
     derivative_type = _SHOT_DERIVATIVE_TYPES.get(artifact_type)
     parent = artifact.get("parent_artifact_hash")
     source = artifact.get("source_artifact_hash")
