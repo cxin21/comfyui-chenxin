@@ -2,7 +2,12 @@
 
 import copy
 
-from .contracts import ContractError, SHA256_HEX_RE, content_hash
+from .contracts import (
+    ContractError,
+    SHA256_HEX_RE,
+    content_hash,
+    validate_json_compatible,
+)
 
 
 _ASSET_TYPES = {"environment", "character", "prop"}
@@ -10,6 +15,24 @@ _EVIDENCE_TIER_KEYS = {
     "explicit_evidence",
     "reasonable_inference",
     "prohibited_expansion",
+}
+_FACE_FEATURES = {
+    "face_shape",
+    "eyes",
+    "eyebrows",
+    "nose",
+    "mouth",
+    "skin",
+    "hairline",
+    "facial_mark",
+    "脸型",
+    "眼睛",
+    "眉毛",
+    "鼻子",
+    "嘴唇",
+    "肤色",
+    "发际线",
+    "面部特征",
 }
 
 
@@ -50,12 +73,24 @@ def _require_string_list(value: object, label: str) -> list[str]:
     return values
 
 
+def _require_feature_value(value: object, label: str) -> tuple[str, str]:
+    if not isinstance(value, dict) or set(value) != {"feature", "value"}:
+        raise ContractError(f"{label} entries must be {{'feature', 'value'}} objects")
+    return (
+        _require_non_empty_string(value["feature"], f"{label}.feature"),
+        _require_non_empty_string(value["value"], f"{label}.value"),
+    )
+
+
 def _require_visual_fingerprint(value: object) -> None:
-    if not isinstance(value, (list, dict)) or len(value) != 6:
+    if not isinstance(value, list) or len(value) != 6:
         raise ContractError("visual_fingerprint must contain exactly six parts")
-    parts = value.values() if isinstance(value, dict) else value
-    for part in parts:
-        _require_non_empty_string(part, "visual_fingerprint part")
+    features: set[str] = set()
+    for part in value:
+        feature, _ = _require_feature_value(part, "visual_fingerprint")
+        if feature in features:
+            raise ContractError("visual_fingerprint features must be unique")
+        features.add(feature)
 
 
 def _tier_references(entries: list, label: str) -> set[str]:
@@ -86,18 +121,14 @@ def _provenance_and_facts(value: object) -> tuple[dict, list[str]]:
 
 
 def _downstream_facts(card: dict) -> list[str]:
-    fields = {
-        "character": ("identity_lock", "face_lock"),
-        "environment": ("environment_anchors",),
-        "prop": ("scale", "function"),
-    }
-    facts: list[str] = []
-    for field in fields.get(card.get("asset_type"), ()):
-        value = card.get(field)
-        if isinstance(value, list):
-            facts.extend(value)
-        elif isinstance(value, str):
-            facts.append(value)
+    facts = [part["value"] for part in card["visual_fingerprint"]]
+    if card["asset_type"] == "character":
+        facts.extend(card["identity_lock"])
+        facts.extend(fact["value"] for fact in card["face_lock"])
+    elif card["asset_type"] == "environment":
+        facts.extend(anchor["value"] for anchor in card["environment_anchors"])
+    else:
+        facts.extend((card["scale"], card["function"]))
     return facts
 
 
@@ -130,6 +161,7 @@ def validate_provenance_tiers(value: dict) -> None:
 def validate_story_breakdown(value: dict) -> dict:
     """Validate and deep-copy the story evidence boundary."""
     value = _require_object(value, "story breakdown")
+    validate_json_compatible(value, "story breakdown")
     _require_schema_version(value, "story breakdown")
     for field in (
         "visual_system",
@@ -148,6 +180,7 @@ def validate_story_breakdown(value: dict) -> dict:
 def validate_art_bible(value: dict) -> dict:
     """Validate and deep-copy the global visual-language contract."""
     value = _require_object(value, "art bible")
+    validate_json_compatible(value, "art bible")
     for field in (
         "style",
         "medium",
@@ -172,18 +205,25 @@ def validate_art_bible(value: dict) -> dict:
 
 def _validate_character_fields(value: dict) -> None:
     _require_string_list(value.get("identity_lock"), "character identity_lock")
-    face_lock = _require_string_list(value.get("face_lock"), "character face_lock")
+    face_lock = _require_non_empty_list(value.get("face_lock"), "character face_lock")
     for fact in face_lock:
-        if len(fact.split()) < 2:
-            raise ContractError("character face_lock must contain specific visual information")
+        feature, _ = _require_feature_value(fact, "character face_lock")
+        if feature not in _FACE_FEATURES:
+            raise ContractError("character face_lock feature is not a visual facial feature")
 
 
 def _validate_environment_fields(value: dict) -> None:
     anchors = value.get("environment_anchors")
     if not isinstance(anchors, list) or not 3 <= len(anchors) <= 5:
         raise ContractError("environment_anchors must be a list of 3-5 stable facts")
+    features: set[str] = set()
+    values: set[str] = set()
     for anchor in anchors:
-        _require_non_empty_string(anchor, "environment anchor")
+        feature, fact = _require_feature_value(anchor, "environment_anchors")
+        if feature in features or fact in values:
+            raise ContractError("environment_anchors must contain unique stable facts")
+        features.add(feature)
+        values.add(fact)
 
 
 def _validate_prop_fields(value: dict) -> None:
@@ -194,6 +234,7 @@ def _validate_prop_fields(value: dict) -> None:
 def validate_asset_card(value: dict, expected_type: str | None = None) -> dict:
     """Validate and deep-copy an environment, character, or prop asset card."""
     value = _require_object(value, "asset card")
+    validate_json_compatible(value, "asset card")
     _require_schema_version(value, "asset card")
     asset_type = value.get("asset_type")
     if asset_type not in _ASSET_TYPES:

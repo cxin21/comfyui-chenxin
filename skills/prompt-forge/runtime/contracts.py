@@ -36,6 +36,14 @@ def canonical_json(value: object) -> str:
     )
 
 
+def validate_json_compatible(value: object, label: str = "value") -> None:
+    """Raise ContractError when a contract value cannot be canonicalized as JSON."""
+    try:
+        canonical_json(value)
+    except (TypeError, ValueError) as exc:
+        raise ContractError(f"{label} must be JSON-compatible") from exc
+
+
 def content_hash(value: object) -> str:
     """Return the SHA-256 digest of a value's canonical JSON representation."""
     return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
