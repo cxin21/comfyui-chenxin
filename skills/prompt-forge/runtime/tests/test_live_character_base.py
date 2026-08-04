@@ -21,6 +21,11 @@ import runtime.execution as execution_module
 from runtime.adapters.camera import patch_character_base
 from runtime.capabilities import build_capability_report, report_is_fresh
 from runtime.comfy_api import ComfyApi
+from runtime.asset_plans import (
+    build_art_bible,
+    build_character_board_plan,
+    build_scene_variant_plan,
+)
 from runtime.contracts import canonical_json, content_hash
 from runtime.execution import (
     approve_execution_draft,
@@ -1022,6 +1027,169 @@ def test_resume_current_capability_gate_fails_closed(mutate, match, monkeypatch)
     mutate(report)
     with pytest.raises(AssertionError, match=match):
         _require_safe_current_report(report, now)
+
+
+def _experiment_story(lighting="cool window light"):
+    values = [
+        "ink wash",
+        "digital watercolor",
+        "quiet negative space",
+        "indigo",
+        "cedar",
+        "linen",
+        "bronze",
+        lighting,
+        "sealed threshold",
+        "modern electronics absent",
+        "reuse fixed anchors",
+        "ink wash digital watercolor",
+    ]
+    return {
+        "schema_version": "1.0",
+        "visual_system": {
+            "primary_style": values[0],
+            "medium": values[1],
+            "visual_grammar": values[2],
+            "palette": values[3:5],
+            "materials": values[5:7],
+            "lighting": lighting,
+            "motifs": [values[8]],
+            "world_taboos": [values[9]],
+            "continuity_strategy": values[10],
+            "style_prompt": values[11],
+        },
+        "characters": [{"asset_id": "character-lee"}],
+        "scenes": [{"asset_id": "environment-workshop"}],
+        "story_logic": ["the key opens the archive"],
+        "uncertainty": ["archive contents are uncertain"],
+        "source_hash": "d" * 64,
+        "provenance": {
+            "explicit_evidence": values + [
+                "the key opens the archive",
+                "archive contents are uncertain",
+            ],
+            "reasonable_inference": ["the archive uses the locked palette"],
+            "prohibited_expansion": ["neon signage"],
+        },
+    }
+
+
+def _experiment_character_card():
+    fingerprint = [
+        {"feature": "silhouette", "value": "slender silhouette"},
+        {"feature": "proportions", "value": "balanced proportions"},
+        {"feature": "palette", "value": "indigo and cedar"},
+        {"feature": "materials", "value": "linen and bronze"},
+        {"feature": "surface", "value": "matte linen"},
+        {"feature": "lighting", "value": "cool window light"},
+    ]
+    facts = [
+        "young archivist",
+        "short black bob",
+        "indigo coat",
+        "brown almond eyes",
+        *(part["value"] for part in fingerprint),
+    ]
+    return {
+        "schema_version": "1.0",
+        "asset_type": "character",
+        "asset_id": "character-lee",
+        "source_story_hash": "a" * 64,
+        "visual_fingerprint": fingerprint,
+        "identity_lock": facts[:3],
+        "face_lock": [{"feature": "eyes", "value": facts[3]}],
+        "provenance": {
+            "explicit_evidence": facts,
+            "reasonable_inference": ["the coat uses the art-bible palette"],
+            "prohibited_expansion": ["metallic armor"],
+        },
+    }
+
+
+def _experiment_environment_card():
+    fingerprint = [
+        {"feature": "silhouette", "value": "arched workshop silhouette"},
+        {"feature": "proportions", "value": "narrow east-wall counter"},
+        {"feature": "palette", "value": "indigo and cedar"},
+        {"feature": "materials", "value": "weathered stone and cedar"},
+        {"feature": "wear_trace", "value": "faded seal damage"},
+        {"feature": "lighting", "value": "cool window light"},
+    ]
+    anchors = [
+        {"feature": "entrance", "value": "weathered stone arch"},
+        {"feature": "emblem", "value": "red lacquer seal"},
+        {"feature": "counter", "value": "narrow cedar counter"},
+    ]
+    facts = [*(item["value"] for item in fingerprint), *(item["value"] for item in anchors)]
+    return {
+        "schema_version": "1.0",
+        "asset_type": "environment",
+        "asset_id": "environment-workshop",
+        "source_story_hash": "b" * 64,
+        "visual_fingerprint": fingerprint,
+        "environment_anchors": anchors,
+        "spatial_layout": "arch faces the east-wall counter",
+        "provenance": {
+            "explicit_evidence": facts + ["arch faces the east-wall counter"],
+            "reasonable_inference": ["the archive uses the workshop palette"],
+            "prohibited_expansion": ["modern neon signage"],
+        },
+    }
+
+
+def _changed_keys(left, right):
+    return {
+        key
+        for key in set(left) | set(right)
+        if canonical_json(left.get(key)) != canonical_json(right.get(key))
+    }
+
+
+def test_experiment_a_one_art_bible_lighting_change_preserves_identity_and_taboos():
+    base_bible = build_art_bible(_experiment_story())
+    changed_bible = build_art_bible(_experiment_story("warm window light"))
+    card = _experiment_character_card()
+    base_board = build_character_board_plan(base_bible, card)
+    changed_board = build_character_board_plan(changed_bible, card)
+
+    assert base_board["identity_lock"] == changed_board["identity_lock"]
+    assert base_board["face_lock"] == changed_board["face_lock"]
+    assert base_board["world_taboos"] == changed_board["world_taboos"]
+    assert base_board["asset_card_hash"] == changed_board["asset_card_hash"]
+    assert base_board["style_prompt"] == changed_board["style_prompt"]
+    assert base_board["lighting"] != changed_board["lighting"]
+    assert base_board["art_bible_hash"] != changed_board["art_bible_hash"]
+    assert content_hash(base_board) != content_hash(changed_board)
+    assert _changed_keys(base_board, changed_board) <= {
+        "art_bible_hash",
+        "lighting",
+        "explicit_evidence",
+    }
+
+
+def test_experiment_b_environment_master_reuse_locks_layout_and_materials():
+    environment = _experiment_environment_card()
+    first = build_scene_variant_plan(
+        environment,
+        {"shot_deltas": {"framing": "wide", "camera_height": "eye-level"}},
+    )
+    second = build_scene_variant_plan(
+        environment,
+        {"shot_deltas": {"framing": "medium", "camera_height": "low"}},
+    )
+
+    for field in (
+        "environment_anchors",
+        "spatial_layout",
+        "materials",
+        "lighting",
+        "visual_fingerprint",
+        "asset_card_hash",
+    ):
+        assert first[field] == second[field], field
+    assert first["shot_deltas"] != second["shot_deltas"]
+    assert _changed_keys(first, second) == {"shot_deltas"}
+    assert content_hash(first) != content_hash(second)
 
 
 @LIVE_MARK

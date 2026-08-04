@@ -202,11 +202,11 @@ sample_prompts:
 ### Anima (miaomiaoHarem / AnimaStandardV7)
 - **Prompt style:** tag-based (Danbooru-style comma-separated tags), score-prefixed. Strong prompt adherence; works best with `score_9, score_8_up, score_7_up` quality prefixes + specific character/scene tags.
 - **Structure:** score prefix -> character tags -> appearance tags -> clothing -> action -> scene -> lighting -> style/artist. Weighted tokens `(tag:1.2)` supported.
-- **Strengths:** anime/manga illustration, strong character consistency via LoRA stack, Chinese-preferring name canon. Default flow in this plugin = AnimaStandardV7.json (73 nodes).
+- **Strengths:** anime/manga illustration, strong character consistency via LoRA stack, Chinese-preferring name canon. This is a legacy Anima recipe; the current production flow is selected only from `runtime/profiles/`.
 - **Avoid:** natural-language sentences (it's a tag model, not FLUX); over-long prompts (>256 tokens degrade); missing score prefix (quality drops).
 - **Settings (AnimaStandardV7 default):** 30 steps / CFG 4.5 / dpmpp_2m / karras / 832x1216. Fixed LoRA stack: `gpt-image-2_anima-base1_v1-1`, `anima-base-1-masterpiece-v51`, `细节调整`. Text encoder: `qwen_3_06b_base.safetensors`. VAE: `qwen_image_vae.safetensors`. Negative prompts SUPPORTED (unlike FLUX): `worst quality,low quality,score_1,score_2,score_3,artist name,blurry,jpeg artifacts,lowres,censor`.
 - **Detailer:** AnimaStandardV7 has built-in DetailerForEach + HandDetailer + NSFWDetailer + FaceDetailer + hiresFix (4x_foolhardy_Remacri) — no separate upscale pass needed.
-- **Source:** this plugin's manga-stage-2-panels SKILL + workflow-resolver.md (AnimaStandardV7.json).
+- **Source:** historical recipe material; production workflow contracts live under `runtime/profiles/`.
 
 ---
 id: flux_1_kontext

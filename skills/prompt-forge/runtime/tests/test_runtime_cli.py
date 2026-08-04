@@ -286,6 +286,7 @@ def test_submit_character_base_command_delegates_local_post(monkeypatch, capsys)
         "source_api_graph": {},
         "consumption": {},
         "consumption_path": "C:/run/consumed.json",
+        "profile": {},
     }
     monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(payload)))
     exit_code = runtime_cli.main(["submit-character-base", "--from-stdin"])
@@ -708,3 +709,94 @@ def test_plan_shot_and_plan_video_commands_are_pure():
     video = _run("plan-video", "--from-stdin", input_text=json.dumps(video_payload))
     assert video.returncode == 0, video.stderr
     assert json.loads(video.stdout)["parameters"]["frames"] == 24
+
+
+def test_ingest_story_emits_canonical_hash_without_execution_side_effects(capsys):
+    story = {
+        "schema_version": "1.0",
+        "visual_system": {
+            "primary_style": "cinematic",
+            "medium": "digital",
+            "visual_grammar": ["clean silhouettes"],
+            "palette": ["amber"],
+            "materials": ["wool"],
+            "lighting": ["soft key"],
+            "motifs": ["rings"],
+        },
+        "characters": [],
+        "scenes": [],
+        "story_logic": [],
+        "uncertainty": {},
+        "source_hash": "a" * 64,
+    }
+    # Invoke the in-process boundary so this test cannot accidentally enqueue.
+    import runtime.story_assets as story_assets
+    expected = story_assets.story_breakdown_hash(story)
+    import unittest.mock
+    with unittest.mock.patch.object(sys, "stdin", io.StringIO(json.dumps(story))):
+        assert runtime_cli.main(["ingest-story", "--from-stdin"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["story_breakdown_hash"] == expected
+    assert result["planning_only"] is True
+
+
+def test_plan_video_production_request_requires_trusted_duration_profile(capsys):
+    payload = {
+        "shot": {
+            "artifact_type": "ShotImage",
+            "accepted": True,
+            "content_hash": "a" * 64,
+            "task_context_hash": "b" * 64,
+            "source_story_hash": "c" * 64,
+            "art_bible_hash": "d" * 64,
+            "lineage_id": "lineage-1",
+        },
+        "prompt_build": {
+            "target": "video",
+            "dialect": "video-timeline",
+            "prompt": "a subject moves",
+            "negative_prompt": "",
+            "ready_to_execute": True,
+            "split_recommendation": {"required": False},
+        },
+        "workflow_hash": "e" * 64,
+        "profile_hash": "f" * 64,
+        "execution_approved": True,
+        "motion_delta": "dolly in",
+        "split_decision": {"required": False, "approved": True},
+        "intent": {"schema_version": "1.0"},
+    }
+    import unittest.mock
+    with unittest.mock.patch.object(sys, "stdin", io.StringIO(json.dumps(payload))):
+        assert runtime_cli.main(["plan-video", "--from-stdin"]) == 1
+    assert "duration profile" in capsys.readouterr().out.lower()
+
+
+def test_plan_video_rejects_caller_forged_hashes_without_trusted_evidence(capsys):
+    payload = {
+        "shot": {
+            "artifact_type": "ShotImage",
+            "accepted": True,
+            "content_hash": "a" * 64,
+            "task_context_hash": "b" * 64,
+            "source_story_hash": "c" * 64,
+            "art_bible_hash": "d" * 64,
+            "lineage_id": "lineage-1",
+        },
+        "prompt_build": {
+            "target": "video", "dialect": "video-timeline", "prompt": "move",
+            "positive_zh": "移动", "positive_en": "move", "negative_prompt": "",
+            "ready_to_execute": True, "split_recommendation": {"required": False},
+        },
+        "workflow_hash": "0" * 64,
+        "profile_hash": "0" * 64,
+        "execution_approved": True,
+        "duration_profile_id": "ltx-yusu-short-v1",
+        "motion_delta": "dolly in",
+        "split_decision": {"required": False, "approved": True},
+        "intent": {"schema_version": "1.0"},
+    }
+    import unittest.mock
+    with unittest.mock.patch.object(sys, "stdin", io.StringIO(json.dumps(payload))):
+        assert runtime_cli.main(["plan-video", "--from-stdin"]) == 1
+    assert "trusted workflow" in capsys.readouterr().out.lower()

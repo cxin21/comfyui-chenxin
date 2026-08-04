@@ -2,7 +2,7 @@
 
 ## Status
 
-Approved design, pending implementation planning.
+Approved design, revised on 2026-08-04 to include the narrative-decomposition, visual-asset, and LTX prompt contracts supplied in the downloaded reference documents. The revised implementation plan supersedes the earlier plan while preserving its graph/profile safety decisions.
 
 ## Goal
 
@@ -287,3 +287,165 @@ Every profile must declare:
 - regression tests cover graph identity, allowlists, lineage, output contracts, and profile-specific temporal rules;
 - at least one local ComfyUI run passes the full pipeline from identity master to video.
 
+## Revision 2026-08-04: upstream narrative and asset layer
+
+The three supplied documents add a required upstream layer that the original
+four-stage image/video sequence did not model. The system is not only a graph
+executor; it is a controlled compiler from story evidence to visual assets,
+then to prompts, then to images and video. The following contracts are now
+part of the design.
+
+### Source contract: story decomposition
+
+`StoryBreakdown` is the evidence-bearing input to all later stages. It keeps
+the template's separation between visual judgment, character setting, scene
+timeline, story logic, dialogue attribution, and uncertainty. It must contain:
+
+- a visual-system assessment before the genre label, distinguishing art style,
+  medium/rendering, palette/light, material language, and mixed-style changes;
+- character records with identity, appearance, hair, costume, accessories,
+  goals, motives, actions, emotion arc, relationships, dialogue ownership,
+  narrative function, end state, and unknowns;
+- scene records with spatial structure, atmosphere, staging, key objects,
+  narrative focus, and continuous non-overlapping timeline nodes;
+- per-node local style change, cast, action/reaction, dialogue attribution,
+  conflict, emotion, narrative function, and transition to the next node;
+- story logic for start, goal, obstacle, conflict, information gap, twist,
+  climax, ending, and audience emotion;
+- explicit uncertainty categories for characters, scenes, plot, time, props,
+  and style. Missing source information is never promoted to a fact.
+
+The decomposition stage must not emit model parameters or image/video prompt
+syntax. It produces evidence and constraints for the next compiler stage.
+
+### Source contract: visual asset bible and asset cards
+
+`ArtBible` and typed `AssetCard` records are compiled from the story evidence.
+The supplied asset document requires a single global visual bible before
+individual assets, with style variant, image grammar, palette, materials,
+lighting, visual motifs, world taboos, and a continuity strategy. Every asset
+must separate `explicit_evidence`, `reasonable_inference`, and
+`prohibited_expansion` and must carry a six-part visual fingerprint:
+silhouette, material, color, wear/trace, lighting, and memory point.
+
+The asset union has three concrete members:
+
+- `EnvironmentAsset`: space personality, spatial/structural/material/light
+  design, five fixed visual anchors, a setting-board prompt, and scene variants
+  that inherit the environment master rather than recreating the space;
+- `CharacterAsset`: narrative role, specific face geometry, hair system,
+  layered costume, body state, immutable identity lock, allowed variations,
+  forbidden changes, and a board prompt requiring head close-up plus front,
+  90-degree side, and rear views;
+- `PropAsset`: narrative function, measurable scale, silhouette, construction,
+  materials, wear, symbols, functional states, and an engineering-board prompt
+  requiring master view, exploded structure, material slice, and function
+  state. Prop boards contain no people or hands.
+
+Environment boards contain no people, character boards contain no scene or
+props, and prop boards contain no people or hands. These are acceptance rules,
+not prompt suggestions.
+
+### Prompt Forge contracts
+
+Prompt Forge now has two distinct dialects and must not mix analysis with
+generation:
+
+1. Image builds consume `ArtBible`, one or more asset cards, a shot intent,
+   explicit evidence, and prohibited expansions. They produce positive and
+   negative prompts plus identity/style/scene/prop locks and reference roles.
+2. LTX builds consume an accepted `ShotImage` and shot intent. They produce a
+   concise Chinese positive prompt, an English positive prompt that preserves
+   Chinese dialogue verbatim, one selected global director prompt, and an
+   optional split recommendation. The prompt has exactly one action layer:
+   reference roles and one-sentence premise followed by a dynamic, non-uniform
+   timeline with `s` units. It names the speaker and exact dialogue, uses
+   stable medium/medium-close shots by default, and avoids an unnecessary
+   second narrative retelling.
+
+The LTX build must represent identity lock, shot action, motion delta, camera
+intent, scene continuity, prop continuity, dialogue attribution, and temporal
+segments. The workflow-owned negative node remains immutable and
+`negative_prompt` remains empty in the build contract.
+
+### Revised stage ordering
+
+The original four render stages remain, but two controlled compiler stages
+precede them and one prompt compilation gate is added before video:
+
+```text
+StoryBreakdown
+  -> ArtBible + Character/Environment/Prop AssetCards
+  -> Prompt Forge image build
+  -> Camera base identity master
+  -> Flux flat-v2 character board / requested views
+  -> ShotIntent + Prompt Forge shot build
+  -> Camera G1 shot_master
+  -> Prompt Forge LTX bilingual timeline build
+  -> LTX short/long Director video
+```
+
+An environment or prop asset is generated only when the story evidence says
+it has narrative or continuity value. If it is needed, its accepted board is
+referenced by `AssetCard` ID and its fixed anchors are inherited by every shot
+variant. If a shot contains multiple major events, more than three core
+characters, a scene/time jump, more than four complex storyboard beats, or a
+mixture of complex action and long dialogue, the prompt compiler emits a
+split recommendation and Stage 4 refuses to compress the request into one
+video.
+
+### New invariants and experiments
+
+- `explicit_evidence`, `reasonable_inference`, and `prohibited_expansion` are
+  hash-bound fields; a later prompt cannot turn an inference into an identity
+  fact without a new approved lineage.
+- A scene variant must reference one accepted environment master and preserve
+  its layout, anchors, palette, materials, light logic, damage, and world
+  symbols; only the declared shot delta may change.
+- A character board is not interchangeable with a scene board or a prop board;
+  artifact types and accepted reference roles enforce the separation.
+- The Flux `side_unknown` output is not direction-safe. A requested
+  `right_side` or `left_side` shot may use it only after an orientation proof is
+  recorded; otherwise the view plan fails closed.
+- Dynamic LTX timeline segments must be monotonic, non-overlapping, contain
+  explicit seconds, and sum within the selected duration profile. The default
+  short run still uses 24 logical frames/24 fps and decodes to 25 frames.
+
+Minimal new experiments are: evidence-to-asset fidelity (change only one
+visual-bible field), environment-master reuse (change only a shot delta),
+character-board orientation proof (change one Flux switch), and LTX timeline
+split (compare one simple event with a deliberately over-complex request).
+
+## Verification record: 2026-08-04
+
+The local ComfyUI REST preflight at `127.0.0.1:8188` responded with version
+`0.29.0`; the queue had zero running and zero pending jobs. Read-only workflow
+retrieval confirmed 141/44 nodes/groups for the camera workflow, 393/34 for the
+grouped Flux workflow, 261/0 for the flat-v2 workflow, and 26/4 for the LTX
+Director workflow. The pinned flat-v2 profile remains bound to UI fingerprint
+`9dc2b01e2aea0b051113b187b134d007f452df6c83cfcbbd8d325eaa4c29e4da` and API
+graph hash `450e6e6570a7c21aee6bc2bd32d19ac579e3460de9ccc1eca456b0dd960eec36`;
+the pinned LTX profile remains bound to UI fingerprint
+`8f777f6315bab2c14fb4d99d83a44d73cf8dfd7362011fc3a931fffa9a081074` and API
+graph hash `c7d0c07e2e6656af9737a7d92bea62bc4b4c7c11291bfb910e13eaa8a3f1fb74`.
+
+The four single-variable checks are executable without generation: changing
+only ArtBible lighting leaves identity and taboo locks unchanged; reusing one
+environment master leaves anchors, layout, palette/materials, damage, and light
+logic unchanged; changing only flat-v2 switch `731.boolean` leaves all twelve
+pose references unchanged and requires proof for `side_unknown`; and the short
+LTX profile compiles 24 logical frames at 24 fps to 25 output frames on
+1024x704 while preserving negative node `195`, with complex scene/time changes
+blocked by the split gate.
+
+The LTX adapter also rejects any profile whose declared duration is not exactly
+the baseline logical-frame budget divided by fps, and rejects timeline segments
+whose rounded frame lengths do not form one contiguous baseline frame range.
+The same invariant is enforced by `validate_yusu_sync` and the JSON CLI
+`patch-yusu` boundary.
+
+No `/prompt` enqueue, upload, approval consumption, or generated artifact was
+performed for this record. The MCP conversion receipt is not exposed by the
+read-only REST endpoints, so the record does not claim a fresh end-to-end
+generation pass. A production acceptance still requires an approved run record
+and hashes for the retained PNG/video artifacts.

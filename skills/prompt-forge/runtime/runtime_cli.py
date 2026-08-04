@@ -21,9 +21,16 @@ from runtime.adapters.camera import (
 from runtime.adapters.flux_multiview import FluxAdapterError
 from runtime.adapters.yusu_timeline import patch_yusu_timeline
 from runtime.artifacts import accept_stage3_reference, verify_video_artifact
+from runtime.asset_plans import (
+    AssetPlanError,
+    build_art_bible,
+    build_character_board_plan,
+    build_environment_board_plan,
+    build_prop_board_plan,
+)
 from runtime.capabilities import build_capability_report
 from runtime.comfy_api import CapabilityError, ComfyApi
-from runtime.contracts import ContractError, canonical_json
+from runtime.contracts import ContractError, canonical_json, content_hash
 from runtime.execution import (
     ExecutionError,
     _canonical_consumption_root,
@@ -37,6 +44,13 @@ from runtime.execution import (
 from runtime.pipeline_state import advance_state, stage_is_reusable
 from runtime.reference_select import select_reference
 from runtime.stages import StageError, build_shot_plan, build_video_plan
+from runtime.stages import build_character_base_plan
+from runtime.story_assets import (
+    art_bible_hash,
+    asset_card_hash,
+    story_breakdown_hash,
+    validate_story_breakdown,
+)
 from runtime.stage_execution import (
     StageExecutionError,
     approve_stage_execution_draft,
@@ -49,6 +63,8 @@ from runtime.stage_execution import (
 from runtime.local_orchestrator import (
     submit_character_base_via_local_rest,
     submit_stage_via_local_rest,
+    validate_trusted_stage_profile,
+    validate_trusted_video_evidence,
     wait_for_stage_history,
 )
 from runtime.workflow_profile import ProfileError, structure_fingerprint
@@ -96,6 +112,15 @@ def _parser() -> argparse.ArgumentParser:
         help="fail closed: Stage 2 production planning requires local MCP callables",
     )
     _add_json_source(plan_multiview)
+
+    ingest_story = commands.add_parser("ingest-story", help="validate story evidence and emit its canonical hash")
+    _add_json_source(ingest_story)
+
+    compile_assets = commands.add_parser("compile-assets", help="compile an art bible and typed asset-board plans")
+    _add_json_source(compile_assets)
+
+    plan_character_base = commands.add_parser("plan-character-base", help="build a clean identity-master plan")
+    _add_json_source(plan_character_base)
 
     approve = commands.add_parser("approve-plan", help="approve one displayed ExecutionDraft")
     _add_json_source(approve)
@@ -297,11 +322,127 @@ def _write_approval_consumption(run_dir: Path, consumption: dict) -> Path:
     return path.resolve()
 
 
+def _planning_result(value: dict, *, stage: str) -> dict:
+    """Annotate pure stage output; this flag never grants execution approval."""
+    result = dict(value)
+    result.setdefault("stage", stage)
+    result["planning_only"] = True
+    return result
+
+
+def _story_payload(payload: dict) -> dict:
+    if "story" in payload:
+        if set(payload) != {"story"}:
+            raise CliUsageError("ingest-story accepts only story; hashes are derived canonically")
+        story = payload["story"]
+    else:
+        story = payload
+    try:
+        return validate_story_breakdown(story)
+    except ContractError as exc:
+        raise CliUsageError(f"invalid story breakdown: {exc}") from exc
+
+
+def _strict_hash(value: object, label: str) -> str:
+    if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None:
+        raise CliUsageError(f"{label} must be a lowercase SHA-256 digest")
+    return value
+
+
+def _reject_caller_hash_override(payload: dict, canonical: dict[str, str]) -> None:
+    for field, expected in canonical.items():
+        if field in payload and payload[field] != expected:
+            raise CliUsageError(f"caller-supplied {field} does not match canonical evidence")
+
+
 def _dispatch(command: str, payload: dict, args) -> dict | tuple[dict, int]:
     if command == "discover":
         return _discover(payload)
     if command == "fingerprint":
         return {"structure_fingerprint": structure_fingerprint(payload)}
+    if command == "ingest-story":
+        story = _story_payload(payload)
+        return _planning_result(
+            {
+                "schema_version": "1.0",
+                "story": story,
+                "story_breakdown_hash": story_breakdown_hash(story),
+            },
+            stage="ingest-story",
+        )
+    if command == "compile-assets":
+        if not isinstance(payload.get("story"), dict):
+            raise CliUsageError("compile-assets requires story")
+        story = _story_payload({"story": payload["story"]})
+        style_override = payload.get("style_override", {})
+        if not isinstance(style_override, dict):
+            raise CliUsageError("style_override must be an object")
+        try:
+            bible = build_art_bible(story, style_override=style_override)
+        except AssetPlanError as exc:
+            raise CliUsageError(str(exc)) from exc
+        _reject_caller_hash_override(payload, {"story_breakdown_hash": story_breakdown_hash(story)})
+        assets = payload.get("assets", {})
+        if not isinstance(assets, dict):
+            raise CliUsageError("assets must be an object keyed by asset type")
+        builders = {
+            "environment": build_environment_board_plan,
+            "character": build_character_board_plan,
+            "prop": build_prop_board_plan,
+        }
+        boards = {}
+        asset_hashes = {}
+        board_plan_hashes = {}
+        for asset_type, asset in assets.items():
+            if asset_type not in builders:
+                raise CliUsageError(f"unsupported asset type: {asset_type}")
+            try:
+                boards[asset_type] = builders[asset_type](bible, asset)
+                asset_hashes[asset.get("asset_id", asset_type)] = asset_card_hash(asset)
+                board_plan_hashes[asset.get("asset_id", asset_type)] = content_hash(boards[asset_type])
+            except (AssetPlanError, ContractError, AttributeError) as exc:
+                raise CliUsageError(f"invalid {asset_type} asset: {exc}") from exc
+        return _planning_result(
+            {
+                "schema_version": "1.0",
+                "story_breakdown_hash": story_breakdown_hash(story),
+                "art_bible": bible,
+                "art_bible_hash": art_bible_hash(bible),
+                "boards": boards,
+                "asset_hashes": asset_hashes,
+                "board_plan_hashes": board_plan_hashes,
+            },
+            stage="compile-assets",
+        )
+    if command == "plan-character-base":
+        character = payload.get("character", payload.get("character_asset"))
+        profile = payload.get("profile")
+        if not isinstance(character, dict) or not isinstance(profile, dict):
+            raise CliUsageError("plan-character-base requires character and profile")
+        ui_workflow = payload.get("ui_workflow")
+        workflow_fingerprint = (
+            structure_fingerprint(ui_workflow)
+            if isinstance(ui_workflow, dict)
+            else profile.get("workflow_fingerprint")
+        )
+        profile_digest = content_hash(profile)
+        _reject_caller_hash_override(
+            payload,
+            {"workflow_fingerprint": workflow_fingerprint, "profile_hash": profile_digest},
+        )
+        if not isinstance(workflow_fingerprint, str):
+            raise CliUsageError("plan-character-base requires a trusted workflow fingerprint")
+        try:
+            plan = build_character_base_plan(
+                character,
+                workflow_fingerprint=workflow_fingerprint,
+                profile_hash=profile_digest,
+                profile=profile,
+                distance=payload.get("distance", "full_body"),
+            )
+        except StageError as exc:
+            return {"accepted": False, "error": str(exc), "planning_only": True}, 1
+        return _planning_result(plan, stage="character-base")
     if command == "patch-camera":
         return patch_character_base(
             payload["api_graph"], payload["prompt_build"], payload["slots"]
@@ -335,9 +476,9 @@ def _dispatch(command: str, payload: dict, args) -> dict | tuple[dict, int]:
         return verify_img2img_path(payload["api_graph"], payload["profile"])
     if command == "plan-shot":
         try:
-            return build_shot_plan(**payload)
+            return _planning_result(build_shot_plan(**payload), stage="shot-image")
         except StageError as exc:
-            return {"accepted": False, "error": str(exc)}, 1
+            return {"accepted": False, "error": str(exc), "planning_only": True}, 1
     if command == "patch-yusu":
         required = {"graph", "image_ref", "prompt", "frames", "fps", "profile"}
         if set(payload) != required:
@@ -352,16 +493,47 @@ def _dispatch(command: str, payload: dict, args) -> dict | tuple[dict, int]:
         )
     if command == "plan-video":
         try:
-            return build_video_plan(
-                payload.pop("shot"),
-                payload.pop("prompt_build"),
-                payload.pop("workflow_hash"),
-                payload.pop("profile_hash"),
-                payload.pop("execution_approved"),
-                **payload,
+            request = dict(payload)
+            shot = request.pop("shot")
+            prompt_build = request.pop("prompt_build")
+            workflow_hash = request.pop("workflow_hash")
+            profile_hash = request.pop("profile_hash")
+            execution_approved = request.pop("execution_approved")
+            production = isinstance(shot, dict) and any(
+                key in shot for key in ("task_context_hash", "source_story_hash", "art_bible_hash", "lineage_id")
+            ) or any(
+                key in request for key in ("motion_delta", "split_decision", "timeline_segments", "intent", "duration_profile_id")
+            )
+            if production:
+                duration_id = request.get("duration_profile_id")
+                if duration_id not in {"ltx-yusu-short-v1", "ltx-yusu-long-v1"}:
+                    raise StageError("trusted duration profile is required for production video")
+                _strict_hash(workflow_hash, "workflow_hash")
+                _strict_hash(profile_hash, "profile_hash")
+                trusted_profile = request.pop("workflow_profile", request.pop("profile", None))
+                trusted_graph = request.pop("workflow_graph", request.pop("source_api_graph", None))
+                if not isinstance(trusted_profile, dict) or not isinstance(trusted_graph, dict):
+                    raise StageError(
+                        "production video requires trusted workflow_graph and workflow_profile evidence"
+                    )
+                if content_hash(trusted_profile) != profile_hash:
+                    raise StageError("profile_hash is not derived from the trusted workflow profile")
+                if content_hash(trusted_graph) != workflow_hash:
+                    raise StageError("workflow_hash is not derived from the trusted workflow graph")
+                try:
+                    validate_trusted_video_evidence(
+                        trusted_profile, trusted_graph, duration_id
+                    )
+                except StageExecutionError as exc:
+                    raise StageError(str(exc)) from exc
+                if execution_approved is not True:
+                    raise StageError("production planning requires explicit approval boundary")
+            return _planning_result(
+                build_video_plan(shot, prompt_build, workflow_hash, profile_hash, execution_approved, **request),
+                stage="video",
             )
         except StageError as exc:
-            return {"accepted": False, "error": str(exc)}, 1
+            return {"accepted": False, "error": str(exc), "planning_only": True}, 1
     if command == "plan-stage-execution":
         try:
             optional = {
@@ -381,8 +553,9 @@ def _dispatch(command: str, payload: dict, args) -> dict | tuple[dict, int]:
     if command == "approve-stage":
         draft = _require_object(payload.get("draft"), "draft")
         event = _require_object(payload.get("approval_event"), "approval_event")
-        if set(payload) != {"draft", "approval_event"}:
-            raise StageExecutionError("approve-stage accepts only draft and approval_event")
+        if set(payload) != {"draft", "approval_event", "profile"}:
+            raise StageExecutionError("approve-stage requires draft, approval_event and trusted profile")
+        validate_trusted_stage_profile(draft, _require_object(payload.get("profile"), "profile"))
         approved = approve_stage_execution_draft(draft, event, args.run_dir)
         event_path = _write_execution_evidence(
             args.run_dir, event, digest=approved["approval_id"], suffix="stage-approval"
@@ -405,6 +578,7 @@ def _dispatch(command: str, payload: dict, args) -> dict | tuple[dict, int]:
         }
         if not required.issubset(payload):
             raise CliUsageError("build-stage-submission is missing required evidence")
+        validate_trusted_stage_profile(payload["approved_plan"], payload["profile"])
         optional = {
             key: payload[key]
             for key in ("ui_workflow", "reference_image_name", "reference_artifact", "image_ref")
@@ -440,7 +614,7 @@ def _dispatch(command: str, payload: dict, args) -> dict | tuple[dict, int]:
         )
     if command == "submit-character-base":
         required = {
-            "approved_plan", "prompt_build", "source_api_graph", "consumption", "consumption_path",
+            "approved_plan", "prompt_build", "source_api_graph", "consumption", "consumption_path", "profile",
         }
         if not required.issubset(payload):
             raise CliUsageError("submit-character-base is missing required approval/submission evidence")
@@ -453,6 +627,7 @@ def _dispatch(command: str, payload: dict, args) -> dict | tuple[dict, int]:
             base_url=args.base_url,
             timeout=args.timeout,
             ui_workflow=payload.get("ui_workflow"),
+            profile=payload.get("profile"),
         )
     if command == "wait-stage":
         if set(payload) != {"prompt_id"}:

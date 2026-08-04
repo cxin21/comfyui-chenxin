@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import math
 import re
 from datetime import datetime, timezone
 
@@ -89,6 +90,84 @@ _CHARACTER_SCENE_PROP_FACT = re.compile(
 # silently alter the video contract.
 LTX_BASELINE_OUTPUT_WIDTH = 1024
 LTX_BASELINE_OUTPUT_HEIGHT = 704
+
+# Duration is selected explicitly at the Stage 4 boundary.  These are the
+# only production budgets accepted by the compiler; the profile JSON files
+# carry the same values for adapter/execution validation.
+LTX_DURATION_PROFILES = {
+    "ltx-yusu-director-v1": {
+        "duration_seconds": 1.0,
+        "frames": 24,
+        "fps": 24,
+        "output_frames": 25,
+    },
+    "ltx-yusu-short-v1": {
+        "duration_seconds": 1.0,
+        "frames": 24,
+        "fps": 24,
+        "output_frames": 25,
+    },
+    "ltx-yusu-long-v1": {
+        "duration_seconds": 4.0,
+        "frames": 96,
+        "fps": 24,
+        "output_frames": 97,
+    },
+}
+
+
+def _duration_profile(profile_id: object) -> tuple[str, dict] | None:
+    if profile_id is None:
+        return None
+    if not isinstance(profile_id, str) or not profile_id.strip():
+        raise StageError("duration profile id is required")
+    normalized = profile_id.strip()
+    aliases = {"ltx-yusu-short": "ltx-yusu-short-v1", "ltx-yusu-long": "ltx-yusu-long-v1"}
+    normalized = aliases.get(normalized, normalized)
+    profile = LTX_DURATION_PROFILES.get(normalized)
+    if profile is None:
+        raise StageError("unsupported duration profile")
+    return normalized, copy.deepcopy(profile)
+
+
+def _validate_video_timeline_segments(segments: object, duration: float) -> list[dict]:
+    """Validate one contiguous, full-coverage timeline before execution."""
+    if not isinstance(segments, list) or not segments:
+        raise StageError("video timeline_segments must be a non-empty list")
+    normalized: list[dict] = []
+    previous_end = 0.0
+    for index, raw in enumerate(segments, 1):
+        if not isinstance(raw, dict):
+            raise StageError("video timeline segment must be an object")
+        start = raw.get("start_second")
+        end = raw.get("end_second")
+        prompt = raw.get("prompt")
+        if (
+            isinstance(start, bool)
+            or not isinstance(start, (int, float))
+            or not math.isfinite(float(start))
+            or isinstance(end, bool)
+            or not isinstance(end, (int, float))
+            or not math.isfinite(float(end))
+            or not isinstance(prompt, str)
+            or not prompt.strip()
+        ):
+            raise StageError("video timeline segment seconds or prompt are invalid")
+        start = float(start)
+        end = float(end)
+        if start < 0 or end <= start or end > duration + 1e-9:
+            raise StageError("video timeline segment is outside the profile duration")
+        if index == 1 and not math.isclose(start, 0.0, abs_tol=1e-9):
+            raise StageError("video timeline must start at zero")
+        if index > 1 and not math.isclose(start, previous_end, abs_tol=1e-9):
+            raise StageError("video timeline segments must be contiguous")
+        normalized.append(
+            {**copy.deepcopy(raw), "start_second": start, "end_second": end, "prompt": prompt.strip()}
+        )
+        previous_end = end
+    if not math.isclose(previous_end, duration, abs_tol=1e-9):
+        raise StageError("video timeline must cover profile duration")
+    return normalized
 
 
 def ltx_output_frame_count(duration_frames: int) -> int:
@@ -915,7 +994,40 @@ def build_video_plan(*args, **kwargs):
     _required_text(profile_hash, "profile hash")
     if execution_approved is not True:
         raise StageError("video plan requires explicit execution approval")
+    duration_profile = _duration_profile(kwargs.get("duration_profile_id"))
+    strict_video_contract = duration_profile is not None or any(
+        key in kwargs for key in ("motion_delta", "split_decision", "timeline_segments")
+    )
+    if strict_video_contract and duration_profile is None:
+        raise StageError("duration profile is required for production video")
+    if strict_video_contract:
+        motion_delta = kwargs.get("motion_delta")
+        if not isinstance(motion_delta, str) or not motion_delta.strip():
+            raise StageError("video motion_delta is required")
+        split_decision = kwargs.get("split_decision")
+        if not isinstance(split_decision, dict) or not isinstance(
+            split_decision.get("required"), bool
+        ) or not isinstance(split_decision.get("approved"), bool):
+            raise StageError("video split decision must explicitly declare required and approved")
+        recommendation = prompt_build.get("split_recommendation")
+        if not isinstance(recommendation, dict) or not isinstance(
+            recommendation.get("required"), bool
+        ):
+            raise StageError("video PromptBuild split recommendation is required")
+        if recommendation["required"] != split_decision["required"]:
+            raise StageError("video split decision does not match PromptBuild recommendation")
+        if recommendation["required"] or split_decision["required"]:
+            raise StageError("video PromptBuild requires split; Stage 4 will not compress the shot")
+        if split_decision["approved"] is not True:
+            raise StageError("video split decision must explicitly clear the split gate")
+        for field in ("positive_zh", "positive_en"):
+            if not isinstance(prompt_build.get(field), str) or not prompt_build[field].strip():
+                raise StageError(f"video PromptBuild {field} is required")
+        if prompt_build.get("negative_prompt") != "":
+            raise StageError("video uses the workflow-owned negative conditioning; negative_prompt must be empty")
     intent = kwargs.get("intent")
+    if strict_video_contract and not isinstance(intent, dict):
+        raise StageError("production video requires a PromptIntent quality contract")
     if intent is not None:
         quality_errors = validate_ltx_prompt_build(prompt_build, intent)
         if quality_errors:
@@ -931,12 +1043,17 @@ def build_video_plan(*args, **kwargs):
             raise StageError("video prompt is empty")
         if prompt_build.get("negative_prompt") != "":
             raise StageError("video uses the workflow-owned negative conditioning; negative_prompt must be empty")
-    frames = kwargs.get("frames", 24)
-    fps = kwargs.get("fps", 24)
-    if not isinstance(frames, int) or isinstance(frames, bool) or frames != 24:
-        raise StageError("video baseline must use 24 frames")
-    if not isinstance(fps, int) or isinstance(fps, bool) or fps != 24:
-        raise StageError("video baseline must use 24 fps")
+    if duration_profile is None:
+        selected_profile_id = "ltx-yusu-director-v1"
+        selected_profile = {"duration_seconds": 1.0, "frames": 24, "fps": 24, "output_frames": 25}
+    else:
+        selected_profile_id, selected_profile = duration_profile
+    frames = kwargs.get("frames", selected_profile["frames"])
+    fps = kwargs.get("fps", selected_profile["fps"])
+    if not isinstance(frames, int) or isinstance(frames, bool) or frames != selected_profile["frames"]:
+        raise StageError(f"video duration profile requires {selected_profile['frames']} logical frames")
+    if not isinstance(fps, int) or isinstance(fps, bool) or fps != selected_profile["fps"]:
+        raise StageError(f"video duration profile requires {selected_profile['fps']} fps")
     output_width = kwargs.get("output_width", LTX_BASELINE_OUTPUT_WIDTH)
     output_height = kwargs.get("output_height", LTX_BASELINE_OUTPUT_HEIGHT)
     if (
@@ -948,17 +1065,36 @@ def build_video_plan(*args, **kwargs):
         or output_height != LTX_BASELINE_OUTPUT_HEIGHT
     ):
         raise StageError("video baseline output must use the profiled 1024x704 canvas")
+    timeline_segments = kwargs.get("timeline_segments")
+    if timeline_segments is not None:
+        normalized_segments = _validate_video_timeline_segments(
+            timeline_segments, selected_profile["duration_seconds"]
+        )
+    else:
+        normalized_segments = [
+            {
+                "start_second": 0.0,
+                "end_second": selected_profile["duration_seconds"],
+                "prompt": prompt_build["prompt"],
+            }
+        ]
+    normalized_segments = _validate_video_timeline_segments(
+        normalized_segments, selected_profile["duration_seconds"]
+    )
     plan = {
         "schema_version": "1.0",
         "stage": "video",
         "plan_state": "draft",
         "execution_approved": True,
-        "production_eligible": production_source,
+        "production_eligible": production_source and strict_video_contract,
         "plan_mode": (
-            "lineage-bound-production" if production_source else "legacy-dry-run"
+            "lineage-bound-production"
+            if production_source and strict_video_contract
+            else "legacy-dry-run"
         ),
         "local_only": True,
         "workflow_profile_id": "ltx-yusu-director-v1",
+        "duration_profile_id": selected_profile_id,
         "workflow_hash": workflow_hash,
         "profile_hash": profile_hash,
         "workflow_fingerprint": kwargs.get("workflow_fingerprint"),
@@ -973,20 +1109,29 @@ def build_video_plan(*args, **kwargs):
         "negative_node_id": 195,
         "parameters": {
             "frames": frames,
-            "output_frames": ltx_output_frame_count(frames),
+            "output_frames": selected_profile["output_frames"],
             "fps": fps,
+            "duration_seconds": selected_profile["duration_seconds"],
             "output_width": output_width,
             "output_height": output_height,
             "start_frame": 0,
             "end_frame": frames - 1,
         },
         "patches": [
-            {"slot": "director.timeline_data", "node_id": 174, "value": "segment-0001"},
+            {"slot": "director.timeline_data", "node_id": 174, "value": [segment.get("prompt") for segment in normalized_segments]},
             {"slot": "director.local_prompts", "node_id": 174, "value": prompt_build["prompt"]},
             {"slot": "director.segment_lengths", "node_id": 174, "value": str(frames)},
         ],
         "expected_outputs": ["video"],
     }
+    plan["timeline_segments"] = normalized_segments
+    if strict_video_contract:
+        plan["motion_delta"] = kwargs["motion_delta"].strip()
+        plan["split_decision"] = copy.deepcopy(kwargs["split_decision"])
+        plan["production_eligible"] = production_source
+    else:
+        plan["legacy_compact"] = True
+        plan["submission_blocked"] = True
     if shot_lineage_id is not None:
         plan["lineage_id"] = shot_lineage_id
     if shot.get("parent_artifact_hash") is not None:

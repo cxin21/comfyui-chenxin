@@ -1,181 +1,92 @@
-# Usage Guide / 使用指南
+# 四阶段生产使用说明
 
-> **EN**: Step-by-step concrete examples for the 3 most common workflows.
->
-> **中文**:3 个最常用工作流的逐步具体示例。
+本文只描述当前受支持的角色一致性到视频生产链。历史兼容技能和可选后处理说明已经退役，不是本流程的替代路径。
 
----
+## 0. 共同输入
 
-## Workflow 1 — Generate a single image (EN: "prompt → PNG")
+开始前准备：
 
-### Command sequence
+- 目标：要生成哪个角色、哪条故事线、哪个镜头或哪段视频；
+- 背景：剧情拆解、影视资产、角色事实、风格和现实限制；
+- 交付标准：正/反提示词、基础图、多视角设定图、镜头图、视频以及可审计证据；
+- 边界：不安装模型、不修改用户工作流、不清理 history/output、不绕过审批。
 
-```bash
-# In a Claude Code session that has this plugin installed:
+信息缺失但不会改变工作流选择时，先按显式假设完成探索版本；会改变资产、节点或安全边界时必须停在 draft。
 
-/chenxin-init                                       # one-time, per machine
-"用 Anima 生成金发精灵女法师释放灭世级魔法, 832x1216"
-```
+## 1. Prompt Forge → 正面角色基础图
 
-### What happens (timeline)
+1. 读取 Prompt Forge 的 PromptIntent、剧情和影视资产信息。
+2. 生成正向提示词、反向提示词以及尺寸、镜头、风格和一致性约束。
+3. 通过 MCP 读取受信的相机基础工作流 UI/API/strip/runtime/validation 证据。
+4. 只修改 profile 允许的输入，生成正面角色基础图。
+5. 从 ComfyUI raw history 读取输出，验证 PNG、路径、SHA-256、lineage 和 front-facing acceptance。
+6. 记录 Stage 1 RunRecord，产出 `CharacterBaseImage`，供 Stage 2 使用。
 
-```
-t=0      Chenxin-core (L4) routes:
-         - "Anima"   → recipe_lookup.py → anima dialect block
-         - "魔法"    → aesthetic-match  (8-segment framework)
-         - 832x1216  → hardware_decide.py (8GB profile)
+任何工作流指纹漂移、转换错误、队列非空或输出无法验证，都必须停止。
 
-t=200ms  vram_decide.py returns:
-         {quant: fp8_e4m3fn, swap: 40, defaults: euler/4/1.0, blocked: false}
+## 2. Flux2-Klein → 多视角角色设定图
 
-t=500ms  SKILL.md calls:
-         mcp__comfyui-mcp__query_workflow(AnimaStandardV7.json, ids=[3,4])
-         mcp__comfyui-mcp__modify_workflow(set node 3/4 to dialect+blend)
+生产 profile：`flux2-klein-multiview-flat-v2`。
 
-t=2s     mcp__comfyui-mcp__enqueue_workflow + get_job_status (poll)
+1. 验证 Stage 1 的 `CharacterBaseImage` 和 RunRecord 完整匹配。
+2. 由受控本地 orchestrator 注入 `McpBridge`，实际调用 `get_workflow`、`strip_workflow`、`validate_workflow` 和 `check_workflow_runtime`。
+3. 使用上传文件名 `prompt-forge/<lineage_id>/character-base-<sha256>.png`，禁止覆盖不同内容。
+4. 只允许 profile 白名单里的两个 base-image 节点使用同一上传文件；pose、模型、LoRA、sampler、scheduler 和其他字段保持不变。
+5. 生成并验证 front、right_45、right、rear_45、rear、left_45、left 等角度资产。
+6. 通过 `select-reference` 和 `accept-reference` 明确接受可作为 Stage 3 参考的角度。
 
-t=15s    mcp__comfyui-mcp__get_image → PNG in <comfyui>/output/
+原始分组 Flux 工作流不是生产 fallback；flat-v2 profile 缺失或证据漂移时 fail closed。
 
-t=16s    L5 gui_save.py writes <comfyui>/user/default/workflows/<ts>_anima-img.json
-         (the graph for replay)
+## 3. Prompt Forge → 相机 G1 镜头图
 
-t=17s    aesthetic-judge algorithm (in stage-3-review module) scores 8.4/10
+1. 基于本次镜头目标再次生成正向、反向和运动/构图提示词。
+2. 绑定已接受的角色角度、故事线、角色事实和镜头约束。
+3. 选择相机工作流的 G1 图生图组，并使用 pinned camera profile。
+4. 只应用 allowlisted camera patch 和 G1 路径检查，不使用通用 UI→API 猜测。
+5. 生成具体镜头图，验证 raw history、输出 PNG、hash、orientation 和 shot lineage。
+6. 记录 Stage 3 RunRecord，镜头图必须标记为 accepted 才能进入 Stage 4。
 
-t=17.1s  Result returned to user with 6-dim breakdown table.
-```
+## 4. LTX Director → 视频
 
----
+生产 profile：`ltx-yusu-director-v1`。
 
-## Workflow 2 — Generate a 5-sec I2V with talking + post-audio
+1. 验证镜头图已被 Stage 3 接受，且 source story/asset/angle lineage 完整。
+2. 读取并校验 `LTX全新导演台工作流.json` 的真实 UI/API/运行时证据。
+3. 在 Yusu LTX Director 节点写入镜头图和 Prompt Forge 生成的提示词。
+4. 由 timeline adapter 处理帧数、FPS、时长、分辨率、段落连续性和对白约束。
+5. 经过 draft → approval → consume → exclusive intent 后才允许 enqueue。
+6. 等待 ComfyUI terminal history，验证视频字节 hash、分辨率、FPS、帧数、时长和 raw graph。
+7. 写入 Stage 4 RunRecord，向用户返回 prompt id、artifact 路径、hash 和技术元数据。
 
-### Command sequence
+## 宿主接入
 
-```bash
-"用 Wan 2.2 出 5 秒视频:金发精灵女法师释放灭世级魔法, 加台词 +
- 后期, 8GB VRAM 友好"
-```
+MCP 协议本身与宿主无关。Codex、Claude Code 或其他宿主需要：
 
-### What happens
+1. 注册 `mcp/mcp_servers.json` 中的 `comfyui-mcp`；
+2. 提供 `host_call_tool(tool_name, arguments) -> JSON-compatible result`；
+3. 用实际宿主工具名构造 `runtime.mcp_bridge.McpBridge`；
+4. 将 bridge 注入 `build_multiview_draft_with_mcp`、`submit-character-base` 或 `submit-stage`。
 
-```
-t=0      L4 routes to:
-         - recipes/MODELS.md: wan (preferred on 8GB)
-         - templates_index.json: img2vid matches → ltx23AllInOneWorkflowForRTX_v44
-         - hardware_decide.py: 8GB profile → defaults
+桥接层不会替宿主调用 MCP，也不会给纯 JSON caller 颁发 production trust。
 
-t=1s     bootstrap.sh inline probe (--vram 8 --model wan)
-         → may recommend lowering longer_edge to 1024 if LTX GGUF Q4
+## 常用运行时命令
 
-t=3s     L2 loads ltx23 workflow + 5-step backup-modify-execute-restore per workflow-config-guard.md
+`skills/prompt-forge/runtime/runtime_cli.py` 提供 JSON 边界命令，包括：
 
-t=5s     mcp__comfyui-mcp__modify_workflow (5 white-listed nodes: 121/593/149/1792/1793)
-         - set 121 = positive prompt
-         - set 593 = negative
-         - set 149 = first frame PNG
-         - set 1792 = 1024 (resolution)
-         - set 1793 = 5 (clip length)
+- `discover`、`fingerprint`、`plan`、`plan-character-base`；
+- `plan-multiview`、`select-reference`、`accept-reference`；
+- `plan-shot`、`activate-g1`、`verify-img2img-path`；
+- `plan-video`、`plan-stage-execution`、`patch-yusu`；
+- `approve-plan`、`consume-approval`、`approve-stage`、`consume-stage`；
+- `submit-character-base`、`submit-stage`、`wait-stage`、`record-stage`；
+- `verify-video`、`pipeline-state`、`record`。
 
-t=10s    mcp__comfyui-mcp__enqueue_workflow
-         → calls LTX Sampler (CFG distilled, 4-step lightx2v)
+命令只接受 UTF-8 JSON 或 stdin。规划命令不产生副作用；纯 JSON 无法携带受控 callable 时必须返回 typed rejection。
 
-t=90s    Video + audio generated (LTX-2.3 GGUF on 8GB takes ~75s for 5s clip)
+## 失败处理
 
-t=92s    ffmpeg-pipeline skill auto-invokes for optional SRT + concat
-
-t=93s    Result returned with 4 products: mp4 / graph / manifest / SRT
-```
-
----
-
-## Workflow 3 — Full 6-stage manga pipeline
-
-### Command sequence
-
-```bash
-"全自动生成漫剧 永劫无间宁红夜"
-```
-
-### What happens (simplified; real times scale with VRAM)
-
-```
-t=0min    L4 + L5 manga-orchestrator kick off
-         SKILL.md enumerates 6 stages
-
-Stage 0 (5min)
-  scripts/bootstrap.sh --title-cn 永劫无间 --title-en yongjie_jianxin
-  creates: 02_assets/, 03_storyboard/01_plan.md, pipeline_state.json
-  writes vault: decision-{date}-manga-orchestrator.md
-
-Stage 1 (60-120min per character)
-  skills/lora-trainer/SKILL.md invoked, vit train_anima_standalone.sh
-  produces: 02_assets/01_characters/<n>/<n>.safetensors
-  verification: 5 test images + 6-dim ≥ 7.0 (in stages stage-3-review)
-  writes vault: knowledge-{date}-{char}-lora-verified.md
-
-Stage 2 (~30 min per 24 panels)
-  Locked AnimaStandardV7.json (modify nodes 3/4 only)
-  per-panel: backup → modify → enqueue → poll → image → restore
-  scoring: 6-dim (absorbed aesthetic-judge)
-  retry: 1× if < 7.0
-  produces: 04_outputs/01_panels/scene_NN.png + manifest
-
-Stage 3 (~10 min for 24 panels)
-  Per-panel: view_image + 6-dim scoring
-  redo: Stage 2 --panel N ×1 if <7.0
-  produces: 04_review.md + redo_list.json
-
-Stage 4 (~5min per 5-sec video × 24 scenes)
-  Locked ltx23AllInOneWorkflowForRTX_v44.json
-  per-scene: 5 white-listed nodes (121/593/149/1792/1793)
-  audio: LTX auto VAE (no audio upload)
-  produces: 02_micro_motion/scene_NN.mp4 per scene
-
-Stage 5 (~5 min)
-  ffmpeg-pipeline skill: concat + SRT auto-gen + optional burn-in
-  produces: 05_final/final.mp4
-
-Vault writes per stage (via on-write-sync-vault.sh hook).
-```
-
-**Total**: 3-8 hours depending on panel count + VRAM, all unattended after `init`.
-
----
-
-## Obsidian Sync — how to read what got written
-
-Every Stage completion + every `SPEC.md`/`plugin.json`/`marketplace.json` write pushes one file to:
-
-```
-$OBSIDIAN_VAULT_PATH/00-Inbox/processed/decision-<YYYY-MM-DD>-<event>.md
-```
-
-For example:
-
-```
-decision-2026-07-30-comfyui-chenxin-p0.1.md     # Phase 1 commit
-decision-2026-07-30-comfyui-chenxin-p0.2.md     # Phase 2 commit
-decision-2026-07-30-manga-stage-1-lora.md       # Each stage completion
-knowledge-2026-07-30-ninghongye-lora-verified.md
-stages-stage-2-panels-yongjie-2026-07-30.md
-```
-
-To grep them:
-
-```bash
-ls $OBSIDIAN_VAULT_PATH/00-Inbox/processed/ | tail -20     # recent
-grep -l 'lora_verified: true' $OBSIDIAN_VAULT_PATH/00-Inbox/processed/*.md   # find lora approvals
-```
-
-To disable vault sync: `OBSIDIAN_VAULT_PATH=/dev/null`.
-
----
-
-## Where to find help when stuck
-
-| Symptom | Read first |
-|---|---|
-| "ComfyUI service unreachable" | [docs/TROUBLESHOOTING.md](TROUBLESHOOTING.md) — section "Symptom: `bash scripts/obsidian-sync.sh` exits 0 but writes nothing" / "ComfyUI workflow fails with VRAM exceeded" |
-| "Where do I get the recipes from?" | `skills/prompt-forge/recipes/MODELS.md` — 80 entries with YAML frontmatter |
-| "How do the workflow stages hang together?" | `skills/manga-orchestrator/SKILL.md` — the 6-stage flowchart |
-| "Why was the architecture decided that way?" | [`docs/vault-bridge/decision-v1-close.md`](vault-bridge/decision-v1-close.md) — full 8-phase close-out notes |
-| "What changed in the latest release?" | `CHANGELOG.md` |
+- 队列非空：等待并重新读取能力，不直接提交；
+- profile/fingerprint/API graph 漂移：重建 draft，不复用旧 approval；
+- enqueue 超时：保留 receipt，先查 history，不盲目重试；
+- 输出缺失或 hash 不匹配：不能写成功 RunRecord；
+- MCP 工具不可用：报告缺口和替代方案，不猜工具名、不伪造 receipt。

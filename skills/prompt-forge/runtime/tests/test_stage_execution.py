@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+
 import runtime.stage_execution as stage_execution
 from runtime.artifacts import accept_stage3_reference
 from runtime.contracts import content_hash
@@ -36,7 +37,7 @@ def _camera_profile(*, production=False):
 
 def _yusu_profile():
     return json.loads(
-        (Path(__file__).parents[1] / "profiles" / "ltx-yusu-director.json").read_text(encoding="utf-8")
+        (Path(__file__).parents[1] / "profiles" / "ltx-yusu-short.json").read_text(encoding="utf-8")
     )
 
 
@@ -198,13 +199,60 @@ def _shot_ui():
     return json.loads((FIXTURES / "camera-img2img-ui-minimal.json").read_text(encoding="utf-8"))
 
 
-def _video_build():
+def _legacy_video_build():
     return {
         "ready_to_execute": True,
         "target": "video",
         "dialect": "video-timeline",
         "prompt": "The subject moves as the camera dollies in.",
+        "positive_zh": "主体移动。",
+        "positive_en": "The subject moves as the camera dollies in.",
         "negative_prompt": "",
+        "split_recommendation": {"required": False, "reason": "single shot"},
+    }
+
+
+def _video_build():
+    positive_zh = "\u30160-1 s\u3017\u4e3b\u4f53\u79fb\u52a8\u3002"
+    positive_en = "\u30160-1 s\u3017The subject moves with a slow dolly in."
+    return {
+        "ready_to_execute": True,
+        "target": "video",
+        "dialect": "video-timeline",
+        "prompt": positive_en,
+        "positive_zh": positive_zh,
+        "positive_en": positive_en,
+        "negative_prompt": "",
+        "global_prompt": "Preserve identity continuity.",
+        "timeline_segments": [
+            {"start": 0.0, "end": 1.0, "text_zh": "\u4e3b\u4f53\u79fb\u52a8\u3002", "text_en": "The subject moves with a slow dolly in."}
+        ],
+        "dialogue_attribution": [],
+        "continuity_requirements": ["subject"],
+        "split_recommendation": {"required": False, "reason": "single shot"},
+        "source_shot_plan_hash": "a" * 64,
+    }
+
+
+def valid_video_intent():
+    dimensions = {
+        name: []
+        for name in (
+            "subject", "action", "scene", "lighting", "composition", "camera",
+            "motion", "timeline", "audio", "color", "style", "mood", "medium", "quality",
+        )
+    }
+    dimensions["subject"] = [{"value": "subject", "origin": "explicit"}]
+    dimensions["action"] = [{"value": "moves", "origin": "explicit"}]
+    dimensions["motion"] = [{"value": "slow dolly in", "origin": "explicit"}]
+    dimensions["camera"] = [{"value": "slow dolly in", "origin": "explicit"}]
+    return {
+        "target": "video",
+        "dimensions": dimensions,
+        "locked_facts": ["subject"],
+        "input_type": "reference",
+        "global_prompts": {"reference": "Preserve identity continuity."},
+        "continuity_locks": {"identity": ["subject"]},
     }
 
 
@@ -215,6 +263,29 @@ def _video_graph():
         graph[node_id] = copy.deepcopy(node)
     graph["174"]["inputs"].update(profile["director_immutable_inputs"])
     return graph
+
+
+def _legacy_video_plan(graph):
+    return build_video_plan(
+        {
+            "artifact_type": "ShotImage",
+            "accepted": True,
+            "content_hash": "d" * 64,
+            "task_context_hash": "1" * 64,
+            "source_story_hash": "2" * 64,
+            "art_bible_hash": "3" * 64,
+            "lineage_id": "lineage-1",
+        },
+        _video_build(),
+        content_hash(graph),
+        content_hash(_yusu_profile()),
+        True,
+        workflow_fingerprint=_yusu_profile()["workflow_fingerprint"],
+        duration_profile_id="ltx-yusu-short-v1",
+        motion_delta="slow dolly in",
+        split_decision={"required": False, "approved": True},
+        intent=valid_video_intent(),
+    )
 
 
 def _video_plan(graph):
@@ -233,6 +304,10 @@ def _video_plan(graph):
         content_hash(_yusu_profile()),
         True,
         workflow_fingerprint=_yusu_profile()["workflow_fingerprint"],
+        duration_profile_id="ltx-yusu-short-v1",
+        motion_delta="slow dolly in",
+        split_decision={"required": False, "approved": True},
+        intent=valid_video_intent(),
     )
 
 
@@ -730,6 +805,10 @@ def test_video_execution_rejects_derivative_source_hash_drift():
         content_hash(_yusu_profile()),
         True,
         workflow_fingerprint=_yusu_profile()["workflow_fingerprint"],
+        duration_profile_id="ltx-yusu-short-v1",
+        motion_delta="slow dolly in",
+        split_decision={"required": False, "approved": True},
+        intent=valid_video_intent(),
     )
     report = _capability_report()
     plan["capability_report_hash"] = content_hash(report)
@@ -794,6 +873,24 @@ def test_video_execution_rejects_unpinned_ltx_contract():
     profile = _yusu_profile()
     profile["immutable_node_inputs"].pop("175")
     plan["profile_hash"] = content_hash(profile)
+    plan["capability_report_hash"] = content_hash(report)
+    plan["plan_hash"] = content_hash({key: value for key, value in plan.items() if key != "plan_hash"})
+    with pytest.raises(stage_execution.StageExecutionError, match="trusted LTX"):
+        stage_execution.build_stage_execution_draft(
+            plan, graph, profile, report, image_ref=image_ref,
+        )
+
+
+def test_video_execution_rejects_mutated_profile_and_matching_graph_hashes():
+    graph = _video_graph()
+    plan = _video_plan(graph)
+    image_ref = _video_image_ref(plan)
+    report = _capability_report()
+    profile = _yusu_profile()
+    profile["immutable_node_inputs"]["128"]["inputs"]["sampler_name"] = "ddim"
+    graph["128"]["inputs"]["sampler_name"] = "ddim"
+    plan["profile_hash"] = content_hash(profile)
+    plan["workflow_hash"] = content_hash(graph)
     plan["capability_report_hash"] = content_hash(report)
     plan["plan_hash"] = content_hash({key: value for key, value in plan.items() if key != "plan_hash"})
     with pytest.raises(stage_execution.StageExecutionError, match="trusted LTX"):

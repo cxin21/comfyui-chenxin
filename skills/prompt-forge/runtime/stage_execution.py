@@ -38,7 +38,13 @@ from .execution import (
 )
 from .workflow_profile import structure_fingerprint
 from .multiview_evidence import MultiviewEvidenceError, validate_png_file
-from .stages import LTX_BASELINE_OUTPUT_HEIGHT, LTX_BASELINE_OUTPUT_WIDTH, ltx_output_frame_count
+from .stages import (
+    LTX_BASELINE_OUTPUT_HEIGHT,
+    LTX_BASELINE_OUTPUT_WIDTH,
+    LTX_DURATION_PROFILES,
+    StageError,
+    ltx_output_frame_count,
+)
 
 
 class StageExecutionError(ValueError):
@@ -51,6 +57,11 @@ _STAGES = frozenset(("shot-image", "video"))
 _LTX_PROFILE_ID = "ltx-yusu-director-v1"
 _LTX_WORKFLOW_NAME = "LTX全新导演台工作流.json"
 _LTX_PROFILE_HASH = "8b960efb362ac1fbfe2840baf1321ef6a6397efde535b43b36e21fd0f04162c1"
+_LTX_DURATION_PROFILE_IDS = frozenset(("ltx-yusu-short-v1", "ltx-yusu-long-v1"))
+_LTX_DURATION_PROFILE_HASHES = {
+    "ltx-yusu-short-v1": "a7a3613c5bba84d358b6c84043911f2c497a786380ef38caea86ddb161bf71e0",
+    "ltx-yusu-long-v1": "3fc2a3442e6188aa57a3cda16bc9cef4e8568f452c68bfcdf8f1b44047db8460",
+}
 
 _DRAFT_KEYS = frozenset(
     {
@@ -258,17 +269,30 @@ def _stage_plan(plan: object, expected_stage: str | None = None) -> dict:
             raise StageExecutionError("Stage 4 source shot artifact type is invalid")
         _lineage_id(plan.get("lineage_id"), "stage plan lineage_id")
         parameters = plan.get("parameters")
+        duration_profile_id = plan.get("duration_profile_id", "ltx-yusu-short-v1")
+        expected_duration = LTX_DURATION_PROFILES.get(duration_profile_id)
+        if expected_duration is None:
+            raise StageExecutionError("Stage 4 duration profile is unsupported")
         if (
             not isinstance(parameters, dict)
-            or parameters.get("frames") != 24
-            or parameters.get("output_frames") != ltx_output_frame_count(24)
-            or parameters.get("fps") != 24
+            or parameters.get("frames") != expected_duration["frames"]
+            or parameters.get("output_frames") != expected_duration["output_frames"]
+            or parameters.get("fps") != expected_duration["fps"]
+            or parameters.get("duration_seconds") != expected_duration["duration_seconds"]
             or parameters.get("output_width") != LTX_BASELINE_OUTPUT_WIDTH
             or parameters.get("output_height") != LTX_BASELINE_OUTPUT_HEIGHT
         ):
             raise StageExecutionError(
-                "Stage 4 requires the fixed 24-frame/25-output-frame/24-fps/1024x704 baseline"
+                "Stage 4 parameters do not match the selected duration profile"
             )
+        try:
+            from .stages import _validate_video_timeline_segments
+
+            _validate_video_timeline_segments(
+                plan.get("timeline_segments"), expected_duration["duration_seconds"]
+            )
+        except StageError as exc:
+            raise StageExecutionError(str(exc)) from exc
     return copy.deepcopy(plan)
 
 
@@ -494,13 +518,17 @@ def build_stage_execution_draft(
     else:
         if not isinstance(image_ref, dict):
             raise StageExecutionError("Stage 4 requires a shot image reference")
+        duration_profile_id = plan.get("duration_profile_id", "ltx-yusu-short-v1")
+        profile_id = profile.get("profile_id")
         if (
-            profile.get("profile_id") != _LTX_PROFILE_ID
+            profile_id not in {_LTX_PROFILE_ID, *_LTX_DURATION_PROFILE_IDS}
+            or (duration_profile_id in _LTX_DURATION_PROFILE_IDS and profile_id != duration_profile_id)
             or profile.get("workflow_name") != _LTX_WORKFLOW_NAME
             or profile.get("runtime_classification") != "local"
             or profile.get("generation_modes") != ["image-to-video"]
             or profile.get("output_frame_rule") != "8n+1"
-            or profile.get("baseline_output_frames") != ltx_output_frame_count(24)
+            or profile.get("baseline_output_frames")
+            != ltx_output_frame_count(profile.get("baseline_frames", 0))
             or profile.get("effective_output_resolution")
             != {"width": LTX_BASELINE_OUTPUT_WIDTH, "height": LTX_BASELINE_OUTPUT_HEIGHT}
             or profile.get("effective_resize_method") != "maintain aspect ratio"
@@ -509,8 +537,13 @@ def build_stage_execution_draft(
             raise StageExecutionError(
                 "Stage 4 requires the exact local LTX Director workflow profile"
             )
-        if profile_digest != _LTX_PROFILE_HASH:
+        if profile_id == _LTX_PROFILE_ID and profile_digest != _LTX_PROFILE_HASH:
             raise StageExecutionError("Stage 4 requires the trusted LTX profile contract")
+        required_immutable_nodes = {"196", "80", "114", "128", "135", "139", "175"}
+        if set(profile.get("immutable_node_inputs", {})) != required_immutable_nodes:
+            raise StageExecutionError("Stage 4 requires the trusted LTX profile contract")
+        if profile_id in _LTX_DURATION_PROFILE_IDS and profile_digest != _LTX_DURATION_PROFILE_HASHES[profile_id]:
+            raise StageExecutionError("Stage 4 requires the trusted LTX duration profile contract")
         profile_fingerprint = profile.get("workflow_fingerprint")
         if (
             workflow_fingerprint is None
@@ -535,6 +568,7 @@ def build_stage_execution_draft(
                 plan["parameters"]["frames"],
                 plan["parameters"]["fps"],
                 profile,
+                timeline_segments=plan.get("timeline_segments"),
             )
             validate_yusu_sync(executable, profile)
         except (YusuTimelineError, TypeError, KeyError) as exc:
@@ -834,6 +868,7 @@ def build_stage_submission(
                 stage_plan["parameters"]["frames"],
                 stage_plan["parameters"]["fps"],
                 profile,
+                timeline_segments=stage_plan.get("timeline_segments"),
             )
             validate_yusu_sync(executable, profile)
         except (YusuTimelineError, TypeError, KeyError) as exc:

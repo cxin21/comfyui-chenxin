@@ -9,12 +9,18 @@ planned. Earlier "Planned" items that did not materialise (e.g. `templates_index
 `check_updates.py`, `obsidian-sync.sh`) are listed in the **Roadmap** section so the gap
 is visible.
 
+### Boundary cleanup (2026-08-04)
+
+- Make `skills/prompt-forge/SKILL.md` the only active production skill for the controlled four-stage character-to-video flow.
+- Add the host-neutral `runtime.mcp_bridge.McpBridge` integration for Stage 2 conversion and Stage 1/3/4 local submission.
+- Mark historical manga, LoRA-training and ffmpeg skills as `status: legacy` with empty trigger lists; remove the unimplemented `manga-stage-1-lora` stub.
+- Rewrite the Chinese README, usage guide, architecture, troubleshooting and inventory so they describe only verified paths and boundaries.
 ### Shipped (verified on disk)
 
 - **P0.1** — Knowledge substrate: 80 model prompt recipes in `skills/prompt-forge/recipes/MODELS.md` (YAML frontmatter, 2462 lines).
 - **P0.1** — Hardware VRAM decision matrix: `skills/prompt-forge/hardware/8gb.json` (15 allowed quantizations, sampler defaults, memory budget).
 - **P0.3** — `prompt-forge` mega-skill v4.0 (L4): keyword-routed prompt composition with 11-step self-check.
-- **P1.1** — L5 application skills ported into the plugin tree: `manga-orchestrator`, `manga-stage-1-lora` (stub), `manga-stage-2-panels`, `manga-stage-3-review`, `manga-stage-4-motion`, `ffmpeg-pipeline`, `lora-trainer`. The 2026-07-30 cleanup hard-deleted the previous `~/.claude/skills/` originals.
+- **P1.1** — L5 application skills ported into the plugin tree: `manga-orchestrator`, `manga-stage-2-panels`, `manga-stage-3-review`, `manga-stage-4-motion`, `ffmpeg-pipeline`, and `lora-trainer` as legacy compatibility files. The unimplemented `manga-stage-1-lora` placeholder is no longer shipped.
 
 ### Shipped — distribution
 

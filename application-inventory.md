@@ -1,83 +1,47 @@
-# Application Inventory — post-2026-07-30 cleanup
+# 技能与插件边界清单
 
-> **Phase**: P1.1 + P3-replacement migration status (committed across `531dd62` and `fa5f503`)
-> **Date**: 2026-07-30
-> **Reason**: prompt-forge (L4, P0.3) routes multi-stage pipelines to L5 application skills. Originally those 7 skills lived at `~/.claude/skills/<name>/` outside the plugin's discoverable surface — so `prompt-forge` step 7 silently fell through. P1.1 brought them in. The 2026-07-30 cleanup (commit `531dd62`) **hard-deleted** the original `~/.claude/skills/<name>/` directories because: (a) every functional capability was duplicated inside the plugin, (b) the plugin's loader now resolves `skills/<name>/SKILL.md` reliably, (c) confusion between old and new paths was producing silent-fall-through bugs.
+更新时间：2026-08-04
 
-## 1. Skills in plugin (P1.1 + post-cleanup)
+## 生产入口
 
-| # | Plugin slot | Origin | Status |
-|---|---|---|---|
-| 1 | `skills/manga-orchestrator/SKILL.md` | ported from a `~/.claude/skills/` original (manga-bootstrap / manga-orchestrator — both pre-cleanup) | **in plugin** |
-| 2 | `skills/manga-stage-1-lora/SKILL.md` | n/a (no source material) | **stub** (49 lines; coverage via `lora-trainer`) |
-| 3 | `skills/manga-stage-2-panels/SKILL.md` | ported | **in plugin** |
-| 4 | `skills/manga-stage-3-review/SKILL.md` | ported (absorbed manga-stage-3-review 内部 6 维算法 6-dim scoring into internal algorithm) | **in plugin** |
-| 5 | `skills/manga-stage-4-motion/SKILL.md` | ported (absorbed `manga-stage-5-talking-head`) | **in plugin** |
-| 6 | `skills/ffmpeg-pipeline/SKILL.md`     | ported | **in plugin** |
-| 7 | `skills/lora-trainer/SKILL.md`        | ported | **in plugin** |
-
-**7 in plugin. 6 ported, 1 stub (manga-stage-1-lora). 0 invented.**
-
-## 2. Hard-deprecation status
-
-The 2026-07-30 cleanup (commit `531dd62`) **hard-deleted** all `~/.claude/skills/<name>/` originals — `aesthetic-judge/`, `ffmpeg-pipeline/`, `lora-trainer/`, `manga-bootstrap/`, `manga-orchestrator/`, `manga-stage-2/3/4/5/`, `prompt-forge/`, plus `_shared/` and the `~/.claude/agents/comfyui-director.md` agent. This was authorized explicitly by the user after a comprehensive scan.
-
-**Functional split (what replaced what):**
-
-| Original (deleted 2026-07-30) | Plugin replacement |
-|---|---|
-| `manga-bootstrap/bootstrap.sh` | `scripts/bootstrap.sh` (P0.3) |
-| `aesthetic-judge/` (6-dim scoring) | absorbed into `skills/manga-stage-3-review/SKILL.md` (internal algorithm) |
-| `manga-stage-5-talking-head/` | absorbed into `skills/manga-stage-4-motion/SKILL.md` (unified video/audio/lip) |
-| `prompt-forge/SKILL.md` | preserved as `skills/prompt-forge/internals/legacy/prompt-forge-methodology.md` (methodology kept, recipe data already in `recipes/MODELS.md`) |
-| `_shared/workflow_config_guard.md` | `skills/prompt-forge/internals/workflow-config-guard.md` |
-| `_shared/workflow_resolver.md` | `skills/prompt-forge/internals/workflow-resolver.md` |
-| `agents/comfyui-director.md` | `agents/comfyui-director.md` (v3 → v4, post-plugin-integration rewrite; CLI-edges `mcp__comfyui-mcp-server__*` fixed to `mcp__comfyui-mcp__*`) |
-
-**When a hard deprecation is safe:** only after the plugin's loader has been observed to win for at least one full session. That gate has now been reached — the user's 2026-07-30 cleanup command explicitly authorized hard deletion of all 12 paths after functional verification.
-
-## 3. MCP namespace bug — fixed
-
-Prior to `531dd62`, the plugin's documentation files used `mcp__comfyui-mcp-server__*` (the wrong namespace). The actual MCP server registered in `mcp/mcp_servers.json` is `comfyui-mcp` → tools resolve at `mcp__comfyui-mcp__*`.
-
-**Files updated in `fa5f503`**:
-
-- `agents/comfyui-director.md` — frontmatter `tools:` + entire body references
-- `skills/prompt-forge/SKILL.md` — lines 51 + 88-95 (L4 routing)
-- `skills/prompt-forge/internals/context_graph.md` — lines 12 + 32 (L2 layer description + flow example)
-- `mcp/README.md` — "Boundary with the rest of the plugin" section
-
-**Verification**: `grep -r "mcp__comfyui-mcp-server" .` returns only `agents/comfyui-director.md:304` — which is the **version-history section explicitly stating** that v3 used this namespace and v4 corrected it. That historical mention is intentionally retained.
-
-## 4. Application route map (L5 → L3 recipes)
-
-| L5 skill (plugin path) | L3 recipe it ultimately invokes | Primary use case |
+| 路径 | 状态 | 责任 |
 |---|---|---|
-| `skills/manga-orchestrator/SKILL.md`         | (orchestrates 0→5 below)       | 6-stage full pipeline coordinator |
-| `skills/manga-stage-2-panels/SKILL.md`       | `recipe.anima.txt2img` (v1.0 AnimaStandardV7) | 24 panel PNGs at 832×1216 |
-| `skills/manga-stage-3-review/SKILL.md`       | (6-dim scoring, no generation) | aesthetic review |
-| `skills/manga-stage-4-motion/SKILL.md`       | `recipe.ltx23.img2vid` (ltx23AllInOne) | 78-node LTX I2V |
-| `skills/ffmpeg-pipeline/SKILL.md`            | (no L3 recipe — pure ffmpeg CLI) | concat + SRT + optional burn-in |
-| `skills/lora-trainer/SKILL.md`               | `recipe.anima.lora_train` (standalone trainer) | Anima 1.0 LoRA, 8GB VRAM |
-| `skills/manga-stage-1-lora/SKILL.md` (stub)  | — | gap; covered by `lora-trainer` |
+| `skills/prompt-forge/SKILL.md` | active | 唯一生产入口：提示词、角色资产、相机镜头、Flux 多视角、LTX Director 视频和运行时证据 |
+| `skills/prompt-forge/runtime/` | active | profile、adapter、draft、approval、consume、submit、history、artifact 和 RunRecord 合同 |
+| `mcp/mcp_servers.json` | active | 上游 `comfyui-mcp` 的 stdio 注册 |
+| `docs/MCP_BRIDGE.md` | active | Codex/Claude/本地 MCP 宿主适配说明 |
 
-## 5. Smoke test contract
+## 兼容技能（不可路由）
 
-`tests/test_applications.sh` enforces, for each ported skill:
+以下文件保留用于历史阅读和旧项目迁移，但均已设置 `status: legacy`、`triggers: []`，不属于当前四阶段生产流程：
 
-1. The file exists at `skills/<name>/SKILL.md`.
-2. The file has YAML frontmatter delimited by `---`.
-3. The frontmatter has both `name:` and `description:` keys.
-4. The `description:` value contains the literal substring `prompt-forge` so L4 routing metadata is present.
+| 路径 | 原用途 | 当前处理 |
+|---|---|---|
+| `skills/manga-orchestrator/SKILL.md` | 漫剧六阶段编排 | 停止作为入口，使用 Prompt Forge 四阶段链 |
+| `skills/manga-stage-2-panels/SKILL.md` | AnimaStandardV7 分镜 | 历史兼容，不是 Flux flat-v2 生产 profile |
+| `skills/manga-stage-3-review/SKILL.md` | 分镜美学评分 | 历史兼容，不替代 Stage 3 镜头图合同 |
+| `skills/manga-stage-4-motion/SKILL.md` | 旧 LTX/I2V | 历史兼容，不替代 Yusu Director profile |
+| `skills/lora-trainer/SKILL.md` | Anima LoRA 训练 | 不在当前生产链，需单独项目处理 |
+| `skills/ffmpeg-pipeline/SKILL.md` | 字幕/拼接后处理 | 不在当前四阶段链，按需单独处理 |
 
-Run: `bash tests/test_applications.sh`
+没有实现的 `skills/manga-stage-1-lora/SKILL.md` 占位已删除；其责任不再由插件自动承诺。
 
-## 6. First-principles: why hard-deprecate now (not "later")
+## 当前四阶段 profile
 
-Three lines of evidence converged:
+| 阶段 | 受信 profile | 交付物 |
+|---|---|---|
+| Stage 1 | `camera-anima-base-v1` | 正面 `CharacterBaseImage` + RunRecord |
+| Stage 2 | `flux2-klein-multiview-flat-v2` | 多视角资产 + accepted reference |
+| Stage 3 | `camera-anima-v1` | G1 图生图镜头图 + RunRecord |
+| Stage 4 | `ltx-yusu-director-v1` | Yusu Director 视频 + raw history + RunRecord |
 
-1. The plugin's 6 application skills (excluding the 49-line stub) cover **the same scopes** the originals covered, with one superset (`manga-stage-4-motion` absorbing `manga-stage-5-talking-head`).
-2. The plugin's `commands/chenxin-{init,build,review,doctor,publish,update}.md` subagents + hooks wire the L4 routing context into Claude Code's skill discovery at load time, so the plugin path wins consistently.
-3. After the user's explicit authorization (2026-07-30), the safety default falls away and the disk is cleaned.
+## 不再维护的旧断言
 
-The "left in place" stance from the original v1.0 inventory was the right safety default during the migration; the user has now confirmed adoption, so the safety falls away.
+以下历史文档中的路径或能力不能作为当前实现依据：
+
+- `agents/`、`commands/`、`hooks/`（当前仓库没有这些目录）；
+- `tests/test_applications.sh`（当前仓库没有该测试脚本）；
+- AnimaStandardV7、`ltx23AllInOneWorkflowForRTX_v44`、旧六阶段自动漫剧链；
+- Obsidian 自动同步、自动安装模型/节点、全自动无人审批 enqueue。
+
+权威依据是 `skills/prompt-forge/SKILL.md`、`skills/prompt-forge/runtime/`、`docs/USAGE.md` 和 `docs/MCP_BRIDGE.md`。

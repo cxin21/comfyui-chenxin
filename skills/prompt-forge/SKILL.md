@@ -1,11 +1,20 @@
 ---
 name: prompt-forge
 description: Use when compiling prompts for image or video models, or when an explicitly approved local ComfyUI generation needs an auditable PromptBuild, ExecutionPlan, artifact, and RunRecord.
+status: active
 ---
 
 # Prompt Forge
 
 The runtime CLI now also provides `submit-character-base` for the approved and consumed Stage 1 graph, `submit-stage` for Stage 3/4, and `wait-stage` for read-only terminal polling. These commands do not approve, rebuild a plan, or retry an uncertain enqueue; they only cross the loopback transport boundary after the corresponding evidence has been validated.
+
+The runtime is MCP-host neutral. Codex, Claude Code, or another MCP host may
+inject `runtime.mcp_bridge.McpBridge` into `build_multiview_draft_with_mcp`,
+`submit-character-base`, or `submit-stage`; the host-specific adapter only
+maps logical workflow tools to actual names and returns JSON-compatible
+responses. The bridge records hash-based call evidence, rejects missing tools,
+and is read-only by default. It does not replace approval, one-time
+consumption, fresh workflow reads, or the idempotent enqueue boundary.
 
 ## Stage 3/4 execution contract
 

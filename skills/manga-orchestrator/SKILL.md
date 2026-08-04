@@ -3,15 +3,12 @@ name: manga-orchestrator
 description: "AI 漫剧自驱动 orchestrator — 6 阶段流水线自动串联。从用户触发（'全自动生成漫剧 [书名]'）到最终视频，全程零人工干预。Also load prompt-forge first for VRAM/recipe context."
 version: 1.1.0
 author: Claude Code
-triggers:
-  - "全自动漫剧"
-  - "自驱动生成"
-  - "一键漫剧"
-  - "orchestrate manga"
-  - "跑全流程"
-  - "auto manga"
+status: legacy
+triggers: []
 allowed-tools: Bash, Read, Write, "mcp__comfyui-mcp__*"
 ---
+> Legacy compatibility only. Do not route production work here; use
+> skills/prompt-forge/SKILL.md and its four-stage character-to-video flow.
 
 # Manga Orchestrator — AI 漫剧自驱动编排 (v1.1, ported)
 

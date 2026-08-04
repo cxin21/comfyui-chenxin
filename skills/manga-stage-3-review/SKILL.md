@@ -3,15 +3,12 @@ name: manga-stage-3-review
 description: "AI 漫剧 Stage 3 — 像素级审查。对 Stage 2 的 panels 调 aesthetic-judge 逐张评分（6 维），生成双层 review.md 报告，< 7.0 自动 re-do 1 次，标 failed + redo_list。Also load prompt-forge first for VRAM/recipe context."
 version: 2.1.0
 author: Claude Code
-triggers:
-  - "审查分镜"
-  - "像素级审查"
-  - "review panels"
-  - "评图"
-  - "stage 3"
-  - "judge images"
+status: legacy
+triggers: []
 allowed-tools: Bash, Read, Write, "mcp__comfyui-mcp__*"
 ---
+> Legacy compatibility only. Do not route production work here; use
+> skills/prompt-forge/SKILL.md and its four-stage character-to-video flow.
 
 # Manga Stage 3 — 像素级审查 (v2.1, ported — 6 维)
 

@@ -3,15 +3,12 @@ name: manga-stage-2-panels
 description: "AI 漫剧 Stage 2 — 分镜面板自动生成。锁定 AnimaStandardV7 工作流，仅修改 prompt + LoRA 配置，自动生成 PNG 面板。可选 IP-Adapter / ControlNet 增强（v2.0）。Also load prompt-forge first for VRAM/recipe context."
 version: 2.1.0
 author: Claude Code
-triggers:
-  - "生成分镜"
-  - "分镜面板"
-  - "生成 panels"
-  - "stage 2"
-  - "storyboard panels"
-  - "跑分镜"
+status: legacy
+triggers: []
 allowed-tools: Bash, Read, Write, "mcp__comfyui-mcp__*"
 ---
+> Legacy compatibility only. Do not route production work here; use
+> skills/prompt-forge/SKILL.md and its four-stage character-to-video flow.
 
 # Manga Stage 2 — 分镜面板生成 (v2.1, ported)
 

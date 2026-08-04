@@ -9,6 +9,7 @@ the profile/capability evidence needed to reconstruct the exact submission.
 from __future__ import annotations
 
 import math
+import json
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,8 +17,16 @@ from pathlib import Path
 from .capabilities import build_capability_report
 from .comfy_api import ComfyApi
 from .comfy_submit import ComfyPromptSubmitter
+from .workflow_discovery import reread_workflow_evidence
+from .adapters.camera import normalize_camera_api_graph
+from .adapters.camera import is_pinned_camera_profile
 from .stage_execution import (
     StageExecutionError,
+    _LTX_DURATION_PROFILE_HASHES,
+    _LTX_DURATION_PROFILE_IDS,
+    _LTX_PROFILE_HASH,
+    _LTX_PROFILE_ID,
+    _stage_plan,
     build_stage_submission,
     submit_stage,
 )
@@ -27,6 +36,8 @@ from .execution import (
     submit_character_base,
     validate_stage_handoff,
 )
+from .contracts import content_hash
+from .mcp_bridge import McpBridge, McpBridgeError
 
 
 _REST_ADAPTER = {
@@ -35,6 +46,12 @@ _REST_ADAPTER = {
     "tools": [],
     "runtime_classification": "local",
 }
+_PROFILE_ROOT = Path(__file__).with_name("profiles")
+_TRUSTED_CAMERA_PROFILE_FILES = {
+    "camera-anima-v1": "camera-anima.json",
+    "camera-anima-base-v1": "camera-anima-base.json",
+}
+_LTX_WORKFLOW_NAME = "LTX全新导演台工作流.json"
 
 
 def _validate_timeout(timeout: object) -> float:
@@ -59,6 +76,171 @@ def _require_idle(report: dict) -> None:
         raise StageExecutionError("local ComfyUI queue is not idle; no stage was submitted")
 
 
+def _reject_untrusted_source_graph(source_api_graph: object) -> None:
+    """Reject graph-shaped receipts and grouped virtual buses before API use."""
+    if not isinstance(source_api_graph, dict):
+        raise StageExecutionError("source API graph must be an object")
+    forbidden = {
+        "conversion_receipt",
+        "converted_api_graph",
+        "__conversion_receipt__",
+        "promotion_receipt",
+    }
+    if forbidden.intersection(source_api_graph):
+        raise StageExecutionError("caller-supplied conversion receipts are not accepted")
+    if isinstance(source_api_graph.get("groups"), list):
+        raise StageExecutionError("grouped Flux API graphs are not production-resolvable")
+    for node in source_api_graph.values():
+        if not isinstance(node, dict):
+            continue
+        if "virtualbus" in str(node.get("class_type", "")).casefold():
+            raise StageExecutionError("grouped Flux virtual buses are not production-resolvable")
+
+
+def _trusted_camera_workflow_name(profile: dict) -> str:
+    """Resolve camera-base aliases through the canonical pinned profile."""
+    profile_file = _TRUSTED_CAMERA_PROFILE_FILES.get(profile.get("profile_id"))
+    if profile_file is None:
+        raise StageExecutionError("fresh workflow re-read requires a trusted workflow_name")
+    try:
+        canonical = json.loads((_PROFILE_ROOT / profile_file).read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise StageExecutionError("trusted camera profile contract is unreadable") from exc
+    workflow_name = canonical.get("workflow_name") if isinstance(canonical, dict) else None
+    if not isinstance(workflow_name, str) or not workflow_name:
+        source_profile_id = canonical.get("source_profile_id") if isinstance(canonical, dict) else None
+        source_file = _TRUSTED_CAMERA_PROFILE_FILES.get(source_profile_id)
+        if source_file and source_file != profile_file:
+            try:
+                source = json.loads((_PROFILE_ROOT / source_file).read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+                raise StageExecutionError("trusted camera profile contract is unreadable") from exc
+            workflow_name = source.get("workflow_name") if isinstance(source, dict) else None
+    if not isinstance(workflow_name, str) or not workflow_name:
+        raise StageExecutionError("trusted camera profile has no workflow_name")
+    return workflow_name
+
+
+def _refresh_workflow_before_submission(
+    source_api_graph: dict,
+    profile: dict,
+    workflow_tools: dict | None,
+    approved_plan: dict,
+) -> dict:
+    """Return the freshly observed/normalized graph or fail closed."""
+    if workflow_tools is None:
+        return source_api_graph
+    workflow_name = profile.get("workflow_name")
+    if not isinstance(workflow_name, str) or not workflow_name:
+        if profile.get("profile_id") in {"camera-anima-v1", "camera-anima-base-v1"}:
+            workflow_name = _trusted_camera_workflow_name(profile)
+        else:
+            raise StageExecutionError("fresh workflow re-read requires a trusted workflow_name")
+    normalizer = normalize_camera_api_graph if profile.get("api_normalization") else None
+    try:
+        evidence = reread_workflow_evidence(
+            workflow_tools,
+            workflow_name,
+            profile=profile,
+            normalize=normalizer,
+        )
+    except (RuntimeError, TypeError, ValueError) as exc:
+        raise StageExecutionError(f"fresh workflow re-read failed: {exc}") from exc
+    if evidence["api_graph"] != source_api_graph:
+        raise StageExecutionError("source API graph is stale or differs from the fresh local workflow")
+    trusted_fingerprint = profile.get("workflow_fingerprint")
+    if isinstance(trusted_fingerprint, str) and evidence["ui_fingerprint"] != trusted_fingerprint:
+        raise StageExecutionError("fresh UI workflow fingerprint does not match the trusted profile")
+    plan = approved_plan.get("stage_plan") if isinstance(approved_plan.get("stage_plan"), dict) else approved_plan
+    planned_fingerprint = plan.get("workflow_fingerprint") if isinstance(plan, dict) else None
+    if isinstance(planned_fingerprint, str) and evidence["ui_fingerprint"] != planned_fingerprint:
+        raise StageExecutionError("fresh UI workflow fingerprint does not match the approved plan")
+    return evidence["api_graph"]
+
+
+def validate_trusted_stage_profile(stage_or_draft: dict, profile: dict) -> dict:
+    """Bind an approval/submission boundary to the immutable profile contract."""
+    if not isinstance(stage_or_draft, dict):
+        raise StageExecutionError("stage plan or draft must be an object")
+    plan = stage_or_draft.get("stage_plan", stage_or_draft)
+    try:
+        safe_plan = _stage_plan(plan, plan.get("stage"))
+    except (AttributeError, StageExecutionError) as exc:
+        raise StageExecutionError(f"trusted stage profile validation failed: {exc}") from exc
+    if not isinstance(profile, dict) or content_hash(profile) != safe_plan.get("profile_hash"):
+        raise StageExecutionError("workflow profile hash does not match the approved stage plan")
+    if safe_plan["stage"] == "shot-image":
+        validate_trusted_camera_profile(profile)
+    else:
+        profile_id = profile.get("profile_id")
+        duration_id = safe_plan.get("duration_profile_id")
+        if profile_id not in {_LTX_PROFILE_ID, *_LTX_DURATION_PROFILE_IDS}:
+            raise StageExecutionError("Stage 4 requires the trusted LTX profile contract")
+        expected_hash = (
+            _LTX_PROFILE_HASH
+            if profile_id == _LTX_PROFILE_ID
+            else _LTX_DURATION_PROFILE_HASHES.get(profile_id)
+        )
+        if expected_hash is None or content_hash(profile) != expected_hash:
+            raise StageExecutionError("Stage 4 profile is not an immutable trusted duration profile")
+        if duration_id in _LTX_DURATION_PROFILE_IDS and profile_id != duration_id:
+            raise StageExecutionError("Stage 4 duration profile does not match the approved profile")
+    return safe_plan
+
+
+def validate_trusted_camera_profile(profile: dict) -> None:
+    if not is_pinned_camera_profile(profile):
+        raise StageExecutionError("Stage 3 requires the trusted camera profile contract")
+    profile_id = profile.get("profile_id")
+    profile_file = _TRUSTED_CAMERA_PROFILE_FILES.get(profile_id)
+    try:
+        trusted_profile = (
+            json.loads((_PROFILE_ROOT / profile_file).read_text(encoding="utf-8"))
+            if profile_file
+            else None
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise StageExecutionError("trusted camera profile contract is unreadable") from exc
+    if not isinstance(trusted_profile, dict) or profile != trusted_profile:
+        raise StageExecutionError("Stage 3 profile is not the immutable trusted camera profile")
+
+
+def validate_trusted_video_evidence(profile: dict, workflow_graph: dict, duration_profile_id: str) -> None:
+    """Validate CLI-supplied Stage 4 evidence against immutable local pins."""
+    if not isinstance(profile, dict) or not isinstance(workflow_graph, dict):
+        raise StageExecutionError("trusted video workflow evidence must be objects")
+    if profile.get("profile_id") not in {_LTX_PROFILE_ID, *_LTX_DURATION_PROFILE_IDS}:
+        raise StageExecutionError("video workflow profile_id is not trusted")
+    expected_hash = (
+        _LTX_PROFILE_HASH
+        if profile["profile_id"] == _LTX_PROFILE_ID
+        else _LTX_DURATION_PROFILE_HASHES.get(profile["profile_id"])
+    )
+    if expected_hash is None or content_hash(profile) != expected_hash:
+        raise StageExecutionError("video workflow profile is not an immutable trusted profile")
+    if profile.get("workflow_name") != _LTX_WORKFLOW_NAME or profile.get("runtime_classification") != "local":
+        raise StageExecutionError("video workflow profile runtime contract is invalid")
+    if profile.get("api_graph_hash") != content_hash(workflow_graph):
+        raise StageExecutionError("workflow graph does not match the trusted LTX profile")
+    if duration_profile_id in _LTX_DURATION_PROFILE_IDS and profile.get("profile_id") != duration_profile_id:
+        raise StageExecutionError("video duration profile does not match the trusted workflow profile")
+
+
+def _bind_workflow_tools(
+    workflow_tools: dict | None,
+    mcp_bridge: McpBridge | None,
+) -> tuple[dict | None, McpBridge | None]:
+    """Resolve a host-neutral bridge into the callable map used by the runtime."""
+    if workflow_tools is not None and mcp_bridge is not None:
+        raise StageExecutionError("provide workflow_tools or mcp_bridge, not both")
+    if mcp_bridge is None:
+        return workflow_tools, None
+    try:
+        return mcp_bridge.workflow_tools(), mcp_bridge
+    except McpBridgeError as exc:
+        raise StageExecutionError(f"MCP bridge negotiation failed: {exc}") from exc
+
+
 def submit_stage_via_local_rest(
     approved_plan: dict,
     source_api_graph: dict,
@@ -73,6 +255,8 @@ def submit_stage_via_local_rest(
     reference_image_name: str | None = None,
     reference_artifact: dict | None = None,
     image_ref: dict | None = None,
+    workflow_tools: dict | None = None,
+    mcp_bridge: McpBridge | None = None,
 ) -> dict:
     """Build, guard and enqueue one consumed Stage 3/4 submission.
 
@@ -81,19 +265,52 @@ def submit_stage_via_local_rest(
     remains part of the plan hash; the fresh report cannot rewrite that plan.
     ``submit_stage`` then owns the exclusive intent/receipt sentinel.
     """
+    workflow_tools, mcp_bridge = _bind_workflow_tools(workflow_tools, mcp_bridge)
+    production = isinstance(approved_plan, dict) and approved_plan.get("production_eligible") is True
+    if isinstance(approved_plan, dict) and isinstance(approved_plan.get("stage_plan"), dict):
+        production = approved_plan["stage_plan"].get("production_eligible") is True
+    if isinstance(approved_plan, dict) and approved_plan.get("plan_mode") == "legacy-dry-run":
+        raise StageExecutionError("legacy dry-run plans cannot be submitted")
+    if isinstance(approved_plan, dict) and approved_plan.get("production_eligible") is False:
+        raise StageExecutionError("non-production stage plans cannot be submitted")
+    # Validate graph shape before profile checks so malformed handoffs expose
+    # their precise evidence failure while still remaining pre-API.
+    _reject_untrusted_source_graph(source_api_graph)
+    handoff_plan = (
+        approved_plan.get("stage_plan")
+        if isinstance(approved_plan, dict) and isinstance(approved_plan.get("stage_plan"), dict)
+        else approved_plan
+    )
     handoff_artifact = (
-        reference_artifact if approved_plan.get("stage") == "shot-image" else image_ref
-    ) if isinstance(approved_plan, dict) else None
+        reference_artifact if handoff_plan.get("stage") == "shot-image" else image_ref
+    ) if isinstance(handoff_plan, dict) else None
     expected_hash = (
-        approved_plan.get("reference_hash")
-        if isinstance(approved_plan, dict) and approved_plan.get("stage") == "shot-image"
-        else approved_plan.get("source_shot_hash") if isinstance(approved_plan, dict) else None
+        handoff_plan.get("reference_hash")
+        if isinstance(handoff_plan, dict) and handoff_plan.get("stage") == "shot-image"
+        else handoff_plan.get("source_shot_hash") if isinstance(handoff_plan, dict) else None
     )
     if handoff_artifact is not None or expected_hash is not None:
         try:
-            validate_stage_handoff(approved_plan, handoff_artifact)
+            validate_stage_handoff(handoff_plan, handoff_artifact)
         except ExecutionError as exc:
             raise StageExecutionError(f"stage handoff validation failed: {exc}") from exc
+    # Validate the full Stage 3/4 intent and immutable profile before any REST
+    # client or capability read is constructed.
+    validate_trusted_stage_profile(approved_plan, profile)
+    if production and workflow_tools is None:
+        raise StageExecutionError(
+            "production submission requires negotiated local workflow tools and a fresh workflow re-read"
+        )
+    source_api_graph = _refresh_workflow_before_submission(
+        source_api_graph, profile, workflow_tools, approved_plan
+    )
+    stage_plan = approved_plan.get("stage_plan", approved_plan)
+    if isinstance(stage_plan, dict) and stage_plan.get("stage") == "video":
+        validate_trusted_video_evidence(
+            profile,
+            source_api_graph,
+            stage_plan.get("duration_profile_id", "ltx-yusu-short-v1"),
+        )
 
     timeout_value = _validate_timeout(timeout)
     api = ComfyApi(base_url=base_url, timeout=timeout_value)
@@ -127,13 +344,16 @@ def submit_stage_via_local_rest(
     submitter = ComfyPromptSubmitter(base_url=api.base_url, timeout=timeout_value)
     receipt = submit_stage(submission, submitter.submit, receipt_path=receipt_path)
     history = api.history(receipt["prompt_id"])
-    return {
+    result = {
         "submission": submission,
         "receipt": receipt,
         "receipt_path": str(receipt_path.resolve()),
         "history": history,
         "live_capability_report": live_report,
     }
+    if mcp_bridge is not None:
+        result["mcp_bridge_receipt"] = mcp_bridge.receipt()
+    return result
 
 
 def submit_character_base_via_local_rest(
@@ -146,12 +366,35 @@ def submit_character_base_via_local_rest(
     base_url: str = "http://127.0.0.1:8188",
     timeout: float = 30.0,
     ui_workflow: dict | None = None,
+    profile: dict | None = None,
+    workflow_tools: dict | None = None,
+    mcp_bridge: McpBridge | None = None,
 ) -> dict:
     """Build and enqueue the consumed Stage 1 camera text-to-image graph.
 
     The REST client remains transport-only. Approval, exact graph rebuilding,
     and the exclusive receipt are owned by ``submit_character_base``.
     """
+    workflow_tools, mcp_bridge = _bind_workflow_tools(workflow_tools, mcp_bridge)
+    production = isinstance(approved_plan, dict) and (
+        approved_plan.get("execution_approved") is True
+        or approved_plan.get("production_eligible") is True
+        or approved_plan.get("plan_mode") == "production"
+    )
+    if not isinstance(profile, dict):
+        raise StageExecutionError("character-base submission requires the trusted camera profile")
+    validate_trusted_camera_profile(profile)
+    expected_profile_hash = approved_plan.get("profile_hash") if isinstance(approved_plan, dict) else None
+    if expected_profile_hash is not None and expected_profile_hash != content_hash(profile):
+        raise StageExecutionError("character-base profile hash does not match the approved plan")
+    if production and workflow_tools is None:
+        raise StageExecutionError(
+            "production submission requires negotiated local workflow tools and a fresh workflow re-read"
+        )
+    _reject_untrusted_source_graph(source_api_graph)
+    source_api_graph = _refresh_workflow_before_submission(
+        source_api_graph, profile, workflow_tools, approved_plan
+    )
     timeout_value = _validate_timeout(timeout)
     api = ComfyApi(base_url=base_url, timeout=timeout_value)
     live_report = build_capability_report(api, _REST_ADAPTER, datetime.now(timezone.utc))
@@ -177,12 +420,15 @@ def submit_character_base_via_local_rest(
     )
     prompt_id = result["enqueue_receipt"]["prompt_id"]
     history = api.history(prompt_id)
-    return {
+    result = {
         "submission": submission,
         **result,
         "history": history,
         "live_capability_report": live_report,
     }
+    if mcp_bridge is not None:
+        result["mcp_bridge_receipt"] = mcp_bridge.receipt()
+    return result
 
 
 def wait_for_stage_history(

@@ -1,272 +1,141 @@
-# comfyui-chenxin(中文)
+# comfyui-chenxin
 
-> **Claude Code 专用的 Local-first ComfyUI 超级技能包。** 80 个模型提示词配方 + 662 个工作流模板 + VRAM 感知模型选择 + 知识自更新 + 漫剧端到端流水线。
->
-> 英文版请看 → [`README.en.md`](README.en.md)。
+面向 ComfyUI 的本地优先 Prompt Forge 插件。当前生产主链是“角色一致性 → 多视角 → 镜头图 → 视频”的四阶段流程，支持 Codex、Claude Code 以及其他能提供 MCP 调用的宿主。
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-FFD27D.svg)](LICENSE)
-[![Claude Code: required](https://img.shields.io/badge/Claude_Code-plugin-5BAEE3.svg)](https://claude.com/claude-code)
-[![ComfyUI: required](https://img.shields.io/badge/ComfyUI-local--GPU-9aa3b2.svg)](https://www.comfy.org/)
-[![GitHub release](https://img.shields.io/github/v/release/cxin21/comfyui-chenxin)](https://github.com/cxin21/comfyui-chenxin/releases)
+> 重要边界：插件不携带模型、Custom Nodes 或保存的工作流文件；它只提供提示词编译、工作流合同、证据校验和受控编排。真正执行前，必须确认本机 ComfyUI、模型、节点和工作流已安装并通过 profile 校验。
 
----
+## 生产流程
 
-## 🚀 快速开始
-
-```bash
-# 1. 在 Claude Code 中安装插件
-/plugin marketplace add cxin21/comfyui-chenxin
-/plugin install comfyui@chenxin
-
-# 2. (一次性,每台机器) 初始化知识库
-/chenxin-init
-
-# 3. 生成 — 示例(用 ComfyUI 自带 text-to-image 模板,**无需任何外部工作流文件**)
-"用 ComfyUI 自带 text-to-image 模板生成一张金发精灵女法师在樱花树下释放魔法的图, 1024x1024"
+```text
+共同目标 / 剧情拆解 / 影视资产
+        │
+        ▼
+1. Prompt Forge 生成正向与反向提示词
+   文生图相机视角工作流 → 正面角色基础图（CharacterBaseImage）
+        │  接受、哈希、RunRecord
+        ▼
+2. Flux2-Klein 人物一键多视图
+   生产 profile：flux2-klein-multiview-flat-v2
+   → front / right_45 / right / rear_45 / rear / left_45 / left 等角度资产
+        │  选择并接受可作为参考的角度
+        ▼
+3. Prompt Forge 再次生成镜头提示词
+   文生图相机视角工作流的 G1 图生图组
+   → 具体镜头图（shot image）
+        │  绑定故事、角色、角度和镜头证据
+        ▼
+4. LTX 全新导演台
+   profile：ltx-yusu-director-v1
+   Yusu LTX Director 加载镜头图与提示词 → 视频 + 原始 history + RunRecord
 ```
 
-**前置条件**:本地 ComfyUI 服务于 `http://127.0.0.1:8188` + ≥ 8 GB 显存。插件未检测到 ComfyUI 运行时会自动拉起(由 `scripts/bootstrap.sh` 完成)。
+每一阶段都必须产生可验证的交接证据。不能用聊天文本、截图、手填 receipt 或旧 approval 代替证据。
 
----
+## 最小边界
 
-## 🧭 架构总览
+### 唯一生产入口
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ L8  Distribution (npm + Claude Code plugin marketplace)     │
-├─────────────────────────────────────────────────────────────┤
-│ L7  ~~跨 CLI 适配器~~  → 未构建(仅服务 Claude Code)        │
-├─────────────────────────────────────────────────────────────┤
-│ L6  遥测 / 健康 / SLO                                       │
-├─────────────────────────────────────────────────────────────┤
-│ L5  应用层(漫剧编排 + 6 个兄弟 Skill)                      │
-├─────────────────────────────────────────────────────────────┤
-│ L4  Skill 编排器(prompt-forge 超级 Skill)                  │
-├─────────────────────────────────────────────────────────────┤
-│ L3  知识底座(80 recipes + 662 templates + hw 配置文件)     │
-├─────────────────────────────────────────────────────────────┤
-│ L2  MCP 驱动(comfyui-mcp 108 工具 + 4 个 CLI 增强)         │
-├─────────────────────────────────────────────────────────────┤
-│ L1  ComfyUI 引擎(你的本地 GPU + custom_nodes)              │
-└─────────────────────────────────────────────────────────────┘
-```
+`skills/prompt-forge/SKILL.md` 是唯一生产技能入口，负责：
 
-详见 [`docs/architecture.md`](docs/architecture.md)。
+- PromptIntent / PromptBuild 编译；
+- 正向、反向提示词和镜头提示词质量合同；
+- 角色基础图、多视角、镜头图、视频四阶段路由；
+- Stage 1/2/3/4 的 profile、哈希、审批、消费、提交和 RunRecord 约束。
 
----
+运行时实现位于 `skills/prompt-forge/runtime/`，包括：
 
-## 📚 完整资源清单
+- `runtime_cli.py`：JSON 输入输出的规划、审批、消费、提交和验证命令；
+- `local_orchestrator.py`：审批/消费之后的本地提交边界；
+- `mcp_bridge.py`：宿主无关 MCP 工具适配、能力协商和哈希调用证据；
+- `profiles/`：受信工作流、节点、模型、分辨率和输出合同；
+- `tests/`：运行时合同、回归和 live 证据测试。
 
-### Skills(11 个) — `skills/`
+### 兼容性技能
 
-| Skill | 路径 | 用途 | 触发词 |
-|---|---|---|---|
-| **prompt-forge** | `skills/prompt-forge/SKILL.md` | L4 超级 Skill,关键词 → 工具/配方/工作流 路由 | "comfyui" / "出视频" / "anima" / "wan" / "ltx" 等 |
-| **manga-orchestrator** | `skills/manga-orchestrator/SKILL.md` | Stage 0:6 阶段流水线编排 | "全自动漫剧" / "auto manga" |
-| **manga-stage-1-lora** | `skills/manga-stage-1-lora/SKILL.md` | LoRA 训练编排(占位,实际由 lora-trainer 覆盖)| "训 LoRA" |
-| **manga-stage-2-panels** | `skills/manga-stage-2-panels/SKILL.md` | Stage 2:锁定 `AnimaStandardV7.json` 生成分镜 | "生成分镜" / "stage 2" |
-| **manga-stage-3-review** | `skills/manga-stage-3-review/SKILL.md` | Stage 3:6 维美学评审(已吸收 `aesthetic-judge`)| "审查分镜" / "judge images" |
-| **manga-stage-4-motion** | `skills/manga-stage-4-motion/SKILL.md` | Stage 4:锁定 `ltx23AllInOneWorkflowForRTX_v44.json` 图生视频 + 说话 | "生成分镜视频" / "图生视频" / "talking head" |
-| **ffmpeg-pipeline** | `skills/ffmpeg-pipeline/SKILL.md` | Stage 5:拼接 + SRT 字幕 + 可选烧入 | "加字幕" / "concat" |
-| **lora-trainer** | `skills/lora-trainer/SKILL.md` | Anima Standalone-Trainer 封装;8 GB 显存友好 | "训 Anima LoRA" / "lora training" |
-| prompt-forge internals(3 文件)| `skills/prompt-forge/internals/{recipe_yaml.py,recipe_lookup.py,hardware_decide.py,context_graph.md,workflow-{config-guard,resolver}.md}` | 库函数 | (自动加载)|
-| prompt-forge internals/legacy(1 文件)| `internals/legacy/prompt-forge-methodology.md` | 保留的 v3.1 提示词工程方法学(2026-07-30 硬删除 `~/.claude/skills/prompt-forge/` 后保留)| (只读)|
+`skills/manga-*`、`skills/lora-trainer/` 和 `skills/ffmpeg-pipeline/` 是历史兼容文档，已标记为 `status: legacy` 且不再拥有自动触发器。它们不属于当前四阶段生产链，不应绕过 Prompt Forge 直接调用。没有实现的 `manga-stage-1-lora` 占位已移除。
 
-### MCP(9 个) — `mcp/`
+## 安装前提
 
-| 文件 | 用途 |
-|---|---|
-| `mcp/README.md` | Layer-2 驱动文档。仅注册上游 npm MCP server。 |
-| `mcp/mcp_servers.json` | 注册上游 `comfyui-mcp`；Prompt Forge 会先协商当前实际工具能力，不依赖写死的 MCP 工具名。 |
+1. ComfyUI 已部署并运行在 `http://127.0.0.1:8188`。
+2. 相机基础图、Flux 多视角和 LTX 导演台工作流已经保存到 ComfyUI，并与本仓库 profile 的名称、指纹、API graph hash、节点和模型合同一致。
+3. 相应的 Checkpoint、LoRA、Custom Nodes 和显存配置已在 ComfyUI 本机可用；插件不会替你下载或安装这些资源。
+4. Python 3.11+、pytest（开发验证）和 `ffprobe`（视频技术元数据校验）可用。
+5. MCP 宿主已注册 `mcp/mcp_servers.json` 中的 `comfyui-mcp`。Codex/Claude 等宿主需要提供一个 `host_call_tool(tool_name, arguments)`，再构造 `runtime.mcp_bridge.McpBridge`。
 
-### Agents(7 个) — `agents/`
+## 安装
 
-| Agent | 用途 |
-|---|---|
-| `chenxin-orchestrator.md` | Sonnet,Tool:Read/Bash/Grep/Glob/Task。读 `SPEC.md`,找下一未勾选 phase,spawn builder + reviewer。 |
-| `chenxin-builder.md` | Sonnet,Tool:Write/Edit/Read/Bash/Grep/Glob/Skill。实现一个 phase 范围。 |
-| `chenxin-reviewer.md` | Sonnet,Tool:Read/Bash/Grep/Glob/Task。**5 维对抗性审查**(代码 / 安全 / workflow-JSON / VRAM / 配方)。 |
-| `chenxin-doctor.md` | Haiku。VRAM + 健康诊断 + 桥接 `mcp__comfyui-mcp__health_check`。 |
-| `chenxin-update-bot.md` | Haiku。周期上游 diff(SlavaSexton + Comfy-Org 模板 + HF 博客 RSS)。 |
-| `chenxin-publisher.md` | Sonnet。bump 版本、open release PR、建 GitHub Release。 |
-| `comfyui-director.md` | Sonnet。**ComfyUI 文生图 / 视频导演** — 编排层。6 阶段流水线 + 锁定工作流 + 节点白名单(v4 重写版)。 |
-
-### Commands(6 个) — `commands/`
-
-安装后可用的斜杠命令:
-
-| 命令 | 描述 |
-|---|---|
-| `/chenxin-init` | 一次性安装 + 引导机器块(`scripts/install.{ps1,sh}` + `scripts/bootstrap.sh`)。 |
-| `/chenxin-build [phase]` | 通过 `chenxin-orchestrator` 跑下一未勾选 phase。 |
-| `/chenxin-review` | 手动触发 5 维对抗性审查(支持 `--strict` 标志)。 |
-| `/chenxin-doctor` | 通过 `chenxin-doctor` 子智能体 + 冒烟测试做健康检查。 |
-| `/chenxin-publish` | bump 版本 + 生成 CHANGELOG + open release PR。 |
-| `/chenxin-update` | 通过 `chenxin-update-bot` 拉最新 L3 底座 delta。 |
-
-### Hooks(4 个) — `hooks/`
-
-| 文件 | 触发 | 动作 |
-|---|---|---|
-| `hooks/hooks.json` | 定义 3 个事件匹配器 | (配置)|
-| `hooks/scripts/on-session-start.sh` | `SessionStart` | 从 `SPEC.md` 打印当前 phase + 建议的下一步命令。 |
-| `hooks/scripts/on-write-sync-vault.sh` | `PostToolUse[Write|Edit]` | 若 target ∈ {`SPEC.md`,`plugin.json`,`marketplace.json`},运行 `scripts/obsidian-sync.sh`。 |
-| `hooks/scripts/on-stop-phase-gate.sh` | `Stop` | 检查 `git status`,若有未提交改动打印 PR 模板友好的提示。 |
-
-### Scripts(11 个) — `scripts/`
-
-| 脚本 | 用途 |
-|---|---|
-| `install.ps1` / `install.sh` | 一次性安装程序(跨平台)。 |
-| `bootstrap.sh` | 健康检查 + 首次运行时读 machine-block。 |
-| `check_updates.py` | 周更守护 — 4 个上游源(SlavaSexton、Comfy-Org/templates、Comfy-Org/skills、HF 博客 RSS)。 |
-| `diff_recipes.py` | 每个配方相对上游的方言 delta。 |
-| `phase-next.sh` / `find-next-phase.sh` | Git-as-orchestrator 助手。 |
-| `obsidian-sync.sh` | 写决策笔记到用户 Obsidian vault(白名单清理过的 EVENT)。 |
-| `self-update.sh` | 自更新节奏驱动。 |
-| `validate-plugin-schema.sh` / `validate-marketplace.sh` | JSON 架构校验器(在 CI + pre-publish 跑)。 |
-
-### 知识底座(L3) — `skills/prompt-forge/`
-
-| 文件 | 行数 | 用途 |
-|---|---|---|
-| `recipes/MODELS.md` | 2462 | 80 个模型提示词配方,带 YAML frontmatter(每个配方含 id/family/modality/dialect/license/triggers)。 |
-| `templates_index.json` | 6651 | 662 个工作流模板,按类别(3d=11 api=242 archived=23 audio=22 conditioning=26 get_started=5 image=92 upscale=22 utility=138 video=81)和模态(3d=36 image=435 video=152 audio=32 vector=2 mixed=5)分类。 |
-| `hardware/8gb.json` | 58 | VRAM 决策矩阵:15 个 allowed_quant,swap_blocks=40,sampler_defaults=euler/4/1.0,preference=[lightning_x2v, lightx2v, fcn, native]。 |
-| `runtime/` | — | v7 本地执行合同：TaskContext、CapabilityReport、workflow fingerprint、immutable pending bundle、ExecutionDraft、hash-bound approval event、canonical consumption namespace、one-shot consumption、approved ExecutionPlan、camera/Flux allowlist patch、normalized artifacts、RunRecord 与 JSON CLI。Stage 1 `plan` 产未批准 draft；Stage 2 production draft 只能由本地授权 orchestrator 的 `build_multiview_draft_with_mcp` 在进程内实际调用 `get_workflow`/`strip_workflow`/`validate_workflow`/`check_workflow_runtime` 后生成。纯 JSON `plan-multiview` 不能把自填 receipt 变成 draft，纯 JSON `patch-flux` 也不能声称已提交，二者均 fail closed。Stage 2 必须依次受控 conversion→draft→外部审批→消费→受控本地 MCP enqueue；所有 stage 共用 exact `draft_hash` 审批与同一 root 的一次性消费。 |
-
-Prompt Forge v7 deterministic gate（live 测试默认跳过）：
+Windows（Claude Code 注册脚本）：
 
 ```powershell
-$env:PYTHONPATH='skills/prompt-forge'
-Remove-Item Env:PROMPT_FORGE_LIVE -ErrorAction SilentlyContinue
-python -m pytest skills/prompt-forge/runtime/tests skills/prompt-forge/internals/tests -q
-python skills/prompt-forge/internals/evaluate.py
+powershell -ExecutionPolicy Bypass -File scripts/install.ps1
 ```
 
-真实 ComfyUI Experiment A/B 默认跳过。已有 A/B 使用 REST，只证明 selected history 图（指纹 `2efbc0fd43749828754dea7989f88806a944628e064d3c9c6876ee602726724f`）内部无漂移并匹配 workflow id/profile；它们是 render/graph characterization，不是 MCP 生产路径或完整审批证据。审查时只读重算的当前保存工作流指纹为 `7fa7a85e005182c6be42a3f3193add3fb41531ef0fae28e1cbd54a791e72e20a`，与历史指纹不同，不能混写为“current saved 未漂移”。未来 B 首轮只 exclusive-create immutable `pending-<draft_hash>.json` 后停止；bundle、approval event、`approve-plan` 与 `consume-approval` 必须绑定同一 existing canonical resolved `consumption_root`，parent/child/alias 不能更换消费 namespace。恢复还必须提供绑定 exact hash 的 `PROMPT_FORGE_APPROVAL_FILE`，并在 POST 前 atomic consume。缺 bundle、过期、篡改、root 不一致、资源/队列不安全或已消费均 fail closed。
-
-Experiment C 默认同样跳过。Stage 2 只接受 accepted/front-facing `CharacterBaseImage` 与对应完整 Stage 1 RunRecord；accepted descriptor 必须精确匹配一条 raw history 的 `type=output`/subfolder/filename 并解析到同一 canonical PNG。真实文件 SHA-256、lineage、canonical path/root、raw history、approved plan 和 consumption sentinel 必须一致。当前 verified Flux fingerprint 为 `fff6236efa6727ac6584d61f640a63f9602b2d07a545d216b96a870a681e6faf`；两个 base inputs 固定为 nodes `111/667`，pose/view prompt/model 字段不变且不注入 FLUX negative prompt。实际 UI→API 调用为 `get_workflow(format=api)`，receipt 记录真实 tool name、arguments、response digest 与受信本地 orchestrator provenance。消费后仅受控本地 MCP enqueue 边界可先原子写入 consumption-bound submission intent、再重算 graph 并提交；in-progress/success/failed intent 均禁止再次调用，失败 receipt 必须保留并先查 server。receipt 与 raw history 的 `prompt[3].extra_data.prompt_forge_enqueue_request_id` 必须绑定同一 request id。纯 JSON `patch-flux` fail closed。Stage 2 RunRecord 再从 canonical output root 读取 PNG 字节计算 hash。Stage 3 选择还必须明确 `accepted=true`、`CharacterAngleView`、`reference_eligible=true`、`semantic_conflict=false` 与 `hash_verified=true`。生产路径必须由真实 comfyui-mcp load/strip(or slice)/UI→API/runtime/validate 产生零 error executable graph，之后才可生成 `pending-c-<draft_hash>.json`；receipt 是受信本地 orchestrator 的可审计观察，不是虚构的 MCP 加密签名。REST 或失真转换不能充当证明。当前 comfyui-mcp 0.49.0 转换仍为 70 warnings/86 validation errors，因此没有上传、enqueue 或通过的 Experiment C 结论。
-
----
-
-## 🧪 测试(全部真实,非 mock)
-
-> 插件中的每个测试都针对真实数据调用实际脚本/CLI/二进制。**无 mock**。测试套件端到端证明组件行为(除了硬件依赖的 ComfyUI 服务 — 插件不要求该服务)。
-
-| 测试 | 结果 | 实际测试内容 |
-|---|---|---|
-| `tests/test_obsidian_sync.sh` | **4/4 PASS** | 对真实 `/tmp/obsidian-sync-sandbox-$$` vault 跑 `scripts/obsidian-sync.sh`;校验路径穿越白名单(敌意 EVENT 参数 → 安全文件名)、event 默认 unknown、vault 缺失时非致命退出 0。 |
-| `tests/test_check_updates.sh` | **17/17 PASS** | 对实际 `~/.cache` 和 `git ls-remote` 调 `check_updates.py` 和 `diff_recipes.py`;校验 JSON 封装、--help 退出 0、幂等自 diff(找出 13 个未变配方)。 |
-| `tests/test_applications.sh` | **7/7 PASS** | 通过 `awk` 读每个 SKILL.md;校验 YAML frontmatter 分隔符、`name:` 和 `description:` 存在、`description` 字面含 "prompt-forge"。 |
-| `scripts/validate-plugin-schema.sh` | **OK** | 解析 `.claude-plugin/plugin.json` 和 `marketplace.json`;校验 name 匹配 slug + dependencies path 存在。 |
-| `scripts/validate-marketplace.sh` | **OK** | 同上,针对 `marketplace.json`(交叉校验 `plugin.json` name 存在 + slug 正则)。 |
-
-跑全部:
+Linux/macOS：
 
 ```bash
-bash tests/test_obsidian_sync.sh
-bash tests/test_check_updates.sh
-bash tests/test_applications.sh
-bash scripts/validate-plugin-schema.sh
-bash scripts/validate-marketplace.sh
+bash scripts/install.sh
 ```
 
----
+这两个脚本只负责 MCP 配置、Claude Code 示例注册和 `comfyui-mcp` 的可选安装；它们不会安装 ComfyUI、模型、Custom Nodes 或工作流。其他 MCP 宿主请按其配置格式注册同一个 stdio MCP server。
 
-## 🔗 Obsidian Vault 集成
+## 审批与执行合同
 
-插件每次对关键文件做实质改动,会向用户 Obsidian vault 写一条 trace 文件。契约由 hook + 幂等脚本强制执行。
+生产提交严格遵循：
 
-- **Vault 默认路径**:`D:/ObsidianWorkSpace/workspace/00-Inbox/processed/`
-- **覆盖**:`OBSIDIAN_VAULT_PATH=/path/to/vault bash scripts/obsidian-sync.sh <event>`
-- **关闭**:`OBSIDIAN_VAULT_PATH=/dev/null`
-- **完整契约**:见 [`docs/OBSIDIAN_SYNC.md`](docs/OBSIDIAN_SYNC.md)
-- **故障排除**:见 [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md)
+```text
+能力发现 → 工作流读取/转换/验证 → draft
+→ 展示 exact draft_hash → 外部 approval
+→ 一次性 consume → 重建 executable graph
+→ queue idle 检查 → exclusive intent → enqueue
+→ raw history → artifact hash/metadata → RunRecord
+```
 
-### Vault → Git 反向桥
+- 规划阶段没有副作用；
+- `approve-*` 只接受本次展示的精确 hash；
+- `consume-*` 是一次性、原子、不可复用的消费记录；
+- 队列非空、profile 漂移、工作流指纹漂移、转换 warning/error、证据缺失时 fail closed；
+- POST 超时或结果不确定时保留 receipt，先查 history，不盲目重试；
+- `runtime_cli.py` 无法携带 Python callable，因此纯 JSON CLI 不能伪造生产 MCP conversion proof；生产 Stage 2 转换必须由受控本地 orchestrator 注入 `McpBridge` 或等价 callable。
 
-关键 vault 决策已镜像到本仓库 `docs/vault-bridge/`(见 [`docs/vault-bridge/README.md`](docs/vault-bridge/README.md)),团队可通过 `git grep` 检索,无需 vault 访问。
+## MCP 桥接
 
----
+宿主无关桥接层见 [`docs/MCP_BRIDGE.md`](docs/MCP_BRIDGE.md)。核心原则：
 
-## 🤝 贡献方式
+- 逻辑工具名与宿主实际工具名分离；
+- 只接受 JSON-compatible 参数和响应；
+- 记录逻辑工具、实际工具、参数哈希、响应哈希和宿主信息；
+- side effect 默认关闭；
+- raw `workflow_tools` 与 `McpBridge` 不能同时传入；
+- 桥接层不负责 UI→API 转换、不绕过审批、不替代一次性 enqueue 合同。
 
-1. Fork + 新建分支(`phase/PX.Y-task-name`)。
-2. 实现 + 提交(`scripts/install.sh`)。
-3. 用 `.github/PULL_REQUEST_TEMPLATE.md` 开 PR(自动填充复选框)。
-4. 等待 5 维对抗性审查(`agents/chenxin-reviewer.md`)→ 人工批准。
-5. `phase-gate.yml` 自动合并,开下一 phase 分支。
+## 验证
 
-完整规范见 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
+在仓库根目录执行：
 
----
+```powershell
+$env:PYTHONPATH = "skills/prompt-forge"
+py -3 -m pytest -q skills/prompt-forge
+py -3 -m compileall -q skills/prompt-forge/runtime
+ruff check skills/prompt-forge/runtime
+```
 
-## 📜 许可证
+工作流 profile 和 live 证据测试默认会在缺少本机 ComfyUI/模型/节点时跳过或 fail closed；这不等同于已完成真实生成。真实生产结论必须同时给出 prompt id、raw history、artifact 绝对路径、SHA-256、技术元数据和 RunRecord。
 
-MIT — 见 [`LICENSE`](LICENSE)。
+## 文档索引
 
-第三方致谢: [`ATTRIBUTION.md`](ATTRIBUTION.md)。
+- [四阶段使用说明](docs/USAGE.md)
+- [系统架构](docs/architecture.md)
+- [MCP 桥接层](docs/MCP_BRIDGE.md)
+- [故障排查](docs/TROUBLESHOOTING.md)
+- [Prompt Forge 规范](skills/prompt-forge/SPEC.md)
+- [受控角色到视频设计](docs/superpowers/specs/2026-08-04-controlled-character-video-pipeline-design.md)
+- [边界清理计划](docs/superpowers/plans/2026-08-04-plugin-boundary-cleanup-plan.md)
 
----
+## 当前不承诺
 
-## 🔗 链接
+- 不承诺全新安装后自动拥有模型、节点和工作流；
+- 不承诺 Codex/其他宿主自动获得 MCP callable，宿主适配仍需注册；
+- 不把旧漫剧六阶段、LoRA 训练、字幕拼接技能包装成当前生产流程；
+- 不在未通过 approval、consumption、history 和 artifact 校验前声称已生成成功。
 
-- GitHub: https://github.com/cxin21/comfyui-chenxin
-- 灵感来源: [SlavaSexton/ComfyUI-Agent-Kit](https://github.com/SlavaSexton/ComfyUI-Agent-Kit)
-- 底层 MCP: [artokun/comfyui-mcp](https://github.com/artokun/comfyui-mcp)
-- 知识上游: [Comfy-Org/workflow_templates](https://github.com/Comfy-Org/workflow_templates)
-- Claude Code: https://claude.com/claude-code
-
-## Prompt Forge v7 Stage 3/4 execution boundary
-
-The character-to-video path is now represented as explicit, hash-bound stages:
-
-1. `accept-reference` records the human acceptance of one verified Flux angle.
-2. `plan-stage-execution` binds a Stage 3 camera img2img or Stage 4 Yusu Director plan to a fresh local capability report and the exact API graph.
-3. `approve-stage` and `consume-stage` require a newly displayed draft, an exact approval event, and an exclusive consumption record.
-4. `build-stage-submission` reconstructs the exact executable graph and request. `submit_stage(...)` is the only Stage 3/4 enqueue boundary, requires an injected trusted-local callable plus the canonical consumed-namespace receipt path, and reserves an exclusive submission intent before the call. `runtime.comfy_submit.ComfyPromptSubmitter` is only the local UTF-8 transport injected into that boundary; calling it directly does not prove approval, consumption, or idempotency.
-5. `submit-character-base` provides the equivalent consumed Stage 1 boundary; `wait-stage` only polls history. `record-stage` requires raw history (not an optional summary), while `record` can bind Stage 1 submission, consumption, receipt, and raw-history evidence.
-
-No approval event is synthesized from chat text. `submit-character-base` and
-`submit-stage` are explicit side-effect commands, but they only accept already
-approved/consumed evidence and write an intent/receipt before the loopback
-POST; `wait-stage` is read-only. The local runtime evidence now covers the
-complete exploratory chain: Stage 1 front-base acceptance, Stage 2 multiview
-generation, Stage 3 camera img2img, and Stage 4 LTX video. The camera UI-to-API
-converter still reports the observed 7 warnings / 3 errors, so Stage 3 uses
-the pinned normalization bridge and submits the normalized graph with the
-original UI workflow attached as UTF-8 provenance; unrelated conversion drift
-remains fail-closed.
-
-### Production profile correction (2026-08-03)
-
-Stage 2 production uses `PromptForge-Flux2-Klein-multiview-flat-v2.json`, not
-the legacy `Flux2-Klein人物一键多视图工作流.json`. The promoted flat graph has
-fingerprint `9dc2b01e2aea0b051113b187b134d007f452df6c83cfcbbd8d325eaa4c29e4da`,
-validates with zero errors/health warnings, and is local-only. The legacy graph
-is retained for comparison because its current converter output contains
-unresolved custom-node buses and dangling references; it is not a safe fallback.
-No Stage 2 upload or enqueue is authorized without a fresh zero-error MCP
-conversion receipt, exact profile/API hash, explicit approval, and terminal
-artifact evidence. A local exploratory run has now produced real evidence:
-Stage 2 prompt `3d8627ab-ec60-46b2-b648-77d8662412ed` completed successfully;
-Stage 3 prompt `fe64ee38-a437-44de-9c15-1de7d9bc1f75` produced
-`2026-08-03-231455_anima-aesthetic-v1.1_2026080304.png`; Stage 4 prompt
-`dd6f2956-1041-461c-a000-a766fb0c125f` produced `屿僳_00004_.mp4`.
-The local evidence is retained under `.live-artifacts/` (ignored from Git).
-The flat output map also avoids a false claim: node `761` is `rear_45`, node
-`609` is `rear`, and node `565` remains `side_unknown` because it emits a
-left/right batch whose per-image semantics are not yet pinned.
-Stage 4 additionally pins the Director graph's base model, all three LTX LoRAs,
-Euler sampler, `linear_quadratic` scheduler, and active `1280x720` resolution;
-the inactive custom `1280x736` widget is not treated as the output size. Because
-the guide frame is 1216x832 and the Director uses `maintain aspect ratio` plus
-32-pixel snapping, the effective output contract is explicitly `1024x704`;
-the Stage 4 artifact verifier now checks width, height, 24 fps, and the LTX
-`8n+1` decoded frame rule (24 logical frames -> 25 output frames). Any drift in
-these inputs or output dimensions fails closed before the run record is accepted,
-and the full LTX profile digest is pinned so a caller cannot remove a contract
-and replace it with a self-authored profile hash.
-
-- Vault(Obsidian):`~/.claude/rules/obsidian-workflow.md`(workspace 规则)
+许可证：MIT。上游 MCP 驱动归属见 [`ATTRIBUTION.md`](ATTRIBUTION.md)。

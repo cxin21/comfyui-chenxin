@@ -1,31 +1,45 @@
-# Troubleshooting
+# 故障排查
 
-Common failure modes and their fixes, indexed by symptom.
+## ComfyUI 无法连接
 
-## Symptom: `bash scripts/validate-plugin-schema.sh` errors with `plugin.json: missing commands/agents/hooks/mcp paths`
+确认 ComfyUI 已启动并监听 `http://127.0.0.1:8188`。插件不会替你启动缺失的 ComfyUI，也不会自动安装节点和模型。先检查：
 
-You removed or renamed one of the plugin directories. Either restore the directory or update `plugin.json` to point at the new path.
+```powershell
+Invoke-WebRequest http://127.0.0.1:8188/system_stats
+```
 
-## Symptom: smoke test for obsidian-sync finds an `unknown` file even though I passed an event
+## MCP 工具不可用
 
-That's by design: `EVENT_RAW` is sanitized through `tr -cd 'A-Za-z0-9._-'`. If your event name contains only illegal characters, the script falls back to `unknown` and writes `decision-YYYY-MM-DD-unknown.md`.
+检查 MCP 宿主是否注册 `mcp/mcp_servers.json` 中的 `comfyui-mcp`，并确认宿主实际工具名已映射到 `McpBridge`。不要根据文档猜工具名；先做能力协商。缺少 `get_workflow`、`strip_workflow`、`validate_workflow` 或 `check_workflow_runtime` 时，生产 Stage 2/3/4 必须停止。
 
-## Symptom: `python3 scripts/check_updates.py --apply` writes 0 changes despite upstream drift
+## 工作流 profile 不匹配
 
-Confirm `git remote -v` lists a remote. The daemon compares local `recipes/MODELS.md` to upstream `SlavaSexton/ComfyUI-Agent-Kit` via `curl`, but `git fetch` failures cause the daemon to fall back to a no-diff report.
+工作流名称、UI fingerprint、API graph hash、节点、模型、LoRA、分辨率或输出 map 任一漂移，旧 draft 和 approval 都不能复用。重新读取真实工作流、重新规划并重新审批。原始分组 Flux 工作流不是 flat-v2 的 fallback。
 
-## Symptom: `bash tests/test_obsidian_sync.sh` fails because /tmp missing
+## 队列非空
 
-On Windows Git Bash, `/tmp` resolves to the user temp dir. If that's read-only (corporate lockdown), set `TMPDIR=$HOME/tmp` before running.
+当前生产策略一次只允许一个 ComfyUI job。队列有 running 或 pending 时不提交新任务；等待 terminal history 后重新生成 live CapabilityReport。
 
-## Symptom: `bash scripts/obsidian-sync.sh` exits 0 but writes nothing
+## 相机转换出现已知缺口
 
-Either the vault doesn't exist (idempotent non-fatal skip) or `EVENT` was empty after sanitization (defaults to `unknown`). Check by setting `OBSIDIAN_VAULT_PATH=` to point at a writable location.
+只允许 `runtime_cli.py normalize-camera` 对受信相机 profile 执行 pinned normalization。不要自行编写通用 UI→API converter，也不要把 caller-authored conversion receipt 作为证明。归一化后必须重新验证 UI fingerprint、API graph、runtime 和 validation。
 
-## Symptom: ComfyUI workflow fails with "VRAM exceeded"
+## Stage 2 找不到可用角度
 
-The inline hardware probe in `scripts/bootstrap.sh` (formerly `mcp/extensions/vram_decide.py`, inlined 2026-08) reads `skills/prompt-forge/hardware/<vram_gb>.json` (or `<vram_gb>gb.json` — both conventions are honored). If neither file exists for your VRAM, the probe returns `sampler_defaults` from the conservative SDXL-style defaults rather than refuse. Update the `hardware/XX.json` profile (or copy `8gb.json` to your actual VRAM tier) to gate correctly.
+只有通过 raw history、PNG hash、lineage 和 acceptance 校验的角度图才能被 `accept-reference` 接受。DiagnosticImage、hash 不匹配、front-facing 未确认或 semantic conflict 的资产不能进入 Stage 3。
 
-## Symptom: recipe_yaml.py modified a recipe's body, not just added YAML frontmatter
+## enqueue 超时或结果不确定
 
-The script is conservative — body content should be unchanged. If you see body change, open an issue with a diff. Likely cause: a recipe line began with `### Foo` inside its body (header collision).
+保留 consumption 和 submission-intent receipt，先按稳定 request id 查询 ComfyUI history。不要删除 sentinel、不要盲目重试、不要把“请求已发出”当成生成成功。
+
+## 视频技术验证失败
+
+Stage 4 需要同时通过 raw history、视频字节 hash、`ffprobe` 的分辨率/FPS/帧数/时长和 profile 合同。任何一项失败都不能写成功 RunRecord。
+
+## 旧技能被触发
+
+`skills/manga-*`、`skills/lora-trainer/` 和 `skills/ffmpeg-pipeline/` 已设置 `status: legacy`、`triggers: []`。如果宿主仍显示旧技能，重载插件并确认当前工作树；生产请求统一显式使用 `skills/prompt-forge/SKILL.md`。
+
+## 纯 JSON CLI 被拒绝
+
+这是预期的安全行为。`runtime_cli.py` 可以规划、审批、消费和验证 JSON，但不能携带受控 Python callable。生产 MCP conversion 必须由本地 orchestrator 注入 `McpBridge`，不能用 JSON 自填 receipt 冒充可信调用。

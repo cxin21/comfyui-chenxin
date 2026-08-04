@@ -1,57 +1,89 @@
-# comfyui-chenxin Architecture (Quick Ref)
+# 系统架构
 
-> TL;DR for engineers. Full spec → [superpowers/specs/2026-07-30-comfyui-chenxin-design.md](superpowers/specs/2026-07-30-comfyui-chenxin-design.md).
+## 目标
 
-```
+插件的生产边界只有一条：Prompt Forge 将用户目标编译成可审计的工作流计划，再由受控本地编排器在 approval 和一次性 consumption 之后提交 ComfyUI。
+
+## 分层
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
-│ L8  Distribution (npm + Claude Code plugin marketplace)     │
+│ MCP Host: Codex / Claude Code / compatible local host        │
 ├─────────────────────────────────────────────────────────────┤
-│ L7  ~~Cross-CLI adapters~~  → not built (Claude Code only) │
+│ Host-neutral MCP Bridge: logical tools → host tool names     │
 ├─────────────────────────────────────────────────────────────┤
-│ L6  Telemetry / Health / SLO                               │
+│ Prompt Forge Skill: prompt, asset, profile, stage routing    │
 ├─────────────────────────────────────────────────────────────┤
-│ L5  Application Layer (manga-orchestrator + 6 sibling apps)│
+│ Runtime: draft / approval / consume / submit / record        │
 ├─────────────────────────────────────────────────────────────┤
-│ L4  Skill Orchestrator (prompt-forge — mega-skill)         │
+│ Profiles + adapters: camera / Flux / Yusu timeline contracts  │
 ├─────────────────────────────────────────────────────────────┤
-│ L3  Knowledge Substrate (74 recipes + 578 templates + hw)  │
+│ ComfyUI MCP + loopback REST (transport only)                 │
 ├─────────────────────────────────────────────────────────────┤
-│ L2  MCP Driver (comfyui-mcp 108 tools)                      │
-├─────────────────────────────────────────────────────────────┤
-│ L1  ComfyUI Core (your local GPU + custom_nodes)           │
+│ Local ComfyUI + models + Custom Nodes + saved workflows      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## Layer contracts
+## 生产模块
 
-| Layer | Owner | Interface | Tests |
-|-------|-------|-----------|-------|
-| L1 | user's local install | HTTP at `127.0.0.1:8188` | health_check |
-| L2 | this repo (mcp/) | MCP tools | integration |
-| L3 | this repo (recipes/) | YAML + JSON files | unit |
-| L4 | this repo (skills/prompt-forge/) | SKILL.md | e2e |
-| L5 | this repo (skills/manga-*/) | SKILL.md | e2e |
-| L6 | this repo (agents/chenxin-doctor.md) | slash + agent | unit |
-| L8 | this repo (.claude-plugin/) | plugin.json | schema |
+| 模块 | 唯一职责 |
+|---|---|
+| `skills/prompt-forge/SKILL.md` | 生产入口、四阶段路由、提示词和安全边界 |
+| `skills/prompt-forge/runtime/mcp_bridge.py` | 适配宿主 MCP 调用并记录哈希证据 |
+| `skills/prompt-forge/runtime/workflow_discovery.py` | 读取 UI/API/strip/runtime/validation 证据 |
+| `skills/prompt-forge/runtime/adapters/camera.py` | 相机工作流的 pinned、allowlisted 归一化 |
+| `skills/prompt-forge/runtime/adapters/flux_multiview.py` | Flux flat-v2 双输入和多视角合同 |
+| `skills/prompt-forge/runtime/adapters/yusu_timeline.py` | LTX Director 时间线、帧数、FPS、时长和段落连续性 |
+| `skills/prompt-forge/runtime/profiles/` | 工作流名称、指纹、节点、模型、输出和资源 pin |
+| `skills/prompt-forge/runtime/local_orchestrator.py` | 只在已审批、已消费后跨 loopback transport 边界 |
+| `skills/prompt-forge/runtime/runtime_cli.py` | JSON 输入输出，不拥有宿主 callable |
 
-## Data flow
+## 四阶段数据流
 
+```text
+PromptIntent / story / art bible
+  → PromptBuild (positive + negative + constraints)
+  → Stage 1 CharacterBaseImage + RunRecord
+  → Stage 2 angle assets + accepted reference
+  → Stage 3 accepted shot image + RunRecord
+  → Stage 4 video + raw history + verified artifact + RunRecord
 ```
-user message
-    ↓ L7/L4 route by keyword
-L4 pick L3 dialect
-    ↓
-L3 ask L2 which template + which model
-    ↓
-L2 bootstrap.sh inline probe (L3 hardware matrix)
-    ↓
-L2 enqueue workflow (comfyui-mcp)
-    ↓
-L1 ComfyUI run
-    ↓ output to output/
-L2 gui_save graph to user/default/workflows/<ts>_<name>.json
-    ↓
-L4 optional aesthetic-judge
-    ↓
-result returned to user
+
+每个箭头都绑定 hash、lineage、profile 和能力证据。任何断链都会停止，不用下游摘要反推上游事实。
+
+## 副作用边界
+
+```text
+read / compile / inspect / normalize
+  → draft
+  → display exact hash
+  → external approval
+  → one-time consume
+  → rebuild executable graph
+  → queue idle + intent sentinel
+  → enqueue once
+  → raw history + artifact verification
 ```
+
+- Prompt 编译和工作流规划无副作用；
+- REST 只作为健康、队列、history 和最终受控提交的 transport；
+- MCP bridge 默认只读，不替代审批和 consumption；
+- queue 非空、profile 漂移、转换 warning/error 或 hash 不匹配时 fail closed；
+- legacy 技能不参与以上链路。
+
+## 资源边界
+
+仓库不包含：模型权重、Custom Nodes、ComfyUI 数据库、保存工作流实体、用户输出、审批文件和 MCP 宿主 SDK。安装脚本只注册 MCP 配置；宿主适配和本机资源由部署者负责。
+
+## 兼容层
+
+以下目录仅作为历史参考，frontmatter 已标记 `status: legacy` 且触发器为空：
+
+- `skills/manga-orchestrator/`
+- `skills/manga-stage-2-panels/`
+- `skills/manga-stage-3-review/`
+- `skills/manga-stage-4-motion/`
+- `skills/lora-trainer/`
+- `skills/ffmpeg-pipeline/`
+
+它们不应再被当作当前四阶段生产入口。没有实现的 `manga-stage-1-lora` 占位已移除。

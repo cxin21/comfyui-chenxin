@@ -1,7 +1,7 @@
 {
   "name": "comfyui-chenxin",
   "version": "0.0.0",
-  "description": "Local-first ComfyUI mega-skill: 80 model prompt recipes, hardware-aware model selection via VRAM decision matrix, prompt orchestration, and the manga end-to-end pipeline. For Claude Code only.",
+  "description": "Local-first ComfyUI skills with a host-neutral Prompt Forge runtime; Claude Code is one supported MCP host.",
   "author": {
     "name": "cxin21",
     "url": "https://github.com/cxin21/comfyui-chenxin"
@@ -20,8 +20,5 @@
   "license": "MIT",
   "homepage": "https://github.com/cxin21/comfyui-chenxin",
   "repository": "https://github.com/cxin21/comfyui-chenxin",
-  "engines": {
-    "claude-code": ">=1.0.0"
-  },
   "mcpServers": "./mcp/mcp_servers.json"
 }

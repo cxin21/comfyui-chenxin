@@ -3,17 +3,12 @@ name: manga-stage-4-motion
 description: "AI 漫剧 Stage 4 — 视频生成（含说话场景）。主路锁定 ltx23AllInOneWorkflowForRTX_v44 工作流，统一处理所有视频：微动作、说话、环境音。备选 I2V_InfiniteTalk_Wan21（唇型驱动）。Also load prompt-forge first for VRAM/recipe context."
 version: 3.1.0
 author: Claude Code
-triggers:
-  - "生成视频"
-  - "微动作"
-  - "stage 4"
-  - "图生视频"
-  - "说话视频"
-  - "加台词"
-  - "唇型同步"
-  - "talking head"
+status: legacy
+triggers: []
 allowed-tools: Bash, Read, Write, "mcp__comfyui-mcp__*"
 ---
+> Legacy compatibility only. Do not route production work here; use
+> skills/prompt-forge/SKILL.md and its four-stage character-to-video flow.
 
 # Manga Stage 4 — 视频生成（含说话场景）v3.1, ported
 

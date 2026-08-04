@@ -75,6 +75,7 @@ def build_capability_report(
     except (TypeError, ValueError) as exc:
         raise CapabilityError(f"workflow candidate discovery failed: {exc}") from exc
 
+    reason_codes = _capability_reason_codes(adapter_metadata, workflow_candidates)
     return {
         "schema_version": "1.0",
         "comfyui": {
@@ -92,6 +93,7 @@ def build_capability_report(
         "saved_workflows": list(workflows),
         "queue": {"running": len(running), "pending": len(pending)},
         "workflow_candidates": workflow_candidates,
+        "reason_codes": reason_codes,
         "generated_at": generated_at,
         "valid_until": valid_until,
     }
@@ -133,3 +135,44 @@ def require_adapter_tools(report: dict, required) -> None:
     missing = sorted(set(required) - set(available))
     if missing:
         raise CapabilityError(f"adapter is missing required tools: {', '.join(missing)}")
+
+
+def _capability_reason_codes(adapter: dict, candidates: list[dict]) -> list[str]:
+    """Summarize known capability gaps using stable machine-readable codes."""
+    codes: set[str] = set()
+    tools = set(adapter.get("tools", [])) if isinstance(adapter, dict) else set()
+    if not adapter.get("board_profiles") and not adapter.get("board_profile_support") and not (
+        {"get_board_profile", "validate_board_profile"} <= tools
+    ):
+        codes.add("missing_board_profile_support")
+    if any(
+        isinstance(candidate, dict)
+        and "unresolved_grouped_flux_buses" in candidate.get("reason_codes", [])
+        for candidate in candidates
+    ):
+        codes.add("unresolved_grouped_flux_buses")
+    if any(
+        isinstance(candidate, dict)
+        and (
+            "invalid_orientation_evidence" in candidate.get("reason_codes", [])
+            or any(
+                isinstance(item, dict) and item.get("verified") is False
+                for item in (candidate.get("orientation_evidence") or {}).values()
+            )
+        )
+        for candidate in candidates
+    ):
+        codes.add("invalid_orientation_evidence")
+    if adapter.get("orientation_evidence") is not None and (
+        not isinstance(adapter.get("orientation_evidence"), dict)
+        or any(
+            isinstance(item, dict) and item.get("verified") is not True
+            for item in adapter["orientation_evidence"].values()
+        )
+    ):
+        codes.add("invalid_orientation_evidence")
+    if not adapter.get("scene_prop_upload") and not ({"upload_scene", "upload_prop"} <= tools):
+        codes.add("missing_scene_prop_upload")
+    if not adapter.get("ltx_output_verification") and "verify_ltx_output" not in tools:
+        codes.add("unavailable_ltx_output_verification")
+    return sorted(codes)

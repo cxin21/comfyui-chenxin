@@ -120,6 +120,96 @@ def _mark(candidate: dict, code: str, reason: str) -> None:
     candidate["reasons"].append(reason)
 
 
+def _looks_grouped_flux(profile: dict, workflow_name: str, graph: dict) -> bool:
+    """Detect the legacy Flux graph whose virtual buses are not production-safe.
+
+    Grouped graphs are intentionally rejected by evidence, not by filename
+    alone.  A profile may explicitly mark itself as grouped, while an API
+    graph can expose the same condition through virtual-bus class names or
+    unresolved group references.
+    """
+    profile_id = profile.get("profile_id")
+    if profile_id in {"flux2-klein-multiview-v1", "flux2-klein-multiview-grouped-v1"}:
+        return True
+    lowered_name = workflow_name.casefold()
+    if "flux2-klein" in lowered_name and "flat-v2" not in lowered_name:
+        return True
+    if not isinstance(graph, dict):
+        return False
+    for node in graph.values():
+        if not isinstance(node, dict):
+            continue
+        class_type = str(node.get("class_type", "")).casefold()
+        if "virtualbus" in class_type or "virtual_bus" in class_type:
+            return True
+        inputs = node.get("inputs")
+        if isinstance(inputs, dict) and any(
+            "bus" in str(key).casefold() or "group" in str(key).casefold()
+            for key in inputs
+        ) and "flux" in lowered_name:
+            return True
+    return False
+
+
+def _has_invalid_orientation_evidence(profile: dict) -> bool:
+    outputs = profile.get("output_nodes") if isinstance(profile, dict) else None
+    if not isinstance(outputs, dict):
+        return False
+    for descriptor in outputs.values():
+        if not isinstance(descriptor, dict):
+            continue
+        label = str(descriptor.get("view_label", "")).casefold()
+        if label == "side_unknown":
+            evidence = descriptor.get("orientation_evidence")
+            # An unresolved output label is allowed in the profile; reject it
+            # only when a caller explicitly supplies contradictory evidence.
+            if isinstance(evidence, dict) and evidence.get("verified") is not True:
+                return True
+    return False
+
+
+def reread_workflow_evidence(
+    workflow_tools: dict,
+    workflow_name: str,
+    *,
+    profile: dict | None = None,
+    normalize=None,
+) -> dict:
+    """Read a workflow UI/API pair again immediately before production.
+
+    This helper accepts only negotiated callables.  It never trusts a caller's
+    conversion receipt and returns hashes of the observed graphs.  An optional
+    ``normalize`` callable can repair a pinned camera conversion bridge before
+    the source graph is hashed.
+    """
+    if not isinstance(workflow_tools, dict) or not all(
+        callable(workflow_tools.get(name)) for name in REQUIRED_WORKFLOW_TOOLS
+    ):
+        raise ValueError("required local workflow discovery callables are unavailable")
+    if not isinstance(workflow_name, str) or not workflow_name:
+        raise ValueError("workflow name is required")
+    ui_graph = _tool_call(workflow_tools, "get_workflow", {"filename": workflow_name, "format": "ui"})
+    converted = _tool_call(workflow_tools, "get_workflow", {"filename": workflow_name, "format": "api"})
+    stripped = _tool_call(workflow_tools, "strip_workflow", {"filename": workflow_name, "format": "api"})
+    if not all(isinstance(graph, dict) for graph in (ui_graph, converted, stripped)):
+        raise ValueError("workflow adapter returned a non-object graph")
+    if converted != stripped:
+        raise ValueError("caller-supplied conversion receipt or stale API conversion is untrusted")
+    normalized = stripped
+    if normalize is not None:
+        normalized = normalize(stripped, ui_graph, profile or {})
+        if not isinstance(normalized, dict):
+            raise ValueError("workflow normalization did not return an API graph")
+    return {
+        "workflow_name": workflow_name,
+        "ui_workflow": copy.deepcopy(ui_graph),
+        "api_graph": copy.deepcopy(normalized),
+        "ui_fingerprint": structure_fingerprint(ui_graph),
+        "api_graph_hash": content_hash(normalized),
+        "raw_api_graph_hash": content_hash(stripped),
+    }
+
+
 def discover_workflow_candidates(
     *,
     saved_workflows: list[str],
@@ -182,8 +272,25 @@ def discover_workflow_candidates(
             candidate["workflow_fingerprint"] = structure_fingerprint(ui_graph)
             candidate["api_graph_hash"] = content_hash(stripped_graph)
             candidate["converted_api_graph_hash"] = content_hash(converted_graph)
+            if _looks_grouped_flux(profile, workflow_name, stripped_graph):
+                _mark(
+                    candidate,
+                    "unresolved_grouped_flux_buses",
+                    "grouped Flux virtual buses are not production-resolvable; use flat-v2",
+                )
+            if _has_invalid_orientation_evidence(profile):
+                _mark(
+                    candidate,
+                    "invalid_orientation_evidence",
+                    "side or rear outputs require explicit directional orientation evidence",
+                )
             if converted_graph != stripped_graph:
                 _mark(candidate, "conversion_mismatch", "get_workflow(api) differs from strip_workflow(api)")
+                _mark(
+                    candidate,
+                    "conversion_receipt_untrusted",
+                    "the caller cannot supply or override a conversion receipt",
+                )
 
             validation = _tool_call(
                 workflow_tools, "validate_workflow", {"workflow": stripped_graph}

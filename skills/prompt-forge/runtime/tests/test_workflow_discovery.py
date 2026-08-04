@@ -163,3 +163,29 @@ def test_discovery_rejects_partial_tool_negotiation(missing):
 
     assert candidates[0]["status"] == "unavailable"
     assert candidates[0]["reason_codes"] == ["mcp_tools_unavailable"]
+
+
+def test_discovery_marks_grouped_flux_buses_unresolved_even_when_adapter_says_valid():
+    ui = _ui_workflow()
+    api = {
+        "1": {"class_type": "LoadImage", "inputs": {}},
+        "2": {"class_type": "FluxVirtualBus", "inputs": {"bus": "group-1"}},
+    }
+    tools, _ = _tools(ui, api)
+    spec = _spec(ui)
+    spec.update({
+        "role": "character-multiview-requested",
+        "profile": {
+            **spec["profile"],
+            "profile_id": "flux2-klein-multiview-v1",
+        },
+        "workflow_name": "Flux2-Klein人物一键多视图工作流.json",
+    })
+    candidates = discover_workflow_candidates(
+        saved_workflows=[spec["workflow_name"]],
+        workflow_tools=tools,
+        workflow_specs=[spec],
+        now=datetime(2026, 8, 4, tzinfo=timezone.utc),
+    )
+    assert "unresolved_grouped_flux_buses" in candidates[0]["reason_codes"]
+    assert candidates[0]["production_ready"] is False

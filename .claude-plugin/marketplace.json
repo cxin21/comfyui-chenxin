@@ -11,7 +11,7 @@
         "source": "github",
         "repo": "cxin21/comfyui-chenxin"
       },
-      "description": "Local-first ComfyUI mega-skill for Claude Code. 80 model prompt recipes (YAML frontmatter), 1 hardware VRAM decision matrix, hardware-aware model selection, self-updating knowledge substrate, manga end-to-end pipeline.",
+      "description": "Local-first Prompt Forge runtime for MCP hosts. Codex, Claude Code, and compatible hosts share the same controlled character-to-video pipeline with host-neutral MCP bridging and fail-closed workflow evidence.",
       "version": "0.0.0",
       "keywords": ["comfyui", "anima", "wan", "ltx", "hunyuan", "manga", "video", "ai-image"]
     }

@@ -3,15 +3,12 @@ name: ffmpeg-pipeline
 description: "AI 漫剧 Stage 5 — 字幕 + 视频拼接。Bash + ffmpeg CLI，零 MCP 依赖。从 Stage 4 mp4 + 对话文本生成 final.mp4。Also load prompt-forge first for VRAM/recipe context."
 version: 1.1.0
 author: Claude Code
-triggers:
-  - "加字幕"
-  - "合成视频"
-  - "concat"
-  - "make final"
-  - "stage 5"
-  - "拼接视频"
+status: legacy
+triggers: []
 allowed-tools: Bash, Read, Write
 ---
+> Legacy compatibility only. This optional post-processing skill is outside
+> the four-stage production flow; use Prompt Forge for generation.
 
 # FFmpeg Pipeline — AI 漫剧 Stage 5 (v1.1, ported)
 

@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from runtime.contracts import canonical_json, content_hash
+from runtime.mcp_bridge import McpBridge
 from runtime.execution import (
     ExecutionError,
     _validate_multiview_profile,
@@ -639,6 +640,43 @@ def test_controlled_mcp_builder_calls_exact_tools_before_production_draft(tmp_pa
     assert draft["plan_state"] == "draft"
     assert draft["saved_workflow_id"] == profile["workflow_id"]
     assert draft["promotion_receipt_hash"] == profile["promotion_receipt_hash"]
+
+
+def test_controlled_mcp_builder_accepts_host_neutral_bridge(tmp_path, monkeypatch):
+    record, artifact, stage1_graph, stage1_history, consumption, consumption_path = _stage1_chain(tmp_path)
+    monkeypatch.setattr(execution_module, "structure_fingerprint", lambda workflow: FINGERPRINT)
+    monkeypatch.setattr(multiview_evidence, "structure_fingerprint", lambda workflow: FINGERPRINT)
+    tools, calls = _controlled_mcp_tools()
+    mapping = {name: f"codex.{name}" for name in tools}
+    bridge = McpBridge(
+        lambda actual, arguments: tools[actual.removeprefix("codex.")](arguments),
+        tool_names=mapping,
+        host_id="codex",
+        host_version="test",
+    )
+    profile, promotion_receipt, _, _, _, _ = _v2_promotion_evidence()
+    _trust_v2_test_evidence(monkeypatch, profile)
+
+    draft = execution_module.build_multiview_draft_with_mcp(
+        stage1_record=record,
+        base_artifact=artifact,
+        stage1_api_graph=stage1_graph,
+        stage1_history=stage1_history,
+        stage1_approval_consumption=consumption,
+        stage1_consumption_path=str(consumption_path.resolve()),
+        workflow_profile_id=profile["profile_id"],
+        workflow_fingerprint=profile["workflow_fingerprint"],
+        workflow_id=profile["workflow_id"],
+        capability_report=_capability_report(),
+        profile=profile,
+        promotion_receipt=promotion_receipt,
+        upload_receipt=_upload_receipt(tmp_path, artifact),
+        mcp_bridge=bridge,
+    )
+
+    assert draft["plan_state"] == "draft"
+    assert len(bridge.receipt()["calls"]) == 5
+    assert calls[0][0] == "get_workflow"
 
 
 def test_production_builder_rejects_legacy_v1_profile_before_mcp_calls():

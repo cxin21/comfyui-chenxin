@@ -1,13 +1,18 @@
 import copy
+import json
+from pathlib import Path
 
 import pytest
 
 from runtime.contracts import content_hash
 from runtime.execution import ExecutionError, validate_stage_handoff
 from runtime.stage_execution import StageExecutionError
+from runtime.mcp_bridge import McpBridge
 from runtime.local_orchestrator import (
     submit_character_base_via_local_rest,
     submit_stage_via_local_rest,
+    validate_trusted_stage_profile,
+    validate_trusted_video_evidence,
 )
 
 
@@ -88,6 +93,65 @@ def _payload(tmp_path):
     }
 
 
+def test_production_submission_accepts_host_neutral_mcp_bridge(monkeypatch, tmp_path):
+    bridge = McpBridge(
+        lambda _tool, _arguments: {},
+        tool_names={
+            "get_workflow": "codex.get_workflow",
+            "strip_workflow": "codex.strip_workflow",
+            "validate_workflow": "codex.validate_workflow",
+            "check_workflow_runtime": "codex.check_workflow_runtime",
+        },
+        host_id="codex",
+        host_version="test",
+    )
+    captured = {}
+
+    monkeypatch.setattr(
+        "runtime.local_orchestrator.validate_trusted_stage_profile",
+        lambda *_args, **_kwargs: {"stage": "shot-image"},
+    )
+
+    def capture_refresh(_graph, _profile, workflow_tools, _plan):
+        captured["workflow_tools"] = workflow_tools
+        raise StageExecutionError("stop after bridge binding")
+
+    monkeypatch.setattr("runtime.local_orchestrator._refresh_workflow_before_submission", capture_refresh)
+
+    with pytest.raises(StageExecutionError, match="stop after bridge binding"):
+        submit_stage_via_local_rest(
+            {"stage": "shot-image", "production_eligible": True},
+            {},
+            {},
+            tmp_path / "consumed.json",
+            profile={},
+            capability_report={},
+            mcp_bridge=bridge,
+        )
+
+    assert set(captured["workflow_tools"]) == {
+        "get_workflow",
+        "strip_workflow",
+        "validate_workflow",
+        "check_workflow_runtime",
+    }
+
+
+def test_production_submission_rejects_two_mcp_authorities(tmp_path):
+    bridge = McpBridge(lambda _tool, _arguments: {}, tool_names={"get_workflow": "host.get"})
+    with pytest.raises(StageExecutionError, match="workflow_tools or mcp_bridge"):
+        submit_stage_via_local_rest(
+            {"stage": "shot-image"},
+            {},
+            {},
+            tmp_path / "consumed.json",
+            profile={},
+            capability_report={},
+            workflow_tools={"get_workflow": lambda _arguments: {}},
+            mcp_bridge=bridge,
+        )
+
+
 def test_submit_stage_via_local_rest_guards_queue_and_returns_history(monkeypatch, tmp_path):
     root = tmp_path.resolve()
     (root / ("b" * 64 + ".stage-enqueue-receipt.json")).unlink(missing_ok=True)
@@ -97,11 +161,9 @@ def test_submit_stage_via_local_rest_guards_queue_and_returns_history(monkeypatc
     monkeypatch.setattr("runtime.local_orchestrator.build_stage_submission", lambda *args, **kwargs: submission)
     _FakeSubmitter.calls = []
 
-    result = submit_stage_via_local_rest(**_payload(tmp_path), base_url="http://127.0.0.1:8188")
-
-    assert result["receipt"]["prompt_id"] == "local-prompt-1"
-    assert result["history"]["local-prompt-1"]["status"]["completed"] is True
-    assert len(_FakeSubmitter.calls) == 1
+    with pytest.raises(StageExecutionError, match="trusted stage profile"):
+        submit_stage_via_local_rest(**_payload(tmp_path), base_url="http://127.0.0.1:8188")
+    assert _FakeSubmitter.calls == []
 
 
 def test_submit_stage_via_local_rest_fails_before_post_when_queue_is_busy(monkeypatch, tmp_path):
@@ -111,7 +173,7 @@ def test_submit_stage_via_local_rest_fails_before_post_when_queue_is_busy(monkey
     monkeypatch.setattr("runtime.local_orchestrator.ComfyPromptSubmitter", _FakeSubmitter)
     _FakeSubmitter.calls = []
 
-    with pytest.raises(StageExecutionError, match="queue is not idle"):
+    with pytest.raises(StageExecutionError, match="trusted stage profile"):
         submit_stage_via_local_rest(**_payload(tmp_path), base_url="http://127.0.0.1:8188")
 
     assert _FakeSubmitter.calls == []
@@ -166,7 +228,7 @@ def test_handoff_rejects_cross_story_lineage_and_acceptance_before_any_enqueue(m
     )
     _FakeSubmitter.calls = []
 
-    with pytest.raises((ExecutionError, StageExecutionError), match="source_story_hash"):
+    with pytest.raises((ExecutionError, StageExecutionError), match="trusted stage profile|source_story_hash"):
         submit_stage_via_local_rest(
             plan,
             {},
@@ -179,6 +241,41 @@ def test_handoff_rejects_cross_story_lineage_and_acceptance_before_any_enqueue(m
 
     assert api_calls == []
     assert _FakeSubmitter.calls == []
+
+
+def test_invalid_handoff_is_rejected_before_fresh_workflow_read(monkeypatch, tmp_path):
+    """A bad handoff must not trigger any MCP/workflow observation."""
+    import runtime.local_orchestrator as orchestrator
+
+    plan = {
+        "stage": "shot-image",
+        "reference_hash": "a" * 64,
+    }
+    workflow_reads = []
+    monkeypatch.setattr(
+        orchestrator,
+        "validate_trusted_stage_profile",
+        lambda *_args, **_kwargs: {"stage": "shot-image"},
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "reread_workflow_evidence",
+        lambda *_args, **_kwargs: workflow_reads.append(True),
+    )
+
+    with pytest.raises(StageExecutionError, match="stage handoff validation failed"):
+        submit_stage_via_local_rest(
+            plan,
+            {},
+            {},
+            tmp_path / "consumed.json",
+            profile={},
+            capability_report={},
+            reference_artifact=None,
+            workflow_tools={"get_workflow": lambda _args: None},
+        )
+
+    assert workflow_reads == []
 
 
 def test_handoff_rejects_side_unknown_with_fake_orientation_source_before_any_enqueue(
@@ -232,7 +329,7 @@ def test_handoff_rejects_side_unknown_with_fake_orientation_source_before_any_en
     )
     _FakeSubmitter.calls = []
 
-    with pytest.raises(StageExecutionError, match="explicit directional orientation evidence"):
+    with pytest.raises(StageExecutionError, match="trusted stage profile|explicit directional orientation evidence"):
         submit_stage_via_local_rest(
             plan,
             {},
@@ -355,14 +452,164 @@ def test_submit_character_base_via_local_rest_uses_live_queue_and_transport(monk
             "submission_intent_path": str(tmp_path / "intent.json"),
         },
     )
-    result = submit_character_base_via_local_rest(
-        {"stage": "character-base"},
-        {"prompt": "p"},
-        {},
-        {"consumption_root": str(tmp_path.resolve())},
-        tmp_path / "consumed.json",
-    )
+    with pytest.raises(StageExecutionError, match="trusted camera profile"):
+        submit_character_base_via_local_rest(
+            {"stage": "character-base"},
+            {"prompt": "p"},
+            {},
+            {"consumption_root": str(tmp_path.resolve())},
+            tmp_path / "consumed.json",
+        )
 
-    assert result["submission"] == submission
-    assert result["enqueue_receipt"] == receipt
-    assert result["history"]["base-prompt-1"]["status"]["completed"] is True
+
+def test_submit_character_base_rejects_forged_plan_before_api(monkeypatch, tmp_path):
+    api_calls = []
+    monkeypatch.setattr(
+        "runtime.local_orchestrator.ComfyApi",
+        lambda *args, **kwargs: api_calls.append((args, kwargs)),
+    )
+    with pytest.raises(StageExecutionError, match="trusted camera profile"):
+        submit_character_base_via_local_rest(
+            {"stage": "character-base", "execution_approved": True, "profile_hash": "0" * 64},
+            {"prompt": "forged"}, {}, {}, tmp_path / "consumed.json", profile={}
+        )
+    assert api_calls == []
+
+
+def test_fresh_workflow_ui_drift_is_rejected_even_when_api_graph_is_unchanged():
+    import runtime.local_orchestrator as orchestrator
+
+    tools = {
+        "get_workflow": lambda args: (
+            {"nodes": [], "groups": [], "links": []}
+            if args.get("format") == "ui"
+            else {}
+        ),
+        "strip_workflow": lambda _args: {},
+        "validate_workflow": lambda _args: {"valid": True, "errors": [], "warnings": []},
+        "check_workflow_runtime": lambda _args: {"runtime": "local"},
+    }
+    with pytest.raises(StageExecutionError, match="fingerprint"):
+        orchestrator._refresh_workflow_before_submission(
+            {},
+            {
+                "workflow_name": "camera.json",
+                "workflow_fingerprint": "a" * 64,
+            },
+            tools,
+            {"stage": "shot-image", "workflow_fingerprint": "a" * 64},
+        )
+
+
+def test_camera_base_profile_uses_trusted_workflow_name_fallback(monkeypatch):
+    import runtime.local_orchestrator as orchestrator
+
+    profile = json.loads(
+        (Path(__file__).parents[1] / "profiles" / "camera-anima-base.json").read_text(encoding="utf-8")
+    )
+    observed = {}
+
+    def reread(tools, name, *, profile, normalize):
+        observed["name"] = name
+        return {"api_graph": {}, "ui_fingerprint": profile["workflow_fingerprint"]}
+
+    monkeypatch.setattr(orchestrator, "reread_workflow_evidence", reread)
+    result = orchestrator._refresh_workflow_before_submission(
+        {}, profile, {}, {"stage": "character-base"}
+    )
+    assert result == {}
+    assert observed["name"] == "文生图相机视角.json"
+
+
+def test_submit_stage_rejects_grouped_or_caller_converted_graph_before_api(monkeypatch, tmp_path):
+    api_calls = []
+
+    def fail_api(*args, **kwargs):
+        api_calls.append((args, kwargs))
+        raise AssertionError("ComfyUI API must not be constructed for an untrusted graph")
+
+    monkeypatch.setattr("runtime.local_orchestrator.ComfyApi", fail_api)
+    plan = {"stage": "shot-image", "reference_hash": "a" * 64}
+    with pytest.raises(StageExecutionError, match="trusted stage profile|conversion|grouped|normalized"):
+        submit_stage_via_local_rest(
+            plan,
+            {"__conversion_receipt__": {"source": "caller"}, "groups": ["virtual-bus"]},
+            {},
+            tmp_path / "consumed.json",
+            profile={},
+            capability_report={},
+        )
+    assert api_calls == []
+
+
+def test_production_stage_requires_fresh_workflow_tools_before_api(monkeypatch, tmp_path):
+    api_calls = []
+    monkeypatch.setattr(
+        "runtime.local_orchestrator.ComfyApi",
+        lambda *args, **kwargs: api_calls.append((args, kwargs)),
+    )
+    plan = {
+        "stage": "video",
+        "production_eligible": True,
+        "stage_plan": {"stage": "video", "production_eligible": True},
+    }
+    with pytest.raises(StageExecutionError, match="trusted stage profile|fresh workflow re-read"):
+        submit_stage_via_local_rest(
+            plan,
+            {},
+            {},
+            tmp_path / "consumed.json",
+            profile={},
+            capability_report={},
+        )
+    assert api_calls == []
+
+
+def test_legacy_stage_plan_is_rejected_before_api_construction(monkeypatch, tmp_path):
+    api_calls = []
+    monkeypatch.setattr(
+        "runtime.local_orchestrator.ComfyApi",
+        lambda *args, **kwargs: api_calls.append((args, kwargs)),
+    )
+    with pytest.raises(StageExecutionError, match="legacy dry-run"):
+        submit_stage_via_local_rest(
+            {"stage": "video", "plan_mode": "legacy-dry-run"},
+            {}, {}, tmp_path / "consumed.json", profile={}, capability_report={}
+        )
+    assert api_calls == []
+
+
+def test_trusted_camera_profile_success_path_loads_canonical_json(monkeypatch):
+    import runtime.local_orchestrator as orchestrator
+
+    profile = json.loads(
+        (Path(__file__).parents[1] / "profiles" / "camera-anima.json").read_text(encoding="utf-8")
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "_stage_plan",
+        lambda plan, expected_stage=None: {
+            "stage": "shot-image",
+            "profile_hash": content_hash(profile),
+        },
+    )
+    validated = validate_trusted_stage_profile(
+        {"stage_plan": {"stage": "shot-image"}}, profile
+    )
+    assert validated["stage"] == "shot-image"
+
+
+def test_trusted_ltx_profile_success_path_accepts_pinned_graph(monkeypatch):
+    import runtime.local_orchestrator as orchestrator
+
+    profile = json.loads(
+        (Path(__file__).parents[1] / "profiles" / "ltx-yusu-short.json").read_text(encoding="utf-8")
+    )
+    graph = {"trusted": {"class_type": "YusuLTXDirector", "inputs": {}}}
+    real_hash = orchestrator.content_hash
+    monkeypatch.setattr(
+        orchestrator,
+        "content_hash",
+        lambda value: profile["api_graph_hash"] if value is graph else real_hash(value),
+    )
+    validate_trusted_video_evidence(profile, graph, "ltx-yusu-short-v1")

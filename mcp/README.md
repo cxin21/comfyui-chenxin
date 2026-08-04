@@ -1,15 +1,10 @@
-# mcp/ — Layer-2 registration for the upstream `comfyui-mcp` driver
+# MCP 注册与桥接
 
-> **Status (2026-08)**: This directory contains only `mcp_servers.json` (the
-> upstream MCP server registration). The previously-shipped stdlib-only Python
-> CLI extensions (`auto_launch.py`, `vram_decide.py`, `_shared.py`) were
-> removed; their capabilities are now inlined into `scripts/bootstrap.sh`.
-> See CHANGELOG "Refactor: remove mcp/extensions/".
+本目录只负责注册上游 `comfyui-mcp` stdio server，不实现 MCP server、不安装 Custom Nodes、不管理模型和工作流实体。
 
-## What this layer does
+## 注册文件
 
-`mcp/mcp_servers.json` registers **one stdio MCP server** for Claude Code to
-spawn:
+`mcp_servers.json`：
 
 ```json
 {
@@ -24,40 +19,22 @@ spawn:
 }
 ```
 
-`comfyui-mcp` is the upstream npm package (source:
-[`github.com/artokun/comfyui-mcp`](https://github.com/artokun/comfyui-mcp),
-see `ATTRIBUTION.md`). It exposes **~108 tools** to agents under the
-namespace `mcp__comfyui-mcp__*` — e.g. `mcp__comfyui-mcp__generate_image`,
-`mcp__comfyui-mcp__enqueue_workflow`, `mcp__comfyui-mcp__list_models`,
-`mcp__comfyui-mcp__health_check`, etc.
+Claude Code 安装脚本会把它复制到自己的 MCP 配置目录；Codex 或其他宿主需要按各自配置格式注册同一个 stdio server。
 
-## How the driver is installed
+## 与 Prompt Forge 的边界
 
-`scripts/install.sh` (POSIX) and `scripts/install.ps1` (Windows) both attempt
-`npm install -g comfyui-mcp`. If npm is missing or the global install fails,
-Claude Code falls back to `npx -y comfyui-mcp` on first invocation. Neither
-behavior depends on anything in this directory.
+- 上游 MCP 负责 ComfyUI 工具调用；
+- `runtime.mcp_bridge.McpBridge` 负责宿主实际工具名到逻辑工具名的适配、JSON 校验和哈希证据；
+- Prompt Forge runtime 负责 profile、工作流证据、审批、一次性消费、enqueue intent、history 和 artifact 校验；
+- MCP bridge 默认只读，不实现 UI→API converter，不绕过 approval，不替代 queue/idempotency 合同；
+- 宿主必须提供 `host_call_tool(tool_name, arguments) -> JSON-compatible result`，runtime 不依赖 Claude 或 Codex SDK。
 
-## Boundary with the rest of the plugin
+详细接口见 [`docs/MCP_BRIDGE.md`](../docs/MCP_BRIDGE.md)。
 
-- **`mcp_servers.json` is the only thing this plugin ships that the MCP host
-  reads.** It is copied to `~/.claude/mcp_servers/comfyui-chenxin.json` by
-  the installer.
-- **The plugin never forks `comfyui-mcp`.** When a capability is awkward or
-  impossible to express through the upstream JSON-RPC surface — namely,
-  anything that *starts a subprocess* (bring up ComfyUI on demand) or that
-  *reads the local knowledge substrate* (the prompt-forge hardware JSON
-  profiles) — it lives in the appropriate layer instead. As of 2026-08,
-  those responsibilities are inlined into `scripts/bootstrap.sh` (a
-  shell-level sibling of this directory), not packaged as separate
-  `mcp/extensions/*.py` scripts.
-- **`.claude-plugin/plugin.json` points at this file** via the `mcpServers`
-  field, so Claude Code auto-loads it on plugin install.
+## 安装
 
-## What is **not** here
+`scripts/install.sh` 和 `scripts/install.ps1` 会尝试安装 npm 包 `comfyui-mcp`；失败时可由宿主使用 `npx -y comfyui-mcp` 或其等价方式启动。安装脚本不会验证本机模型、节点、工作流和 GPU 是否满足 profile。
 
-- No custom node definitions (those live under `<comfyui>/custom_nodes/`).
-- No MCP server implementation (the only registered server is the upstream
-  npm binary).
-- No CLI tooling — ComfyUI bring-up and hardware-aware recommendations are
-  done inline by `scripts/bootstrap.sh`.
+## 归属
+
+上游包来源和许可证见 [`ATTRIBUTION.md`](../ATTRIBUTION.md)。

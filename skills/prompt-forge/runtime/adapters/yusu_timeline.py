@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import numbers
 from pathlib import PurePosixPath
 
@@ -48,6 +49,27 @@ def _profile_ids(profile: object) -> tuple[int, int, int, int]:
     if not isinstance(fps, int) or isinstance(fps, bool) or fps <= 0:
         raise YusuTimelineError("Yusu baseline fps must be a positive integer")
     return director_id, negative_id, frames, fps
+
+
+def profile_duration_seconds(profile: object) -> float:
+    """Return the selected profile's single authoritative duration."""
+    if not isinstance(profile, dict):
+        raise YusuTimelineError("Yusu profile must be an object")
+    _, _, frames, fps = _profile_ids(profile)
+    duration = profile.get("duration_seconds", frames / fps)
+    if (
+        isinstance(duration, bool)
+        or not isinstance(duration, numbers.Real)
+        or not math.isfinite(float(duration))
+        or float(duration) <= 0
+    ):
+        raise YusuTimelineError("Yusu profile duration_seconds is invalid")
+    expected = frames / fps
+    if not math.isclose(float(duration), expected, rel_tol=0.0, abs_tol=1e-9):
+        raise YusuTimelineError(
+            "Yusu profile duration_seconds must equal baseline_frames / baseline_fps"
+        )
+    return float(duration)
 
 
 def _node(graph: dict, node_id: int, label: str) -> dict:
@@ -169,17 +191,80 @@ def _without_director_fields(graph: dict, director_id: int) -> dict:
     return normalized
 
 
-def _build_segment(image_ref: dict, prompt: str, frames: int) -> dict:
+def _build_segment(
+    image_ref: dict,
+    prompt: str,
+    start_second: float,
+    end_second: float,
+    fps: int,
+    segment_index: int,
+) -> dict:
+    start_frame = int(round(start_second * fps))
+    length = max(1, int(round((end_second - start_second) * fps)))
     return {
-        "id": "segment-0001",
+        "id": f"segment-{segment_index:04d}",
         "imageFile": image_ref["imageFile"],
         "imageB64": image_ref["imageB64"],
         "prompt": prompt,
-        "start": 0,
-        "length": frames,
+        "start": start_frame,
+        "length": length,
+        "start_second": start_second,
+        "end_second": end_second,
         "type": "image",
         "isEndFrame": False,
     }
+
+
+def _normalize_segments(
+    image_ref: dict,
+    prompt: str,
+    fps: int,
+    duration: float,
+    timeline_segments: object,
+) -> list[dict]:
+    if timeline_segments is None:
+        timeline_segments = [
+            {"start_second": 0.0, "end_second": duration, "prompt": prompt.strip()}
+        ]
+    if not isinstance(timeline_segments, list) or not timeline_segments:
+        raise YusuTimelineError("Yusu timeline_segments must be a non-empty list")
+    normalized: list[dict] = []
+    previous_end = 0.0
+    for index, raw in enumerate(timeline_segments, 1):
+        if not isinstance(raw, dict):
+            raise YusuTimelineError("Yusu timeline segment must be an object")
+        start = raw.get("start_second")
+        end = raw.get("end_second")
+        segment_prompt = raw.get("prompt")
+        if (
+            isinstance(start, bool)
+            or not isinstance(start, numbers.Real)
+            or not math.isfinite(float(start))
+            or isinstance(end, bool)
+            or not isinstance(end, numbers.Real)
+            or not math.isfinite(float(end))
+            or not isinstance(segment_prompt, str)
+            or not segment_prompt.strip()
+        ):
+            raise YusuTimelineError("Yusu timeline segment seconds or prompt are invalid")
+        start = float(start)
+        end = float(end)
+        if start < 0 or end <= start or end > duration + 1e-9:
+            raise YusuTimelineError("Yusu timeline segment is outside the profile duration")
+        if index == 1 and not math.isclose(start, 0.0, abs_tol=1e-9):
+            raise YusuTimelineError("Yusu timeline must start at zero")
+        if index > 1 and not math.isclose(start, previous_end, abs_tol=1e-9):
+            raise YusuTimelineError("Yusu timeline segments must be contiguous")
+        normalized.append(_build_segment(image_ref, segment_prompt.strip(), start, end, fps, index))
+        previous_end = end
+    if not math.isclose(previous_end, duration, abs_tol=1e-9):
+        raise YusuTimelineError("Yusu timeline must cover profile duration")
+    expected_frames = int(round(duration * fps))
+    if sum(segment["length"] for segment in normalized) != expected_frames:
+        raise YusuTimelineError(
+            "Yusu timeline segment frame lengths do not cover profile frame budget"
+        )
+    return normalized
 
 
 def patch_yusu_timeline(
@@ -189,6 +274,8 @@ def patch_yusu_timeline(
     frames: int,
     fps: int,
     profile: dict,
+    *,
+    timeline_segments: list[dict] | None = None,
 ) -> dict:
     """Patch one image segment and all Yusu derived fields atomically."""
     if not isinstance(graph, dict):
@@ -201,6 +288,7 @@ def patch_yusu_timeline(
         raise YusuTimelineError("Yusu fps must be a positive integer")
     image = _safe_image_ref(image_ref)
     director_id, negative_id, baseline_frames, baseline_fps = _profile_ids(profile)
+    duration = profile_duration_seconds(profile)
     validate_yusu_immutable_inputs(graph, profile)
     if frames != baseline_frames or fps != baseline_fps:
         raise YusuTimelineError("Yusu timeline must use the profiled baseline frame rate and length")
@@ -211,17 +299,19 @@ def patch_yusu_timeline(
     if negative.get("class_type") != "CLIPTextEncode":
         raise YusuTimelineError("Yusu negative node has an unexpected class_type")
     timeline = _parse_timeline(director["inputs"])
-    timeline["segments"] = [_build_segment(image, prompt.strip(), frames)]
+    segments = _normalize_segments(image, prompt, fps, duration, timeline_segments)
+    timeline["segments"] = segments
+    timeline["duration_seconds"] = duration
 
     patched = copy.deepcopy(graph)
     patched_director = _node(patched, director_id, "director")
     patched_inputs = patched_director["inputs"]
     patched_inputs["timeline_data"] = canonical_json(timeline)
-    patched_inputs["local_prompts"] = prompt.strip()
-    patched_inputs["segment_lengths"] = str(frames)
+    patched_inputs["local_prompts"] = "\n".join(segment["prompt"] for segment in segments)
+    patched_inputs["segment_lengths"] = ",".join(str(segment["length"]) for segment in segments)
     patched_inputs["start_second"] = 0.0
-    patched_inputs["end_second"] = frames / fps
-    patched_inputs["duration_seconds"] = frames / fps
+    patched_inputs["end_second"] = duration
+    patched_inputs["duration_seconds"] = duration
     patched_inputs["start_frame"] = 0
     patched_inputs["end_frame"] = frames - 1
     patched_inputs["duration_frames"] = frames
@@ -252,27 +342,62 @@ def validate_yusu_sync(graph: dict, profile: dict) -> None:
         raise YusuTimelineError("Yusu negative node has an unexpected class_type")
     inputs = director["inputs"]
     timeline = _parse_timeline(inputs)
+    duration = profile_duration_seconds(profile)
     segments = timeline.get("segments")
-    if not isinstance(segments, list) or len(segments) != 1 or not isinstance(segments[0], dict):
-        raise YusuTimelineError("Yusu timeline must contain exactly one segment")
-    segment = segments[0]
-    if segment.get("id") != "segment-0001":
-        raise YusuTimelineError("Yusu segment id is not deterministic")
-    if segment.get("type") != "image" or segment.get("isEndFrame") is not False:
-        raise YusuTimelineError("Yusu segment type or end-frame flag is invalid")
-    if segment.get("start") != 0 or segment.get("length") != frames:
-        raise YusuTimelineError("Yusu segment frame range is invalid")
-    _safe_image_ref({"imageFile": segment.get("imageFile"), "imageB64": segment.get("imageB64")})
-    prompt = segment.get("prompt")
-    if not isinstance(prompt, str) or not prompt.strip():
-        raise YusuTimelineError("Yusu segment prompt is empty")
-    if inputs.get("local_prompts") != prompt:
+    if not isinstance(segments, list) or not segments or not all(isinstance(item, dict) for item in segments):
+        raise YusuTimelineError("Yusu timeline must contain one or more segments")
+    previous_end = 0.0
+    expected_frame_cursor = 0
+    image_identity = None
+    prompts: list[str] = []
+    lengths: list[str] = []
+    for index, segment in enumerate(segments, 1):
+        if segment.get("id") != f"segment-{index:04d}":
+            raise YusuTimelineError("Yusu segment id is not deterministic")
+        if segment.get("type") != "image" or segment.get("isEndFrame") is not False:
+            raise YusuTimelineError("Yusu segment type or end-frame flag is invalid")
+        start = segment.get("start_second")
+        end = segment.get("end_second")
+        if not isinstance(start, numbers.Real) or isinstance(start, bool) or not isinstance(end, numbers.Real) or isinstance(end, bool):
+            raise YusuTimelineError("Yusu segment seconds are invalid")
+        if index == 1 and not math.isclose(float(start), 0.0, abs_tol=1e-9):
+            raise YusuTimelineError("Yusu timeline must start at zero")
+        if index > 1 and not math.isclose(float(start), previous_end, abs_tol=1e-9):
+            raise YusuTimelineError("Yusu timeline segments must be contiguous")
+        if float(end) <= float(start) or float(end) > duration + 1e-9:
+            raise YusuTimelineError("Yusu timeline segment is outside the profile duration")
+        image = _safe_image_ref({"imageFile": segment.get("imageFile"), "imageB64": segment.get("imageB64")})
+        identity = (image["imageFile"], image["imageB64"])
+        if image_identity is None:
+            image_identity = identity
+        elif image_identity != identity:
+            raise YusuTimelineError("Yusu timeline segments must use the same image")
+        prompt = segment.get("prompt")
+        if not isinstance(prompt, str) or not prompt.strip():
+            raise YusuTimelineError("Yusu segment prompt is empty")
+        expected_start = int(round(float(start) * fps))
+        expected_length = max(1, int(round((float(end) - float(start)) * fps)))
+        if expected_start != expected_frame_cursor:
+            raise YusuTimelineError("Yusu segment frame ranges are not contiguous")
+        if segment.get("start") != expected_start or segment.get("length") != expected_length:
+            raise YusuTimelineError("Yusu segment frame range is invalid")
+        prompts.append(prompt.strip())
+        lengths.append(str(expected_length))
+        expected_frame_cursor += expected_length
+        previous_end = float(end)
+    if not math.isclose(previous_end, duration, abs_tol=1e-9):
+        raise YusuTimelineError("Yusu timeline must cover profile duration")
+    if expected_frame_cursor != frames:
+        raise YusuTimelineError("Yusu timeline frame lengths do not cover profile frame budget")
+    if timeline.get("duration_seconds") != duration:
+        raise YusuTimelineError("Yusu timeline duration is out of sync")
+    if inputs.get("local_prompts") != "\n".join(prompts):
         raise YusuTimelineError("Yusu local_prompts is out of sync")
-    if inputs.get("segment_lengths") != str(frames):
+    if inputs.get("segment_lengths") != ",".join(lengths):
         raise YusuTimelineError("Yusu segment_lengths is out of sync")
     if inputs.get("start_second") != 0.0:
         raise YusuTimelineError("Yusu start_second is out of sync")
-    if inputs.get("end_second") != frames / fps or inputs.get("duration_seconds") != frames / fps:
+    if inputs.get("end_second") != duration or inputs.get("duration_seconds") != duration:
         raise YusuTimelineError("Yusu duration seconds are out of sync")
     if inputs.get("start_frame") != 0 or inputs.get("end_frame") != frames - 1:
         raise YusuTimelineError("Yusu frame range is out of sync")

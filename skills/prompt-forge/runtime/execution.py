@@ -30,6 +30,7 @@ from .multiview_evidence import (
 from .prompt_quality import validate_anima_prompt_build
 from .reference_select import EXPLICIT_ORIENTATION_SOURCES
 from .workflow_profile import ProfileError, resolve_slots, structure_fingerprint
+from .mcp_bridge import McpBridge, McpBridgeError
 
 
 class ExecutionError(ValueError):
@@ -1178,14 +1179,23 @@ def build_multiview_draft_with_mcp(
     profile: dict,
     promotion_receipt: dict,
     upload_receipt: dict,
-    mcp_tools: dict,
+    mcp_tools: dict | None = None,
+    mcp_bridge: McpBridge | None = None,
     view_plan: dict | None = None,
 ) -> dict:
     """Build a production Stage 2 draft from calls made inside this process.
 
-    ``mcp_tools`` is injected only by the authorized local orchestrator. Raw
-    JSON receipts are deliberately not accepted at this production boundary.
+    ``mcp_tools`` or ``mcp_bridge`` is injected only by the authorized local
+    orchestrator. Raw JSON receipts are deliberately not accepted at this
+    production boundary.
     """
+    if mcp_tools is not None and mcp_bridge is not None:
+        raise ExecutionError("provide mcp_tools or mcp_bridge, not both")
+    if mcp_bridge is not None:
+        try:
+            mcp_tools = mcp_bridge.workflow_tools()
+        except McpBridgeError as exc:
+            raise ExecutionError(f"MCP bridge negotiation failed: {exc}") from exc
     expected_tools = {
         "get_workflow",
         "strip_workflow",

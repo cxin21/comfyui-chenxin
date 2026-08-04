@@ -3,16 +3,12 @@ name: lora-trainer
 description: "Anima LoRA 璁粌缂栨帓 (v2.2) 鈥?鍗曡矾寰勶細gazingstars123/Anima-Standalone-Trainer 鐙珛 venv銆?GB VRAM 鍙嬪ソ锛屾棤闇€ ComfyUI 鍦ㄧ嚎銆侫lso load prompt-forge first for VRAM/recipe context."
 version: 2.3.0
 author: Claude Code
-triggers:
-  - "璁粌 LoRA"
-  - "璁?LoRA"
-  - "璁?Anima LoRA"
-  - "train LoRA"
-  - "lora training"
-  - "璁鑹?
-  - "璁満鏅?
+status: legacy
+triggers: []
 allowed-tools: Bash, Read, Write, "mcp__comfyui-mcp__*"
 ---
+> Legacy compatibility only. LoRA training is outside the controlled
+> character-to-video production flow; use Prompt Forge for the four stages.
 
 # Lora Trainer 鈥?Anima LoRA 璁粌缂栨帓 (v2.3, ported)
 

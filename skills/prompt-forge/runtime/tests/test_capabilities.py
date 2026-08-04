@@ -221,6 +221,18 @@ def test_api_surface_exposes_only_read_operations():
     assert not any("enqueue" in name.lower() for name in dir(api))
 
 
+def test_capability_report_exposes_reason_codes_for_unavailable_optional_capabilities():
+    report = build_capability_report(
+        FakeApi(),
+        local_adapter(),
+        datetime(2026, 8, 4, tzinfo=timezone.utc),
+    )
+    assert isinstance(report["reason_codes"], list)
+    assert "missing_board_profile_support" in report["reason_codes"]
+    assert "missing_scene_prop_upload" in report["reason_codes"]
+    assert "unavailable_ltx_output_verification" in report["reason_codes"]
+
+
 def test_history_endpoint_is_read_only_and_binds_prompt_id(monkeypatch):
     api = ComfyApi()
     seen = []
