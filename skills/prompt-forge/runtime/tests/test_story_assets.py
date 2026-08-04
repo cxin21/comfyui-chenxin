@@ -235,6 +235,28 @@ def test_face_lock_accepts_open_vocabulary_specific_evidence():
     assert validate_asset_card(card)["face_lock"] == card["face_lock"]
 
 
+def test_face_lock_accepts_unlisted_feature_and_specific_value():
+    card = _character_card()
+    card["face_lock"] = [{"feature": "forehead", "value": "broad"}]
+    card["provenance"]["explicit_evidence"].remove("deep brown almond eyes")
+    card["provenance"]["explicit_evidence"].append("broad")
+
+    assert validate_asset_card(card)["face_lock"] == card["face_lock"]
+
+
+@pytest.mark.parametrize(
+    "value", ["very pretty", "really pretty", "\u6f02\u4eae", "\u975e\u5e38\u597d"]
+)
+def test_face_lock_rejects_generic_aesthetic_values(value):
+    card = _character_card()
+    card["face_lock"] = [{"feature": "forehead", "value": value}]
+    card["provenance"]["explicit_evidence"].remove("deep brown almond eyes")
+    card["provenance"]["explicit_evidence"].append(value)
+
+    with pytest.raises(ContractError, match="specific visual"):
+        validate_asset_card(card)
+
+
 def test_environment_anchors_require_unique_structured_stable_facts():
     card = _environment_card()
     card["environment_anchors"] = [
@@ -286,6 +308,34 @@ def test_environment_anchors_accept_open_vocabulary_specific_evidence():
         "feature": "屋顶",
         "value": "石板屋顶",
     }
+
+
+@pytest.mark.parametrize("value", ["brick", "very dark brown"])
+def test_environment_anchor_accepts_single_or_modified_specific_value(value):
+    card = _environment_card()
+    card["environment_anchors"][0] = {"feature": "wall", "value": value}
+    card["provenance"]["explicit_evidence"].remove(
+        "weathered stone arch at the entrance"
+    )
+    card["provenance"]["explicit_evidence"].append(value)
+
+    assert validate_asset_card(card)["environment_anchors"][0] == {
+        "feature": "wall",
+        "value": value,
+    }
+
+
+@pytest.mark.parametrize("value", ["nice roof", "some place", "thing-1"])
+def test_environment_anchor_rejects_generic_value(value):
+    card = _environment_card()
+    card["environment_anchors"][0] = {"feature": "roof", "value": value}
+    card["provenance"]["explicit_evidence"].remove(
+        "weathered stone arch at the entrance"
+    )
+    card["provenance"]["explicit_evidence"].append(value)
+
+    with pytest.raises(ContractError, match="environment_anchors"):
+        validate_asset_card(card)
 
 
 def test_explicit_and_prohibited_evidence_cannot_overlap():

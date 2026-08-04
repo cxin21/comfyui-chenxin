@@ -29,22 +29,18 @@ STRUCTURED_FACT_SCHEMA_VERSION = "feature-value-v1"
 STRUCTURED_FACT_MIGRATION = "legacy-string-facts-rejected"
 
 STRUCTURED_FACT_VOCABULARY = "open-with-generic-denylist-v1"
-_FACE_FEATURES = {
-    "face_shape", "eyes", "eyebrows", "nose", "mouth", "skin", "hairline",
-    "facial_mark", "cheeks", "jaw", "ears", "\u8138\u578b", "\u773c\u775b",
-    "\u7709\u6bdb", "\u9f3b\u5b50", "\u5634\u5507", "\u80a4\u8272", "\u53d1\u9645\u7ebf",
-    "\u9762\u90e8\u7279\u5f81", "\u8138\u988a", "\u4e0b\u988c", "\u8033\u6735",
-}
 _GENERIC_AESTHETIC_VALUES = {
     "beautiful",
     "pretty",
     "very pretty",
+    "really pretty",
     "handsome",
     "attractive",
     "good-looking",
     "\u597d\u770b",
     "\u6f02\u4eae",
     "\u5f88\u6f02\u4eae",
+    "\u975e\u5e38\u597d",
     "\u7f8e\u4e3d",
     "\u5e05",
     "\u5e05\u6c14",
@@ -54,14 +50,9 @@ _GENERIC_ENVIRONMENT_FEATURES = {
     "\u4e1c\u897f", "\u7269\u4ef6", "\u5730\u65b9", "\u67d0\u5904",
 }
 _GENERIC_ENVIRONMENT_VALUES = {
-    "a", "thing", "thing-1", "object", "item", "place", "some place", "stuff", "something",
+    "a", "thing", "thing-1", "object", "item", "place", "some place", "nice roof", "stuff", "something",
     "\u4e1c\u897f", "\u7269\u4ef6", "\u5730\u65b9", "\u67d0\u7269",
 }
-_GENERIC_ENVIRONMENT_TOKENS = {
-    "a", "thing", "object", "item", "place", "some", "stuff", "something",
-}
-
-
 def _require_object(value: object, label: str) -> dict:
     if not isinstance(value, dict):
         raise ContractError(f"{label} must be an object")
@@ -117,20 +108,8 @@ def _normalized(value: str) -> str:
 
 def _require_specific_face_value(feature: str, value: str) -> None:
     normalized_value = _normalized(value)
-    if (
-        _normalized(feature) not in _FACE_FEATURES
-        or normalized_value in _GENERIC_AESTHETIC_VALUES
-    ):
+    if normalized_value in _GENERIC_AESTHETIC_VALUES:
         raise ContractError("character face_lock must contain specific visual information")
-
-
-def _is_minimally_specific_phrase(value: str) -> bool:
-    if sum("\u4e00" <= char <= "\u9fff" for char in value) >= 2:
-        return True
-    tokens = [part for part in value.replace("-", " ").split() if part]
-    return len(tokens) >= 2 and any(
-        token not in _GENERIC_ENVIRONMENT_TOKENS for token in tokens
-    )
 
 
 def _is_non_generic_environment_feature(value: str) -> bool:
@@ -148,7 +127,6 @@ def _require_stable_environment_anchor(feature: str, value: str) -> None:
     if (
         not _is_non_generic_environment_feature(normalized_feature)
         or normalized_value in _GENERIC_ENVIRONMENT_VALUES
-        or not _is_minimally_specific_phrase(normalized_value)
     ):
         raise ContractError("environment_anchors must contain specific stable facts")
 
