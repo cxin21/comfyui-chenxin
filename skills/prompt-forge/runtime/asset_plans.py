@@ -128,11 +128,49 @@ def _raise_contract_error(action: str, error: ContractError) -> None:
     raise AssetPlanError(f"{action}: {error}") from error
 
 
+def _visual_facts(value: Any, root_field: str, path: str | None = None) -> list[tuple[str, str, str]]:
+    """Return exact leaf facts with their root and nested paths for evidence checks."""
+    current_path = path or root_field
+    if isinstance(value, str) and value.strip():
+        return [(root_field, current_path, value)]
+    if isinstance(value, list):
+        facts: list[tuple[str, str, str]] = []
+        for index, child in enumerate(value):
+            facts.extend(_visual_facts(child, root_field, f"{current_path}[{index}]"))
+        return facts
+    if isinstance(value, dict):
+        facts = []
+        for key, child in value.items():
+            facts.extend(_visual_facts(child, root_field, f"{current_path}.{key}"))
+        return facts
+    raise AssetPlanError(
+        f"art bible visual fact at '{current_path}' must be a non-empty string or nested collection"
+    )
+
+
+def _validate_art_bible_facts(art_bible: dict[str, Any]) -> None:
+    tiers = _copy_tiers(art_bible)
+    references = {key: _tier_references(tiers[key], f"provenance.{key}") for key in _TIER_KEYS}
+    allowed = references["explicit_evidence"] | references["reasonable_inference"]
+    prohibited = references["prohibited_expansion"]
+    for field in _BIBLE_FIELDS:
+        for root_field, path, fact in _visual_facts(art_bible[field], field):
+            exact_references = {fact, f"{root_field}:{fact}", f"{path}:{fact}"}
+            if exact_references & prohibited:
+                raise AssetPlanError("prohibited expansion cannot become an art bible fact")
+            if not exact_references & allowed:
+                raise AssetPlanError(
+                    f"art bible visual fact at '{path}' must be referenced by evidence or inference"
+                )
+
+
 def _validate_bible(value: dict) -> dict:
     try:
-        return validate_art_bible(value)
+        art_bible = validate_art_bible(value)
     except ContractError as error:
         _raise_contract_error("invalid art bible", error)
+    _validate_art_bible_facts(art_bible)
+    return art_bible
 
 
 def _validate_asset(value: dict, expected_type: str) -> dict:

@@ -30,6 +30,21 @@ def _visual_fingerprint():
 
 
 def _story():
+    visual_evidence = [
+        "restrained ink wash",
+        "digital watercolor",
+        "negative space foregrounds the key",
+        "indigo",
+        "cedar red",
+        "linen",
+        "cedar",
+        "bronze",
+        "cool window light with warm sidelight",
+        "sealed thresholds",
+        "no modern electronics",
+        "reuse fixed anchors and palette",
+        "restrained ink wash, digital watercolor",
+    ]
     return {
         "schema_version": "1.0",
         "visual_system": {
@@ -49,7 +64,7 @@ def _story():
         "story_logic": ["the key opens the archive"],
         "uncertainty": ["archive contents are uncertain"],
         "source_hash": "d" * 64,
-        "provenance": _provenance("restrained ink wash", "digital watercolor"),
+        "provenance": _provenance(*visual_evidence),
     }
 
 
@@ -298,3 +313,64 @@ def test_board_plan_is_deep_copied_from_its_source_contracts():
     assert environment["environment_anchors"][0]["value"] == "weathered stone arch at the entrance"
     assert "new fact" not in bible["explicit_evidence"]
     assert "new fact" not in environment["provenance"]["explicit_evidence"]
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("primary_style", "restrained ink wash"),
+        ("palette", "indigo"),
+        ("materials", "bronze"),
+    ],
+)
+def test_build_art_bible_rejects_visual_facts_declared_prohibited(field, value):
+    story = _story()
+    story["provenance"]["explicit_evidence"].remove(value)
+    story["provenance"]["prohibited_expansion"] = [value]
+
+    with pytest.raises(AssetPlanError, match="prohibited expansion cannot become an art bible fact"):
+        build_art_bible(story)
+
+
+def test_build_art_bible_accepts_structured_evidence_for_nested_visual_values():
+    story = _story()
+    story["visual_system"]["palette"] = [["indigo"], ["cedar red"]]
+    story["provenance"]["explicit_evidence"] = [
+        {"field": "style", "value": "restrained ink wash"},
+        {"field": "medium", "value": "digital watercolor"},
+        {"field": "visual_grammar", "value": "negative space foregrounds the key"},
+        {"field": "palette", "value": "indigo"},
+        {"field": "palette", "value": "cedar red"},
+        {"field": "materials", "value": "linen"},
+        {"field": "materials", "value": "cedar"},
+        {"field": "materials", "value": "bronze"},
+        {"field": "lighting", "value": "cool window light with warm sidelight"},
+        {"field": "motifs", "value": "sealed thresholds"},
+        {"field": "world_taboos", "value": "no modern electronics"},
+        {"field": "continuity_strategy", "value": "reuse fixed anchors and palette"},
+        {"field": "style_prompt", "value": "restrained ink wash, digital watercolor"},
+    ]
+
+    bible = build_art_bible(story)
+
+    assert bible["palette"] == [["indigo"], ["cedar red"]]
+
+
+@pytest.mark.parametrize(
+    ("builder", "asset_factory"),
+    [
+        (build_environment_board_plan, _environment_card),
+        (build_character_board_plan, _character_card),
+        (build_prop_board_plan, _prop_card),
+    ],
+)
+def test_board_builders_cannot_bypass_prohibited_art_bible_visual_facts(
+    builder, asset_factory
+):
+    bible = _art_bible()
+    bible["style"] = "forbidden style"
+    bible["explicit_evidence"].remove("restrained ink wash")
+    bible["prohibited_expansion"] = ["forbidden style"]
+
+    with pytest.raises(AssetPlanError, match="prohibited expansion cannot become an art bible fact"):
+        builder(bible, asset_factory())
