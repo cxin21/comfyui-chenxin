@@ -332,6 +332,87 @@ def test_stage_execution_rejects_legacy_video_dry_run_plan():
         )
 
 
+def test_stage3_execution_rejects_missing_plan_or_reference_lineage():
+    report = _capability_report()
+    plan = _shot_plan(report)
+    plan.pop("lineage_id")
+    plan["plan_hash"] = content_hash(
+        {key: value for key, value in plan.items() if key != "plan_hash"}
+    )
+    with pytest.raises(stage_execution.StageExecutionError, match="stage plan lineage_id"):
+        stage_execution.build_stage_execution_draft(
+            plan,
+            _shot_graph(),
+            _camera_profile(),
+            report,
+            ui_workflow=_shot_ui(),
+            image_name="ref.png",
+            reference_artifact=_accepted_reference(),
+        )
+
+
+def test_stage3_execution_rejects_orientation_drift_from_planned_reference():
+    report = _capability_report()
+    reference = _accepted_reference()
+    reference["view_label"] = "right_45"
+    reference["orientation_proof"].update(
+        {"expected_view": "right_45", "observed_view": "right_45"}
+    )
+
+    with pytest.raises(stage_execution.StageExecutionError, match="planned reference view"):
+        stage_execution.build_stage_execution_draft(
+            _shot_plan(report),
+            _shot_graph(),
+            _camera_profile(),
+            report,
+            ui_workflow=_shot_ui(),
+            image_name="ref.png",
+            reference_artifact=reference,
+        )
+
+    plan = _shot_plan(report)
+    reference = _accepted_reference()
+    reference.pop("lineage_id")
+    with pytest.raises(stage_execution.StageExecutionError, match="lineage_id"):
+        stage_execution.build_stage_execution_draft(
+            plan,
+            _shot_graph(),
+            _camera_profile(),
+            report,
+            ui_workflow=_shot_ui(),
+            image_name="ref.png",
+            reference_artifact=reference,
+        )
+
+
+def test_stage4_execution_rejects_missing_plan_or_image_lineage():
+    graph = _video_graph()
+    report = _capability_report()
+    plan = _video_plan(graph)
+    plan["capability_report_hash"] = content_hash(report)
+    plan.pop("lineage_id")
+    plan["plan_hash"] = content_hash(
+        {key: value for key, value in plan.items() if key != "plan_hash"}
+    )
+    image_ref = _video_image_ref({**plan, "lineage_id": "lineage-1"})
+    with pytest.raises(stage_execution.StageExecutionError, match="stage plan lineage_id"):
+        stage_execution.build_stage_execution_draft(
+            plan, graph, _yusu_profile(), report, image_ref=image_ref
+        )
+
+    plan = _video_plan(graph)
+    plan["capability_report_hash"] = content_hash(report)
+    plan["plan_hash"] = content_hash(
+        {key: value for key, value in plan.items() if key != "plan_hash"}
+    )
+    image_ref = _video_image_ref(plan)
+    image_ref.pop("lineage_id")
+    with pytest.raises(stage_execution.StageExecutionError, match="lineage_id"):
+        stage_execution.build_stage_execution_draft(
+            plan, graph, _yusu_profile(), report, image_ref=image_ref
+        )
+
+
 def test_shot_execution_draft_rebinds_graph_and_g1_without_mutating_sources():
     report = _capability_report()
     plan = _shot_plan(report)

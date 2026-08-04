@@ -87,8 +87,46 @@ def validate_stage_handoff(stage_plan: object, artifact: object) -> dict:
             "front_closeup": "front",
             "front_upper": "front",
         }.get(view_label.strip().casefold(), view_label.strip().casefold())
-        if canonical_label != proof["observed_view"].strip().casefold():
+        observed_view = proof["observed_view"].strip().casefold()
+        if canonical_label != "side_unknown" and canonical_label != observed_view:
             raise ExecutionError("stage handoff orientation proof conflicts with view_label")
+        selection = stage_plan.get("reference_selection")
+        if not isinstance(selection, dict):
+            raise ExecutionError("stage handoff planned reference view is missing")
+        selected_view = selection.get("selected_view")
+        desired_view = selection.get("desired_view")
+        planned_reference_view = stage_plan.get("reference_view")
+        planned_desired_view = stage_plan.get("desired_view")
+        if not all(
+            isinstance(value, str) and value.strip()
+            for value in (
+                selected_view,
+                desired_view,
+                planned_reference_view,
+                planned_desired_view,
+            )
+        ):
+            raise ExecutionError("stage handoff planned reference view is invalid")
+        aliases = {"front_closeup": "front", "front_upper": "front"}
+
+        def canonical(value: str) -> str:
+            normalized = value.strip().casefold()
+            return aliases.get(normalized, normalized)
+
+        selected = canonical(selected_view)
+        planned_reference = canonical(planned_reference_view)
+        artifact_selected = observed_view if canonical_label == "side_unknown" else canonical_label
+        if (
+            artifact_selected != selected
+            or observed_view != selected
+            or canonical(proof["expected_view"]) != selected
+            or canonical(desired_view) != canonical(planned_desired_view)
+            or (
+                planned_reference != "side_unknown"
+                and planned_reference != artifact_selected
+            )
+        ):
+            raise ExecutionError("stage handoff artifact does not match the planned reference view")
     else:
         from .artifacts import is_ltx_input_eligible
 

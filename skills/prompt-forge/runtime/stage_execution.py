@@ -228,8 +228,7 @@ def _stage_plan(plan: object, expected_stage: str | None = None) -> dict:
             or selection.get("character_board_hash") != plan.get("character_board_hash")
         ):
             raise StageExecutionError("Stage 3 reference selection binding is invalid")
-        if plan.get("lineage_id") is not None:
-            _lineage_id(plan.get("lineage_id"), "stage plan lineage_id")
+        _lineage_id(plan.get("lineage_id"), "stage plan lineage_id")
     else:
         if (
             plan.get("production_eligible") is not True
@@ -257,8 +256,7 @@ def _stage_plan(plan: object, expected_stage: str | None = None) -> dict:
                 )
         else:
             raise StageExecutionError("Stage 4 source shot artifact type is invalid")
-        if plan.get("lineage_id") is not None:
-            _lineage_id(plan.get("lineage_id"), "stage plan lineage_id")
+        _lineage_id(plan.get("lineage_id"), "stage plan lineage_id")
         parameters = plan.get("parameters")
         if (
             not isinstance(parameters, dict)
@@ -353,9 +351,8 @@ def _validate_image_ref(
         raise StageExecutionError("shot image reference does not match the approved lineage")
     for key in ("imageFile", "imageB64"):
         _text(image_ref.get(key), f"shot image {key}")
-    if image_ref.get("lineage_id") is not None:
-        _lineage_id(image_ref.get("lineage_id"), "shot image lineage_id")
-    if expected_lineage_id is not None and image_ref.get("lineage_id") != expected_lineage_id:
+    image_lineage = _lineage_id(image_ref.get("lineage_id"), "shot image lineage_id")
+    if expected_lineage_id is not None and image_lineage != expected_lineage_id:
         raise StageExecutionError("shot image lineage_id does not match the stage plan")
     return copy.deepcopy(image_ref)
 
@@ -374,6 +371,7 @@ def _validate_reference_acceptance(reference: object, expected_hash: str) -> dic
         raise StageExecutionError("reference artifact is not Stage 3 eligible")
     if reference.get("content_hash") != expected_hash:
         raise StageExecutionError("reference artifact does not match the stage plan")
+    _lineage_id(reference.get("lineage_id"), "reference artifact lineage_id")
     acceptance = reference.get("acceptance")
     if not isinstance(acceptance, dict) or set(acceptance) != {
         "schema_version", "artifact_hash", "actor", "accepted_at", "acceptance_id"

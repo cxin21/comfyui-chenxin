@@ -125,6 +125,12 @@ def test_handoff_rejects_cross_story_lineage_and_acceptance_before_any_enqueue(m
         "source_story_hash": "c" * 64,
         "art_bible_hash": "d" * 64,
         "lineage_id": "lineage-1",
+        "reference_view": "right_45",
+        "desired_view": "right_45",
+        "reference_selection": {
+            "selected_view": "right_45",
+            "desired_view": "right_45",
+        },
         "orientation_proof": {
             "schema_version": "1.0",
             "expected_view": "right_45",
@@ -191,6 +197,12 @@ def test_validate_stage_handoff_rejects_single_field_drift(field, value, message
         "source_story_hash": "c" * 64,
         "art_bible_hash": "d" * 64,
         "lineage_id": "lineage-1",
+        "reference_view": "right_45",
+        "desired_view": "right_45",
+        "reference_selection": {
+            "selected_view": "right_45",
+            "desired_view": "right_45",
+        },
         "orientation_proof": {
             "schema_version": "1.0",
             "expected_view": "right_45",
