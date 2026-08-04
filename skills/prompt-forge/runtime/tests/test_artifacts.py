@@ -192,11 +192,15 @@ def test_ltx_input_eligibility_requires_separate_derivative_acceptance_and_paren
         "accepted": False,
         "content_hash": "a" * 64,
         "parent_artifact_hash": "b" * 64,
+        "source_artifact_hash": "b" * 64,
     }
     assert is_ltx_input_eligible(derivative) is False
     derivative["accepted"] = True
     assert is_ltx_input_eligible(derivative) is True
     derivative.pop("parent_artifact_hash")
+    assert is_ltx_input_eligible(derivative) is False
+    derivative["parent_artifact_hash"] = "b" * 64
+    derivative["source_artifact_hash"] = "c" * 64
     assert is_ltx_input_eligible(derivative) is False
 
 
@@ -218,6 +222,7 @@ def test_video_plan_preserves_separately_accepted_derivative_lineage():
         "accepted": True,
         "content_hash": "a" * 64,
         "parent_artifact_hash": "b" * 64,
+        "source_artifact_hash": "b" * 64,
         "task_context_hash": "c" * 64,
         "source_story_hash": "d" * 64,
         "art_bible_hash": "e" * 64,
@@ -238,6 +243,48 @@ def test_video_plan_preserves_separately_accepted_derivative_lineage():
     assert plan["task_context_hash"] == "c" * 64
     assert plan["source_story_hash"] == "d" * 64
     assert plan["art_bible_hash"] == "e" * 64
+
+
+def test_video_plan_marks_non_sha_clean_master_as_nonproduction():
+    build = {
+        "ready_to_execute": True,
+        "target": "video",
+        "dialect": "video-timeline",
+        "prompt": "The subject moves as the camera dollies in.",
+        "negative_prompt": "",
+    }
+    shot = {
+        "artifact_type": "ShotImage",
+        "accepted": True,
+        "content_hash": "shot",
+        "task_context_hash": "b" * 64,
+        "source_story_hash": "c" * 64,
+        "art_bible_hash": "d" * 64,
+        "lineage_id": "lineage-1",
+    }
+
+    plan = build_video_plan(shot, build, "e" * 64, "f" * 64, True)
+    assert plan["production_eligible"] is False
+    assert plan["plan_mode"] == "legacy-dry-run"
+
+
+def test_video_plan_marks_clean_master_without_context_lineage_as_nonproduction():
+    build = {
+        "ready_to_execute": True,
+        "target": "video",
+        "dialect": "video-timeline",
+        "prompt": "The subject moves as the camera dollies in.",
+        "negative_prompt": "",
+    }
+    shot = {
+        "artifact_type": "ShotImage",
+        "accepted": True,
+        "content_hash": "a" * 64,
+    }
+
+    plan = build_video_plan(shot, build, "e" * 64, "f" * 64, True)
+    assert plan["production_eligible"] is False
+    assert plan["plan_mode"] == "legacy-dry-run"
 
 
 def test_video_requires_expected_fps_and_frames():

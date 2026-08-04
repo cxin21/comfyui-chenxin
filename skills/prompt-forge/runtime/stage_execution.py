@@ -25,7 +25,7 @@ from .adapters.camera import (
     verify_img2img_path,
 )
 from .adapters.yusu_timeline import YusuTimelineError, patch_yusu_timeline, validate_yusu_sync
-from .artifacts import verify_video_artifact
+from .artifacts import is_ltx_input_eligible, verify_video_artifact
 from .capabilities import report_is_fresh
 from .contracts import canonical_json, content_hash
 from .execution import (
@@ -191,16 +191,72 @@ def _stage_plan(plan: object, expected_stage: str | None = None) -> dict:
         raise StageExecutionError("stage plan PromptBuild lineage is invalid")
     _sha(plan.get("profile_hash"), "stage plan profile_hash")
     if stage == "shot-image":
+        if (
+            plan.get("production_eligible") is not True
+            or plan.get("plan_mode") != "scene-aware-production"
+        ):
+            raise StageExecutionError(
+                "Stage 3 requires a scene-aware production shot plan"
+            )
         if plan.get("workflow_profile_id") != "camera-anima-v1":
             raise StageExecutionError("Stage 3 requires camera-anima-v1")
         _sha(plan.get("reference_hash"), "stage plan reference_hash")
+        for field in (
+            "shot_intent_hash",
+            "character_board_hash",
+            "source_story_hash",
+            "art_bible_hash",
+            "task_context_hash",
+        ):
+            _sha(plan.get(field), f"stage plan {field}")
+        environment_hash = plan.get("environment_board_hash")
+        if environment_hash is not None:
+            _sha(environment_hash, "stage plan environment_board_hash")
+        prop_hashes = plan.get("prop_board_hashes")
+        if not isinstance(prop_hashes, dict):
+            raise StageExecutionError("stage plan prop_board_hashes must be an object")
+        for prop_id, prop_hash in prop_hashes.items():
+            _text(prop_id, "stage plan prop id")
+            _sha(prop_hash, f"stage plan prop board hash for {prop_id}")
+        selection = plan.get("reference_selection")
+        if (
+            not isinstance(selection, dict)
+            or selection.get("selection_reason") not in {"exact-angle", "nearest-angle"}
+            or not isinstance(selection.get("distance_degrees"), int)
+            or isinstance(selection.get("distance_degrees"), bool)
+            or selection.get("content_hash") != plan.get("reference_hash")
+            or selection.get("character_board_hash") != plan.get("character_board_hash")
+        ):
+            raise StageExecutionError("Stage 3 reference selection binding is invalid")
         if plan.get("lineage_id") is not None:
             _lineage_id(plan.get("lineage_id"), "stage plan lineage_id")
     else:
+        if (
+            plan.get("production_eligible") is not True
+            or plan.get("plan_mode") != "lineage-bound-production"
+        ):
+            raise StageExecutionError("Stage 4 requires a lineage-bound production plan")
         if plan.get("workflow_profile_id") != "ltx-yusu-director-v1":
             raise StageExecutionError("Stage 4 requires ltx-yusu-director-v1")
         _sha(plan.get("workflow_hash"), "stage plan workflow_hash")
         _sha(plan.get("source_shot_hash"), "stage plan source_shot_hash")
+        for field in ("task_context_hash", "source_story_hash", "art_bible_hash"):
+            _sha(plan.get(field), f"stage plan {field}")
+        source_type = plan.get("source_shot_artifact_type")
+        if source_type == "ShotImage":
+            if plan.get("parent_shot_hash") is not None or plan.get("source_artifact_hash") is not None:
+                raise StageExecutionError("clean ShotImage cannot carry derivative hashes")
+        elif source_type in {"ShotRefined", "ShotStyleVariant", "ShotCutout"}:
+            parent_hash = _sha(plan.get("parent_shot_hash"), "stage plan parent_shot_hash")
+            source_artifact_hash = _sha(
+                plan.get("source_artifact_hash"), "stage plan source_artifact_hash"
+            )
+            if source_artifact_hash != parent_hash:
+                raise StageExecutionError(
+                    "stage plan source_artifact_hash must match parent_shot_hash"
+                )
+        else:
+            raise StageExecutionError("Stage 4 source shot artifact type is invalid")
         if plan.get("lineage_id") is not None:
             _lineage_id(plan.get("lineage_id"), "stage plan lineage_id")
         parameters = plan.get("parameters")
@@ -290,7 +346,7 @@ def _validate_image_ref(
 ) -> dict:
     if not isinstance(image_ref, dict):
         raise StageExecutionError("accepted shot image reference is required")
-    if image_ref.get("artifact_type") != "ShotImage" or image_ref.get("accepted") is not True:
+    if not is_ltx_input_eligible(image_ref):
         raise StageExecutionError("shot image reference must be an accepted ShotImage")
     _sha(image_ref.get("content_hash"), "shot image content_hash")
     if image_ref["content_hash"] != expected_hash:

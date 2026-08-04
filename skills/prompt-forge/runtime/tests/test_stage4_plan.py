@@ -12,7 +12,15 @@ from runtime.stages import (
 
 
 def _shot(accepted=True):
-    return {"artifact_type": "ShotImage", "accepted": accepted, "content_hash": "shot"}
+    return {
+        "artifact_type": "ShotImage",
+        "accepted": accepted,
+        "content_hash": "a" * 64,
+        "task_context_hash": "b" * 64,
+        "source_story_hash": "c" * 64,
+        "art_bible_hash": "d" * 64,
+        "lineage_id": "lineage-1",
+    }
 
 
 def _build():
@@ -38,7 +46,7 @@ def test_video_plan_locks_one_second_baseline():
     assert plan["parameters"]["fps"] == 24
     assert plan["parameters"]["output_width"] == LTX_BASELINE_OUTPUT_WIDTH == 1024
     assert plan["parameters"]["output_height"] == LTX_BASELINE_OUTPUT_HEIGHT == 704
-    assert plan["source_shot_hash"] == "shot"
+    assert plan["source_shot_hash"] == "a" * 64
 
 
 def test_video_plan_rejects_unprofiled_output_canvas():

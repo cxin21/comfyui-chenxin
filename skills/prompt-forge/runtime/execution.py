@@ -35,6 +35,12 @@ class ExecutionError(ValueError):
     """Raised when execution evidence does not satisfy the runtime boundary."""
 
 
+def _handoff_sha256(value: object, label: str) -> str:
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+        raise ExecutionError(f"{label} must be a lowercase SHA-256 digest")
+    return value
+
+
 def validate_stage_handoff(stage_plan: object, artifact: object) -> dict:
     """Validate the exact accepted upstream artifact before any enqueue work."""
     if not isinstance(stage_plan, dict):
@@ -48,6 +54,12 @@ def validate_stage_handoff(stage_plan: object, artifact: object) -> dict:
         raise ExecutionError("stage handoff artifact must be accepted")
 
     if stage == "shot-image":
+        expected_hash = _handoff_sha256(
+            stage_plan.get("reference_hash"), "stage plan reference_hash"
+        )
+        artifact_hash = _handoff_sha256(
+            artifact.get("content_hash"), "stage handoff artifact content_hash"
+        )
         if artifact.get("artifact_type") != "CharacterAngleView":
             raise ExecutionError("stage handoff artifact_type must be CharacterAngleView")
         if (
@@ -56,21 +68,49 @@ def validate_stage_handoff(stage_plan: object, artifact: object) -> dict:
             or artifact.get("hash_verified") is not True
         ):
             raise ExecutionError("stage handoff CharacterAngleView is not reference eligible")
-        expected_hash = stage_plan.get("reference_hash")
+        view_label = artifact.get("view_label")
+        proof = artifact.get("orientation_proof")
+        if (
+            not isinstance(view_label, str)
+            or not view_label.strip()
+            or not isinstance(proof, dict)
+            or proof.get("schema_version") != "1.0"
+            or proof.get("verified") is not True
+            or not isinstance(proof.get("expected_view"), str)
+            or not proof["expected_view"].strip()
+            or proof.get("observed_view") != proof.get("expected_view")
+            or not isinstance(proof.get("source"), str)
+            or not proof["source"].strip()
+        ):
+            raise ExecutionError("stage handoff CharacterAngleView orientation proof is invalid")
+        canonical_label = {
+            "front_closeup": "front",
+            "front_upper": "front",
+        }.get(view_label.strip().casefold(), view_label.strip().casefold())
+        if canonical_label != proof["observed_view"].strip().casefold():
+            raise ExecutionError("stage handoff orientation proof conflicts with view_label")
     else:
         from .artifacts import is_ltx_input_eligible
 
+        expected_hash = _handoff_sha256(
+            stage_plan.get("source_shot_hash"), "stage plan source_shot_hash"
+        )
+        artifact_hash = _handoff_sha256(
+            artifact.get("content_hash"), "stage handoff artifact content_hash"
+        )
         if not is_ltx_input_eligible(artifact):
             raise ExecutionError("stage handoff requires an accepted ShotImage")
-        expected_hash = stage_plan.get("source_shot_hash")
         expected_type = stage_plan.get("source_shot_artifact_type")
         if expected_type is not None and artifact.get("artifact_type") != expected_type:
             raise ExecutionError("stage handoff artifact_type does not match the video plan")
         expected_parent = stage_plan.get("parent_shot_hash")
         if expected_parent is not None and artifact.get("parent_artifact_hash") != expected_parent:
             raise ExecutionError("stage handoff parent_artifact_hash does not match the video plan")
+        expected_source = stage_plan.get("source_artifact_hash")
+        if expected_source is not None and artifact.get("source_artifact_hash") != expected_source:
+            raise ExecutionError("stage handoff source_artifact_hash does not match the video plan")
 
-    if artifact.get("content_hash") != expected_hash:
+    if artifact_hash != expected_hash:
         raise ExecutionError("stage handoff content_hash does not match the stage plan")
     for field in (
         "task_context_hash",

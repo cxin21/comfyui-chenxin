@@ -86,7 +86,7 @@ def _shot_build():
     }
 
 
-def _shot_plan(report):
+def _legacy_shot_plan(report):
     prompt_build = _shot_build()
     return build_shot_plan(
         "b" * 64,
@@ -109,6 +109,59 @@ def _shot_plan(report):
     )
 
 
+def _shot_plan(report):
+    prompt_build = _shot_build()
+    intent = {
+        "schema_version": "1.0",
+        "artifact_type": "ShotIntent",
+        "task_context_hash": "1" * 64,
+        "source_story_hash": "2" * 64,
+        "art_bible_hash": "3" * 64,
+        "scene_id": "scene-1",
+        "timeline_node_id": "beat-1",
+        "character_ids": ["character-1"],
+        "environment_id": None,
+        "prop_ids": [],
+        "desired_view": "left_45",
+        "camera": {"direction": "left_45"},
+        "action": "turns left",
+        "dialogue": [],
+        "emotion": "focused",
+        "continuity_locks": {"character_ids": ["character-1"]},
+        "shot_deltas": {},
+        "uncertainty": [],
+        "explicit_evidence": [],
+        "reasonable_inference": [],
+        "prohibited_expansion": [],
+    }
+    intent["shot_intent_hash"] = content_hash(intent)
+    return build_shot_plan(
+        "b" * 64,
+        content_hash(prompt_build),
+        _accepted_reference(),
+        "left_45",
+        True,
+        shot_prompt_build=prompt_build,
+        identity_facts=["the_swordswoman"],
+        g1_proof={"vae_encode_node_id": 59, "sampler_node_id": 27, "traversed_node_ids": [27, 75, 59]},
+        profile_hash=content_hash(_camera_profile()),
+        capability_report_hash=content_hash(report),
+        workflow_fingerprint=structure_fingerprint(_shot_ui()),
+        shot_intent=intent,
+        character_board={
+            "artifact_type": "CharacterBoard",
+            "asset_id": "character-1",
+            "accepted": True,
+            "content_hash": "4" * 64,
+            "lineage_id": "lineage-1",
+            "task_context_hash": "1" * 64,
+            "source_story_hash": "2" * 64,
+            "art_bible_hash": "3" * 64,
+        },
+        props=[],
+    )
+
+
 def _shot_graph():
     return json.loads((FIXTURES / "camera-img2img-api-minimal.json").read_text(encoding="utf-8"))
 
@@ -124,6 +177,17 @@ def _accepted_reference():
             "semantic_conflict": False,
             "hash_verified": True,
             "content_hash": "a" * 64,
+            "task_context_hash": "1" * 64,
+            "source_story_hash": "2" * 64,
+            "art_bible_hash": "3" * 64,
+            "character_board_hash": "4" * 64,
+            "orientation_proof": {
+                "schema_version": "1.0",
+                "expected_view": "left_45",
+                "observed_view": "left_45",
+                "source": "manual-review",
+                "verified": True,
+            },
         },
         "user:test",
         "2026-08-03T00:30:00Z",
@@ -155,13 +219,35 @@ def _video_graph():
 
 def _video_plan(graph):
     return build_video_plan(
-        {"artifact_type": "ShotImage", "accepted": True, "content_hash": "d" * 64},
+        {
+            "artifact_type": "ShotImage",
+            "accepted": True,
+            "content_hash": "d" * 64,
+            "task_context_hash": "1" * 64,
+            "source_story_hash": "2" * 64,
+            "art_bible_hash": "3" * 64,
+            "lineage_id": "lineage-1",
+        },
         _video_build(),
         content_hash(graph),
         content_hash(_yusu_profile()),
         True,
         workflow_fingerprint=_yusu_profile()["workflow_fingerprint"],
     )
+
+
+def _video_image_ref(plan):
+    return {
+        "artifact_type": plan["source_shot_artifact_type"],
+        "accepted": True,
+        "content_hash": plan["source_shot_hash"],
+        "task_context_hash": plan["task_context_hash"],
+        "source_story_hash": plan["source_story_hash"],
+        "art_bible_hash": plan["art_bible_hash"],
+        "lineage_id": plan["lineage_id"],
+        "imageFile": "shots/shot.png",
+        "imageB64": "/api/view?filename=shot.png",
+    }
 
 
 def _event(draft, root):
@@ -197,6 +283,52 @@ def test_stage_execution_rejects_unavailable_workflow_candidate():
             ui_workflow=_shot_ui(),
             image_name="ref.png",
             reference_artifact=_accepted_reference(),
+        )
+
+
+def test_stage_execution_rejects_legacy_compact_shot_plan():
+    report = _capability_report()
+    with pytest.raises(stage_execution.StageExecutionError, match="scene-aware production"):
+        stage_execution.build_stage_execution_draft(
+            _legacy_shot_plan(report),
+            _shot_graph(),
+            _camera_profile(),
+            report,
+            ui_workflow=_shot_ui(),
+            image_name="ref.png",
+            reference_artifact=_accepted_reference(),
+        )
+
+
+def test_stage_execution_rejects_legacy_video_dry_run_plan():
+    graph = _video_graph()
+    plan = build_video_plan(
+        {"artifact_type": "ShotImage", "accepted": True, "content_hash": "shot"},
+        _video_build(),
+        content_hash(graph),
+        content_hash(_yusu_profile()),
+        True,
+        workflow_fingerprint=_yusu_profile()["workflow_fingerprint"],
+    )
+    report = _capability_report()
+    plan["capability_report_hash"] = content_hash(report)
+    plan["plan_hash"] = content_hash(
+        {key: value for key, value in plan.items() if key != "plan_hash"}
+    )
+
+    with pytest.raises(stage_execution.StageExecutionError, match="lineage-bound production"):
+        stage_execution.build_stage_execution_draft(
+            plan,
+            graph,
+            _yusu_profile(),
+            report,
+            image_ref={
+                "artifact_type": "ShotImage",
+                "accepted": True,
+                "content_hash": "shot",
+                "imageFile": "shots/shot.png",
+                "imageB64": "/api/view?filename=shot.png",
+            },
         )
 
 
@@ -395,13 +527,7 @@ def test_terminal_record_can_validate_expired_approval_after_enqueue(tmp_path, m
     report = _capability_report()
     plan["capability_report_hash"] = content_hash(report)
     plan["plan_hash"] = content_hash({key: value for key, value in plan.items() if key != "plan_hash"})
-    image_ref = {
-        "artifact_type": "ShotImage",
-        "accepted": True,
-        "content_hash": plan["source_shot_hash"],
-        "imageFile": "shots/shot.png",
-        "imageB64": "/api/view?filename=shot.png",
-    }
+    image_ref = _video_image_ref(plan)
     draft = stage_execution.build_stage_execution_draft(
         plan, graph, _yusu_profile(), report, image_ref=image_ref
     )
@@ -482,8 +608,7 @@ def test_stage_submission_rejects_tampered_ui_provenance(tmp_path):
 def test_video_submission_patches_yusu_timeline_and_preserves_workflow_negative(tmp_path):
     graph = _video_graph()
     plan = _video_plan(graph)
-    shot_hash = plan["source_shot_hash"]
-    image_ref = {"artifact_type": "ShotImage", "accepted": True, "content_hash": shot_hash, "imageFile": "shots/shot.png", "imageB64": "/api/view?filename=shot.png"}
+    image_ref = _video_image_ref(plan)
     report = _capability_report()
     plan["capability_report_hash"] = content_hash(report)
     plan["plan_hash"] = content_hash({key: value for key, value in plan.items() if key != "plan_hash"})
@@ -501,16 +626,55 @@ def test_video_submission_patches_yusu_timeline_and_preserves_workflow_negative(
     assert submission["api_graph"]["195"] == graph["195"]
 
 
+def test_video_execution_rejects_derivative_source_hash_drift():
+    graph = _video_graph()
+    shot = {
+        "artifact_type": "ShotRefined",
+        "derivative_type": "detailer",
+        "accepted": True,
+        "content_hash": "d" * 64,
+        "parent_artifact_hash": "e" * 64,
+        "source_artifact_hash": "e" * 64,
+        "task_context_hash": "1" * 64,
+        "source_story_hash": "2" * 64,
+        "art_bible_hash": "3" * 64,
+        "lineage_id": "lineage-1",
+        "imageFile": "shots/refined.png",
+        "imageB64": "/api/view?filename=refined.png",
+    }
+    plan = build_video_plan(
+        shot,
+        _video_build(),
+        content_hash(graph),
+        content_hash(_yusu_profile()),
+        True,
+        workflow_fingerprint=_yusu_profile()["workflow_fingerprint"],
+    )
+    report = _capability_report()
+    plan["capability_report_hash"] = content_hash(report)
+    plan["plan_hash"] = content_hash(
+        {key: value for key, value in plan.items() if key != "plan_hash"}
+    )
+    draft = stage_execution.build_stage_execution_draft(
+        plan, graph, _yusu_profile(), report, image_ref=shot
+    )
+    assert draft["stage_plan"]["parent_shot_hash"] == "e" * 64
+
+    plan["source_artifact_hash"] = "9" * 64
+    plan["plan_hash"] = content_hash(
+        {key: value for key, value in plan.items() if key != "plan_hash"}
+    )
+
+    with pytest.raises(stage_execution.StageExecutionError, match="source_artifact_hash"):
+        stage_execution.build_stage_execution_draft(
+            plan, graph, _yusu_profile(), report, image_ref=shot
+        )
+
+
 def test_video_execution_rejects_wrong_ltx_profile():
     graph = _video_graph()
     plan = _video_plan(graph)
-    image_ref = {
-        "artifact_type": "ShotImage",
-        "accepted": True,
-        "content_hash": plan["source_shot_hash"],
-        "imageFile": "shots/shot.png",
-        "imageB64": "/api/view?filename=shot.png",
-    }
+    image_ref = _video_image_ref(plan)
     report = _capability_report()
     plan["capability_report_hash"] = content_hash(report)
     profile = _yusu_profile()
@@ -527,13 +691,7 @@ def test_video_execution_rejects_wrong_ltx_profile():
 def test_video_execution_rejects_unpinned_ltx_contract():
     graph = _video_graph()
     plan = _video_plan(graph)
-    image_ref = {
-        "artifact_type": "ShotImage",
-        "accepted": True,
-        "content_hash": plan["source_shot_hash"],
-        "imageFile": "shots/shot.png",
-        "imageB64": "/api/view?filename=shot.png",
-    }
+    image_ref = _video_image_ref(plan)
     report = _capability_report()
     profile = _yusu_profile()
     profile["immutable_node_inputs"].pop("175")
@@ -550,13 +708,7 @@ def test_video_execution_rejects_profile_fingerprint_drift():
     graph = _video_graph()
     plan = _video_plan(graph)
     plan["workflow_fingerprint"] = "0" * 64
-    image_ref = {
-        "artifact_type": "ShotImage",
-        "accepted": True,
-        "content_hash": plan["source_shot_hash"],
-        "imageFile": "shots/shot.png",
-        "imageB64": "/api/view?filename=shot.png",
-    }
+    image_ref = _video_image_ref(plan)
     report = _capability_report()
     plan["capability_report_hash"] = content_hash(report)
     plan["plan_hash"] = content_hash({key: value for key, value in plan.items() if key != "plan_hash"})
@@ -570,13 +722,7 @@ def test_video_execution_rejects_ltx_sampler_drift():
     graph = _video_graph()
     graph["128"]["inputs"]["sampler_name"] = "ddim"
     plan = _video_plan(graph)
-    image_ref = {
-        "artifact_type": "ShotImage",
-        "accepted": True,
-        "content_hash": plan["source_shot_hash"],
-        "imageFile": "shots/shot.png",
-        "imageB64": "/api/view?filename=shot.png",
-    }
+    image_ref = _video_image_ref(plan)
     report = _capability_report()
     plan["capability_report_hash"] = content_hash(report)
     plan["plan_hash"] = content_hash({key: value for key, value in plan.items() if key != "plan_hash"})

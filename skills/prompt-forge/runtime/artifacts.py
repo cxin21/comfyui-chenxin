@@ -128,12 +128,14 @@ def is_ltx_input_eligible(artifact: object) -> bool:
         return artifact.get("parent_artifact_hash") is None
     derivative_type = _SHOT_DERIVATIVE_TYPES.get(artifact_type)
     parent = artifact.get("parent_artifact_hash")
+    source = artifact.get("source_artifact_hash")
     return (
         derivative_type is not None
         and artifact.get("derivative_type") == derivative_type
         and isinstance(parent, str)
         and bool(re.fullmatch(r"[0-9a-f]{64}", parent))
         and parent != content
+        and source == parent
     )
 
 

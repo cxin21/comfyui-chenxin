@@ -564,6 +564,41 @@ def _bound_board(
     return copy.deepcopy(board)
 
 
+def _sha256(value: object, label: str) -> str:
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+        raise StageError(f"{label} must be a lowercase SHA-256 digest")
+    return value
+
+
+def _validated_reference_acceptance(reference: dict, content_digest: str) -> None:
+    acceptance = reference.get("acceptance")
+    if not isinstance(acceptance, dict) or set(acceptance) != {
+        "schema_version",
+        "artifact_hash",
+        "actor",
+        "accepted_at",
+        "acceptance_id",
+    }:
+        raise StageError("Stage 3 reference acceptance evidence is missing")
+    if (
+        acceptance.get("schema_version") != "1.0"
+        or acceptance.get("artifact_hash") != content_digest
+        or not isinstance(acceptance.get("actor"), str)
+        or not acceptance["actor"].strip()
+        or not isinstance(acceptance.get("accepted_at"), str)
+        or not acceptance["accepted_at"].strip()
+    ):
+        raise StageError("Stage 3 reference acceptance is not self-consistent")
+    unsigned = dict(acceptance)
+    acceptance_id = unsigned.pop("acceptance_id")
+    if (
+        not isinstance(acceptance_id, str)
+        or acceptance_id != content_hash(unsigned)
+        or reference.get("acceptance_id") != acceptance_id
+    ):
+        raise StageError("Stage 3 reference acceptance hash is invalid")
+
+
 def _scene_aware_shot_bindings(
     intent: object,
     reference: dict,
@@ -599,19 +634,25 @@ def _scene_aware_shot_bindings(
     )
     character_hash = character["content_hash"]
 
+    content_digest = _sha256(
+        reference.get("content_hash"), "Stage 3 reference content_hash"
+    )
     if (
         reference.get("reference_eligible") is not True
         or reference.get("semantic_conflict") is not False
         or reference.get("hash_verified") is not True
     ):
         raise StageError("Stage 3 reference is not eligible")
+    _validated_reference_acceptance(reference, content_digest)
     for field in ("source_story_hash", "art_bible_hash"):
         if reference.get(field) != intent.get(field):
             raise StageError(f"Stage 3 reference {field} does not match ShotIntent")
     if reference.get("character_board_hash") != character_hash:
         raise StageError("Stage 3 reference character_board_hash does not match")
-    expected_context = intent.get("task_context_hash")
-    if expected_context is not None and reference.get("task_context_hash") != expected_context:
+    expected_context = _sha256(
+        intent.get("task_context_hash"), "ShotIntent task_context_hash"
+    )
+    if reference.get("task_context_hash") != expected_context:
         raise StageError("Stage 3 reference task_context_hash does not match ShotIntent")
 
     try:
@@ -668,7 +709,7 @@ def _scene_aware_shot_bindings(
         "distance_degrees": selection["distance_degrees"],
         "desired_view": selection["desired_view"],
         "selected_view": selection["selected_view"],
-        "content_hash": reference["content_hash"],
+        "content_hash": content_digest,
     }
     for field in ("parent_artifact_hash", "source_artifact_hash"):
         if reference.get(field) is not None:
@@ -692,11 +733,7 @@ def _scene_aware_shot_bindings(
         "explicit_evidence": copy.deepcopy(intent.get("explicit_evidence", [])),
         "reasonable_inference": copy.deepcopy(intent.get("reasonable_inference", [])),
         "prohibited_expansion": copy.deepcopy(intent.get("prohibited_expansion", [])),
-        **(
-            {"task_context_hash": expected_context}
-            if expected_context is not None
-            else {}
-        ),
+        "task_context_hash": expected_context,
     }
 
 
@@ -765,6 +802,8 @@ def build_shot_plan(
         "stage": "shot-image",
         "plan_state": "draft",
         "execution_approved": True,
+        "production_eligible": False,
+        "plan_mode": "legacy-dry-run",
         "local_only": True,
         "workflow_profile_id": "camera-anima-v1",
         "workflow_mode": "image-to-image",
@@ -801,6 +840,8 @@ def build_shot_plan(
                 [] if props is None else props,
             )
         )
+        plan["production_eligible"] = True
+        plan["plan_mode"] = "scene-aware-production"
     if shot_prompt_build is not None:
         plan["prompt_build"] = copy.deepcopy(shot_prompt_build)
     plan["plan_hash"] = content_hash(plan)
@@ -812,7 +853,17 @@ def build_video_plan(*args, **kwargs):
     if len(args) < 5:
         raise StageError("video plan requires shot, PromptBuild, workflow hash, profile hash and approval")
     shot, prompt_build, workflow_hash, profile_hash, execution_approved = args[:5]
-    legacy_clean_shot = (
+    base_eligible = is_ltx_input_eligible(shot)
+    context_eligible = isinstance(shot, dict) and all(
+        isinstance(shot.get(field), str)
+        and bool(re.fullmatch(r"[0-9a-f]{64}", shot[field]))
+        for field in ("task_context_hash", "source_story_hash", "art_bible_hash")
+    )
+    lineage_eligible = isinstance(shot, dict) and isinstance(
+        shot.get("lineage_id"), str
+    ) and bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", shot["lineage_id"]))
+    production_source = base_eligible and context_eligible and lineage_eligible
+    legacy_clean_source = (
         isinstance(shot, dict)
         and shot.get("artifact_type") == "ShotImage"
         and shot.get("accepted") is True
@@ -820,9 +871,22 @@ def build_video_plan(*args, **kwargs):
         and bool(shot["content_hash"].strip())
         and shot.get("parent_artifact_hash") is None
     )
-    if not legacy_clean_shot and not is_ltx_input_eligible(shot):
+    if not production_source and not legacy_clean_source:
         raise StageError("video plan requires an accepted ShotImage")
-    shot_hash = _required_text(shot.get("content_hash"), "ShotImage content_hash")
+    shot_hash = (
+        _sha256(shot.get("content_hash"), "ShotImage content_hash")
+        if production_source
+        else _required_text(shot.get("content_hash"), "ShotImage content_hash")
+    )
+    shot_context = (
+        {
+            field: _sha256(shot.get(field), f"ShotImage {field}")
+            for field in ("task_context_hash", "source_story_hash", "art_bible_hash")
+        }
+        if production_source
+        else {}
+    )
+    shot_lineage_id = shot.get("lineage_id") if production_source else None
     if not isinstance(prompt_build, dict):
         raise StageError("video plan requires a PromptBuild")
     _required_text(workflow_hash, "workflow hash")
@@ -867,6 +931,10 @@ def build_video_plan(*args, **kwargs):
         "stage": "video",
         "plan_state": "draft",
         "execution_approved": True,
+        "production_eligible": production_source,
+        "plan_mode": (
+            "lineage-bound-production" if production_source else "legacy-dry-run"
+        ),
         "local_only": True,
         "workflow_profile_id": "ltx-yusu-director-v1",
         "workflow_hash": workflow_hash,
@@ -875,6 +943,7 @@ def build_video_plan(*args, **kwargs):
         "capability_report_hash": kwargs.get("capability_report_hash"),
         "source_shot_hash": shot_hash,
         "source_shot_artifact_type": shot["artifact_type"],
+        **shot_context,
         "prompt_build_hash": content_hash(prompt_build),
         "prompt_build": copy.deepcopy(prompt_build),
         "prompt_intent_hash": content_hash(intent) if intent is not None else None,
@@ -896,20 +965,10 @@ def build_video_plan(*args, **kwargs):
         ],
         "expected_outputs": ["video"],
     }
-    if shot.get("lineage_id") is not None:
-        lineage_id = shot.get("lineage_id")
-        if not isinstance(lineage_id, str) or not re.fullmatch(
-            r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", lineage_id
-        ):
-            raise StageError("Stage 4 ShotImage lineage_id is invalid")
-        plan["lineage_id"] = lineage_id
-    for field in ("task_context_hash", "source_story_hash", "art_bible_hash"):
-        if shot.get(field) is not None:
-            value = shot[field]
-            if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
-                raise StageError(f"Stage 4 ShotImage {field} is invalid")
-            plan[field] = value
+    if shot_lineage_id is not None:
+        plan["lineage_id"] = shot_lineage_id
     if shot.get("parent_artifact_hash") is not None:
         plan["parent_shot_hash"] = shot["parent_artifact_hash"]
+        plan["source_artifact_hash"] = shot["source_artifact_hash"]
     plan["plan_hash"] = content_hash(plan)
     return plan

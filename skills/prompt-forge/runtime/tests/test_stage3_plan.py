@@ -39,6 +39,7 @@ def _story():
         "story_logic": ["the key opens the archive"],
         "uncertainty": ["archive contents remain unknown"],
         "source_hash": "d" * 64,
+        "task_context_hash": "1" * 64,
     }
 
 
@@ -72,7 +73,7 @@ def _shot_intent():
 
 
 def _bound_reference(intent):
-    return {
+    artifact = {
         "artifact_type": "CharacterAngleView",
         "view_label": "right_45",
         "accepted": True,
@@ -83,6 +84,7 @@ def _bound_reference(intent):
         "lineage_id": "lineage-1",
         "source_story_hash": intent["source_story_hash"],
         "art_bible_hash": intent["art_bible_hash"],
+        "task_context_hash": intent["task_context_hash"],
         "character_board_hash": "b" * 64,
         "source_artifact_hash": "c" * 64,
         "orientation_proof": {
@@ -93,6 +95,16 @@ def _bound_reference(intent):
             "verified": True,
         },
     }
+    acceptance = {
+        "schema_version": "1.0",
+        "artifact_hash": artifact["content_hash"],
+        "actor": "user:test",
+        "accepted_at": "2026-08-04T08:00:00Z",
+    }
+    acceptance["acceptance_id"] = content_hash(acceptance)
+    artifact["acceptance"] = acceptance
+    artifact["acceptance_id"] = acceptance["acceptance_id"]
+    return artifact
 
 
 def _board(artifact_type, asset_id, digest, intent):
@@ -104,6 +116,7 @@ def _board(artifact_type, asset_id, digest, intent):
         "lineage_id": "lineage-1",
         "source_story_hash": intent["source_story_hash"],
         "art_bible_hash": intent["art_bible_hash"],
+        "task_context_hash": intent["task_context_hash"],
     }
 
 
@@ -130,6 +143,8 @@ def test_shot_plan_records_reference_and_camera():
     assert result["reference_hash"] == "ref"
     assert result["desired_view"] == "left_45"
     assert result["execution_approved"] is True
+    assert result["production_eligible"] is False
+    assert result["plan_mode"] == "legacy-dry-run"
 
 
 def test_shot_plan_rejects_unaccepted_reference():
@@ -248,6 +263,8 @@ def test_scene_aware_shot_plan_binds_boards_and_nearest_orientation_reason():
     assert plan["character_board_hash"] == "b" * 64
     assert plan["environment_board_hash"] == "e" * 64
     assert plan["prop_board_hashes"] == {"prop-archive-key": "f" * 64}
+    assert plan["production_eligible"] is True
+    assert plan["plan_mode"] == "scene-aware-production"
     assert plan["reference_selection"] == {
         "selection_reason": "nearest-angle",
         "distance_degrees": 45,
@@ -309,6 +326,48 @@ def test_shot_plan_rejects_unproven_orientation_source():
     reference.pop("orientation_proof")
 
     with pytest.raises(StageError, match="orientation"):
+        build_shot_plan(
+            "base",
+            "shot",
+            reference,
+            "right",
+            True,
+            shot_intent=intent,
+            character_board=_board("CharacterBoard", "character-lee", "b" * 64, intent),
+            environment=_board(
+                "EnvironmentBoard", "environment-workshop", "e" * 64, intent
+            ),
+            props=[_board("PropBoard", "prop-archive-key", "f" * 64, intent)],
+        )
+
+
+def test_scene_aware_shot_plan_rejects_forged_reference_content_hash():
+    intent = _shot_intent()
+    reference = _bound_reference(intent)
+    reference["content_hash"] = "forged"
+
+    with pytest.raises(StageError, match="content_hash"):
+        build_shot_plan(
+            "base",
+            "shot",
+            reference,
+            "right",
+            True,
+            shot_intent=intent,
+            character_board=_board("CharacterBoard", "character-lee", "b" * 64, intent),
+            environment=_board(
+                "EnvironmentBoard", "environment-workshop", "e" * 64, intent
+            ),
+            props=[_board("PropBoard", "prop-archive-key", "f" * 64, intent)],
+        )
+
+
+def test_scene_aware_shot_plan_rejects_forged_reference_acceptance_hash():
+    intent = _shot_intent()
+    reference = _bound_reference(intent)
+    reference["acceptance"]["artifact_hash"] = "9" * 64
+
+    with pytest.raises(StageError, match="acceptance"):
         build_shot_plan(
             "base",
             "shot",

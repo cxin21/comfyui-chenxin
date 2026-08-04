@@ -125,9 +125,17 @@ def test_handoff_rejects_cross_story_lineage_and_acceptance_before_any_enqueue(m
         "source_story_hash": "c" * 64,
         "art_bible_hash": "d" * 64,
         "lineage_id": "lineage-1",
+        "orientation_proof": {
+            "schema_version": "1.0",
+            "expected_view": "right_45",
+            "observed_view": "right_45",
+            "source": "manual-review",
+            "verified": True,
+        },
     }
     reference = {
         "artifact_type": "CharacterAngleView",
+        "view_label": "right_45",
         "accepted": True,
         "reference_eligible": True,
         "semantic_conflict": False,
@@ -137,6 +145,13 @@ def test_handoff_rejects_cross_story_lineage_and_acceptance_before_any_enqueue(m
         "source_story_hash": "9" * 64,
         "art_bible_hash": "d" * 64,
         "lineage_id": "lineage-1",
+        "orientation_proof": {
+            "schema_version": "1.0",
+            "expected_view": "right_45",
+            "observed_view": "right_45",
+            "source": "manual-review",
+            "verified": True,
+        },
     }
     api_calls = []
     monkeypatch.setattr(
@@ -176,9 +191,17 @@ def test_validate_stage_handoff_rejects_single_field_drift(field, value, message
         "source_story_hash": "c" * 64,
         "art_bible_hash": "d" * 64,
         "lineage_id": "lineage-1",
+        "orientation_proof": {
+            "schema_version": "1.0",
+            "expected_view": "right_45",
+            "observed_view": "right_45",
+            "source": "manual-review",
+            "verified": True,
+        },
     }
     reference = {
         "artifact_type": "CharacterAngleView",
+        "view_label": "right_45",
         "accepted": True,
         "reference_eligible": True,
         "semantic_conflict": False,
@@ -188,10 +211,51 @@ def test_validate_stage_handoff_rejects_single_field_drift(field, value, message
         "source_story_hash": "c" * 64,
         "art_bible_hash": "d" * 64,
         "lineage_id": "lineage-1",
+        "orientation_proof": {
+            "schema_version": "1.0",
+            "expected_view": "right_45",
+            "observed_view": "right_45",
+            "source": "manual-review",
+            "verified": True,
+        },
     }
     reference[field] = value
 
     with pytest.raises(ExecutionError, match=message):
+        validate_stage_handoff(plan, reference)
+
+
+@pytest.mark.parametrize(
+    ("expected_hash", "artifact_hash"),
+    [
+        (None, None),
+        ("not-a-hash", "not-a-hash"),
+        ("a" * 64, None),
+        (None, "a" * 64),
+    ],
+)
+def test_validate_stage_handoff_rejects_missing_or_malformed_hashes(
+    expected_hash, artifact_hash
+):
+    plan = {"stage": "shot-image", "reference_hash": expected_hash}
+    reference = {
+        "artifact_type": "CharacterAngleView",
+        "view_label": "right_45",
+        "accepted": True,
+        "reference_eligible": True,
+        "semantic_conflict": False,
+        "hash_verified": True,
+        "content_hash": artifact_hash,
+        "orientation_proof": {
+            "schema_version": "1.0",
+            "expected_view": "right_45",
+            "observed_view": "right_45",
+            "source": "manual-review",
+            "verified": True,
+        },
+    }
+
+    with pytest.raises(ExecutionError, match="SHA-256"):
         validate_stage_handoff(plan, reference)
 
 
