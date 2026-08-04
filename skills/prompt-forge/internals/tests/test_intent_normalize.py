@@ -115,6 +115,57 @@ def test_duplicate_values_keep_highest_priority_origin():
     ]
 
 
+def test_normalize_intent_merges_evidence_locks_and_prohibited_expansion_without_aliasing():
+    intent = _intent()
+    intent.update(
+        {
+            "story_breakdown_hash": "a" * 64,
+            "art_bible_hash": "b" * 64,
+            "asset_refs": [
+                {"asset_id": "character-lee", "asset_type": "character", "content_hash": "c" * 64}
+            ],
+            "explicit_evidence": ["indigo linen coat"],
+            "reasonable_inference": ["the coat is weathered"],
+            "prohibited_expansion": ["modern LED glasses"],
+            "continuity_locks": {
+                "identity": ["indigo linen coat"],
+                "style": ["restrained ink wash"],
+                "scene": [],
+                "prop": [],
+            },
+            "uncertainty": ["exact coat age"],
+        }
+    )
+
+    result = normalize_intent(intent, load_concept_map())
+
+    assert result["story_breakdown_hash"] == "a" * 64
+    assert result["art_bible_hash"] == "b" * 64
+    assert result["asset_refs"] == intent["asset_refs"]
+    assert result["explicit_evidence"] == ["indigo linen coat"]
+    assert result["reasonable_inference"] == ["the coat is weathered"]
+    assert result["prohibited_expansion"] == ["modern LED glasses"]
+    assert "indigo linen coat" in result["locked_facts"]
+    assert "restrained ink wash" in result["locked_facts"]
+    assert "the coat is weathered" not in result["locked_facts"]
+    assert "modern LED glasses" in result["intent"]["negative_constraints"]
+    assert "exact coat age" in result["uncertainty"]
+
+    result["asset_refs"][0]["asset_id"] = "mutated"
+    result["continuity_locks"]["identity"].append("mutated")
+    assert intent["asset_refs"][0]["asset_id"] == "character-lee"
+    assert intent["continuity_locks"]["identity"] == ["indigo linen coat"]
+
+
+def test_normalize_intent_rejects_prohibited_facts_in_evidence_or_locks():
+    intent = _intent()
+    intent["explicit_evidence"] = ["modern LED glasses"]
+    intent["prohibited_expansion"] = ["modern LED glasses"]
+
+    with pytest.raises(ValueError, match="prohibited"):
+        normalize_intent(intent, load_concept_map())
+
+
 def test_generation_mode_must_match_target():
     intent = _intent()
     intent["target"] = "video"

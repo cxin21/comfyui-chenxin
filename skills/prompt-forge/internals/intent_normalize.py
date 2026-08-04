@@ -11,6 +11,7 @@ Output is JSON on stdout; errors are written to stderr. Stdlib only.
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import re
 import sys
@@ -59,6 +60,7 @@ REFERENCE_KINDS = {"image", "video", "audio"}
 SCENE_DIMENSIONS = {"scene", "lighting", "composition", "color", "style", "mood"}
 _CJK_RE = re.compile(r"[\u4e00-\u9fff]+")
 _LATIN_RE = re.compile(r"[a-zA-Z0-9_'-]+")
+_SHA256_RE = re.compile(r"[0-9a-f]{64}")
 _IGNORED_CJK_FRAGMENTS = {
     "用", "出", "在", "的", "图", "画", "给", "请", "帮我", "生成",
     "一张", "一个", "一幅", "一位", "让", "把", "和", "与", "要", "做", "来",
@@ -132,6 +134,87 @@ def match_concepts(text: str, entries: dict[str, dict]) -> list[dict]:
 
 def _dedupe(values: list[str]) -> list[str]:
     return list(dict.fromkeys(value for value in values if value))
+
+
+def _string_list_field(intent: dict, name: str) -> list[str]:
+    value = intent.get(name, [])
+    if not isinstance(value, list) or not all(
+        isinstance(item, str) and item.strip() for item in value
+    ):
+        raise ValueError(f"intent '{name}' must be a string list")
+    return _dedupe([item.strip() for item in value])
+
+
+def _contract_hash(intent: dict, name: str) -> str | None:
+    value = intent.get(name)
+    if value is None:
+        return None
+    if not isinstance(value, str) or _SHA256_RE.fullmatch(value) is None:
+        raise ValueError(f"intent '{name}' must be a lowercase SHA-256 hash")
+    return value
+
+
+def _continuity_locks(intent: dict) -> dict[str, list[str]]:
+    raw = intent.get("continuity_locks", {})
+    if not isinstance(raw, dict):
+        raise ValueError("intent 'continuity_locks' must be an object")
+    locks: dict[str, list[str]] = {}
+    for role in sorted(raw):
+        if not isinstance(role, str) or not role.strip():
+            raise ValueError("intent continuity lock roles must be non-empty strings")
+        values = raw[role]
+        if not isinstance(values, list) or not all(
+            isinstance(item, str) and item.strip() for item in values
+        ):
+            raise ValueError(f"intent continuity lock '{role}' must be a string list")
+        locks[role] = _dedupe([item.strip() for item in values])
+    return locks
+
+
+def _asset_refs(intent: dict) -> list[dict]:
+    raw = intent.get("asset_refs", [])
+    if not isinstance(raw, list) or not all(isinstance(item, dict) for item in raw):
+        raise ValueError("intent 'asset_refs' must be a list of objects")
+    try:
+        json.dumps(raw, ensure_ascii=False, sort_keys=True, allow_nan=False)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("intent 'asset_refs' must be canonical JSON") from exc
+    return copy.deepcopy(raw)
+
+
+def _evidence_extension(intent: dict) -> dict:
+    explicit = _string_list_field(intent, "explicit_evidence")
+    reasonable = _string_list_field(intent, "reasonable_inference")
+    prohibited = _string_list_field(intent, "prohibited_expansion")
+    uncertainty = _string_list_field(intent, "uncertainty")
+    locks = _continuity_locks(intent)
+    lock_values = _dedupe([fact for role in locks for fact in locks[role]])
+
+    explicit_keys = {_normalized_fact(item) for item in explicit}
+    reasonable = [
+        item for item in reasonable if _normalized_fact(item) not in explicit_keys
+    ]
+    allowed = intent.get("locked_facts", []) + explicit + reasonable + lock_values
+    allowed_keys = {_normalized_fact(item) for item in allowed}
+    prohibited_keys = {_normalized_fact(item) for item in prohibited}
+    if allowed_keys.intersection(prohibited_keys):
+        raise ValueError("prohibited expansion cannot be evidence or a continuity lock")
+
+    return {
+        "story_breakdown_hash": _contract_hash(intent, "story_breakdown_hash"),
+        "art_bible_hash": _contract_hash(intent, "art_bible_hash"),
+        "asset_refs": _asset_refs(intent),
+        "explicit_evidence": explicit,
+        "reasonable_inference": reasonable,
+        "prohibited_expansion": prohibited,
+        "continuity_locks": locks,
+        "uncertainty": uncertainty,
+        "continuity_lock_values": lock_values,
+    }
+
+
+def _normalized_fact(value: str) -> str:
+    return " ".join(value.casefold().split())
 
 
 def _unresolved_cjk(text: str, matches: list[dict]) -> list[str]:
@@ -251,6 +334,7 @@ def validate_intent(intent: dict) -> None:
             tags = item.get("tag_candidates", [])
             if not isinstance(tags, list) or not all(isinstance(tag, str) and tag for tag in tags):
                 raise ValueError(f"dimension '{dimension}' tag_candidates must be a string list")
+    _evidence_extension(intent)
 
 
 def _merge_items(items: list[dict]) -> list[dict]:
@@ -278,6 +362,7 @@ def _merge_items(items: list[dict]) -> list[dict]:
 def normalize_intent(intent: dict, entries: dict[str, dict]) -> dict:
     """Normalize PromptIntent while preserving explicit and inferred provenance."""
     validate_intent(intent)
+    extension = _evidence_extension(intent)
     lexical = normalize_query(intent["original_query"], entries)
     dimensions = {
         dimension: _merge_items(intent["dimensions"][dimension])
@@ -300,13 +385,52 @@ def normalize_intent(intent: dict, entries: dict[str, dict]) -> dict:
         for item in dimensions[dimension]
         if item["origin"] == "explicit"
     ]
-    locked_facts = _dedupe(intent["locked_facts"] + explicit_values)
-    normalized_intent = dict(intent)
+    locked_facts = _dedupe(
+        intent["locked_facts"]
+        + explicit_values
+        + extension["explicit_evidence"]
+        + extension["continuity_lock_values"]
+    )
+    normalized_intent = copy.deepcopy(intent)
     normalized_intent["dimensions"] = dimensions
+    has_evidence_extension = any(
+        name in intent
+        for name in (
+            "story_breakdown_hash",
+            "art_bible_hash",
+            "asset_refs",
+            "explicit_evidence",
+            "reasonable_inference",
+            "prohibited_expansion",
+            "continuity_locks",
+            "uncertainty",
+        )
+    )
+    if has_evidence_extension:
+        normalized_intent["locked_facts"] = locked_facts
+        normalized_intent["negative_constraints"] = _dedupe(
+            intent["negative_constraints"] + extension["prohibited_expansion"]
+        )
+
+    uncertainty = _dedupe(extension["uncertainty"] + lexical["lexicon_unresolved"])
+    evidence_provenance = {
+        name: copy.deepcopy(extension[name])
+        for name in (
+            "explicit_evidence",
+            "reasonable_inference",
+            "prohibited_expansion",
+        )
+    }
 
     return {
         "schema_version": SCHEMA_VERSION,
         "intent": normalized_intent,
+        "story_breakdown_hash": extension["story_breakdown_hash"],
+        "art_bible_hash": extension["art_bible_hash"],
+        "asset_refs": extension["asset_refs"],
+        **evidence_provenance,
+        "continuity_locks": copy.deepcopy(extension["continuity_locks"]),
+        "uncertainty": uncertainty,
         "english_terms": _dedupe(english_terms),
         "scene_terms": _dedupe(scene_terms),
         "tag_candidates": _dedupe(lexical["tag_candidates"] + proposed_tags),
@@ -320,7 +444,8 @@ def normalize_intent(intent: dict, entries: dict[str, dict]) -> dict:
                 for item in dimensions[dimension]
             )
             for origin in sorted(ORIGINS)
-        },
+        }
+        | evidence_provenance,
     }
 
 

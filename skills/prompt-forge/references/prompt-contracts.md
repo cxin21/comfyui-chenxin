@@ -18,6 +18,23 @@ constraints, not a finished prompt.
   "output_constraints": {"aspect_ratio": "2:3"},
   "references": [],
   "locked_facts": ["blonde hair"],
+  "story_breakdown_hash": "<lowercase sha256>",
+  "art_bible_hash": "<lowercase sha256>",
+  "asset_refs": [{
+    "asset_id": "character-lee",
+    "asset_type": "character",
+    "content_hash": "<lowercase sha256>"
+  }],
+  "explicit_evidence": ["blonde hair"],
+  "reasonable_inference": ["travel-worn fabric"],
+  "prohibited_expansion": ["modern LED glasses"],
+  "continuity_locks": {
+    "identity": ["blonde hair"],
+    "style": ["restrained ink wash"],
+    "scene": [],
+    "prop": []
+  },
+  "uncertainty": ["exact garment age"],
   "dimensions": {
     "subject": [{
       "value": "blonde-haired elf",
@@ -47,6 +64,14 @@ Rules:
   semantic values to make final-render auditing deterministic.
 - `tag_candidates` are proposals, not canonical facts, until the compiler
   validates them.
+- Evidence-extension fields are optional for legacy callers. When present,
+  hashes are lowercase SHA-256 values, asset references are JSON objects, and
+  all returned values are deep copies. Explicit evidence and continuity locks
+  join `locked_facts`; reasonable inference remains unlocked; prohibited
+  expansion joins negative constraints. A fact appearing in an allowed tier or
+  lock and `prohibited_expansion` fails closed.
+- Unknown source facts remain in `uncertainty`; normalization never promotes
+  them to identity truth.
 
 ## Compile envelope
 
@@ -79,3 +104,74 @@ Important fields:
 
 The compiler always returns `execution.performed=false`; generation is a later
 side effect. `ready_to_execute=false` is a hard stop.
+
+### Evidence-bound image extension
+
+Image builds keep the PromptBuild 1.0 `prompt` and `negative_prompt` fields and
+may add:
+
+```json
+{
+  "reference_roles": [
+    {"asset_id": "character-lee", "role": "identity"}
+  ],
+  "identity_lock": ["blonde hair"],
+  "style_lock": ["restrained ink wash"],
+  "scene_lock": [],
+  "prop_lock": [],
+  "source_contract_hashes": {
+    "story_breakdown": "<lowercase sha256>",
+    "art_bible": "<lowercase sha256>",
+    "character-lee": "<lowercase sha256>"
+  }
+}
+```
+
+The extension is all-or-nothing at the quality boundary. Reference roles must
+identify a source and role, lock fields are string lists, and source hashes are
+valid lowercase SHA-256 values. PromptIntent continuity locks must be preserved,
+and a prohibited expansion cannot appear in a build lock.
+
+### Evidence-bound LTX video extension
+
+Video builds keep PromptBuild 1.0 and add:
+
+```json
+{
+  "prompt": "<exact selected positive_en or positive_zh>",
+  "negative_prompt": "",
+  "positive_zh": "...〖0-1.7 s〗...〖1.7-4.2 s〗...",
+  "positive_en": "...〖0-1.7 s〗...〖1.7-4.2 s〗...",
+  "global_prompt": "<one selected director prompt>",
+  "timeline_segments": [
+    {
+      "start": 0.0,
+      "end": 1.7,
+      "text_zh": "...",
+      "text_en": "..."
+    }
+  ],
+  "dialogue_attribution": [
+    {"speaker": "女剑士", "text": "快走。", "start": 1.7, "end": 4.2}
+  ],
+  "continuity_requirements": ["same character", "same courtyard"],
+  "split_recommendation": {"required": false, "reason": ""},
+  "source_shot_plan_hash": "<lowercase sha256>"
+}
+```
+
+`parse_ltx_timeline` accepts only explicit `〖start-end s〗` markers with
+positive duration in monotonic, non-overlapping order. Bare, hidden, malformed,
+zero-duration, or placeholder intervals fail closed. Chinese dialogue declared
+in `dialogue_attribution` is copied code-point-for-code-point into
+`positive_en`; all surrounding scene, action, and camera text is English.
+
+`input_type` is one of `reference`, `script`, `storyboard`, or
+`character_sheet`; the corresponding value in PromptIntent `global_prompts` is
+selected exactly once and never concatenated with competing candidates. A
+scene/time change, more than three core characters, more than four complex
+beats, multiple major events, or mixed complex action/dialogue requires a split.
+Extreme-wide framing is rejected unless explicitly requested. Motion, camera,
+continuity, dialogue ownership, and the source shot-plan hash are mandatory.
+No `negative_*` companion field is allowed: the workflow-owned LTX negative
+remains the only negative system.
