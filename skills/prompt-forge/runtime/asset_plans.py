@@ -54,19 +54,55 @@ _VARIANT_FIXED_DELTA_FIELDS = {
     "materials": "fixed environment materials",
     "lighting": "fixed environment light logic",
 }
+_FINGERPRINT_FEATURE_ALIASES = {
+    "materials": {"material", "materials", "material_detail", "材质", "材料"},
+    "lighting": {"light", "lighting", "illumination", "光照", "照明", "灯光"},
+}
+
+
+def _tier_references(entries: list[Any], label: str) -> set[str]:
+    references: set[str] = set()
+    for entry in entries:
+        if isinstance(entry, str) and entry.strip():
+            references.add(entry)
+            continue
+        if (
+            not isinstance(entry, dict)
+            or set(entry) != {"field", "value"}
+            or not isinstance(entry["field"], str)
+            or not entry["field"].strip()
+            or not isinstance(entry["value"], str)
+            or not entry["value"].strip()
+        ):
+            raise AssetPlanError(
+                f"{label} entries must be non-empty strings or {{'field', 'value'}} objects"
+            )
+        references.update(
+            {entry["field"], entry["value"], f"{entry['field']}:{entry['value']}"}
+        )
+    return references
 
 
 def _copy_tiers(value: dict[str, Any]) -> dict[str, list[Any]]:
-    """Return the known evidence tiers without inventing missing evidence."""
-    provenance = value.get("provenance", value)
+    """Validate and copy complete evidence tiers without silent degradation."""
+    provenance = value["provenance"] if "provenance" in value else value
     if not isinstance(provenance, dict):
-        return {key: [] for key in _TIER_KEYS}
-    return {
-        key: copy.deepcopy(provenance.get(key, []))
-        if isinstance(provenance.get(key, []), list)
-        else []
+        raise AssetPlanError("provenance must be an object")
+    if not all(key in provenance for key in _TIER_KEYS):
+        raise AssetPlanError("provenance requires all evidence tiers")
+    if not all(isinstance(provenance[key], list) for key in _TIER_KEYS):
+        raise AssetPlanError("provenance evidence tiers must be lists")
+
+    references = {
+        key: _tier_references(provenance[key], f"provenance.{key}")
         for key in _TIER_KEYS
     }
+    prohibited = references["prohibited_expansion"]
+    if references["explicit_evidence"] & prohibited:
+        raise AssetPlanError("prohibited expansion cannot also be explicit evidence")
+    if references["reasonable_inference"] & prohibited:
+        raise AssetPlanError("prohibited expansion cannot also be reasonable inference")
+    return {key: copy.deepcopy(provenance[key]) for key in _TIER_KEYS}
 
 
 def _merged_tiers(art_bible: dict[str, Any], asset: dict[str, Any]) -> dict[str, list[Any]]:
@@ -214,11 +250,16 @@ def build_prop_board_plan(art_bible: dict, asset: dict) -> dict:
     return plan
 
 
-def _fingerprint_values(asset: dict, feature: str) -> list[str]:
+def _normalize_feature(feature: str) -> str:
+    return feature.strip().casefold().replace("-", "_").replace(" ", "_")
+
+
+def _fingerprint_values(asset: dict, semantic: str) -> list[str]:
+    aliases = {_normalize_feature(alias) for alias in _FINGERPRINT_FEATURE_ALIASES[semantic]}
     return [
         part["value"]
         for part in asset["visual_fingerprint"]
-        if part["feature"].casefold() == feature
+        if _normalize_feature(part["feature"]) in aliases
     ]
 
 
@@ -271,6 +312,7 @@ def build_scene_variant_plan(environment_asset: dict, shot_intent: dict) -> dict
         "spatial_layout": copy.deepcopy(environment.get("spatial_layout")),
         "materials": _fingerprint_values(environment, "materials"),
         "lighting": _fingerprint_values(environment, "lighting"),
+        "visual_fingerprint": copy.deepcopy(environment["visual_fingerprint"]),
         "shot_deltas": copy.deepcopy(shot_deltas),
         **_copy_tiers(environment),
     }

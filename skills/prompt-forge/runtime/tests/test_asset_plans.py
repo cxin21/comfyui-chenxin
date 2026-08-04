@@ -220,3 +220,81 @@ def test_scene_variant_cannot_hide_fixed_environment_changes_in_shot_deltas():
 def test_scene_variant_cannot_replace_other_fixed_environment_properties(field, message):
     with pytest.raises(AssetPlanError, match=message):
         build_scene_variant_plan(_environment_card(), {field: ["replace it"]})
+
+
+def test_scene_variant_normalizes_chinese_material_and_lighting_features():
+    environment = _environment_card()
+    environment["visual_fingerprint"][3] = {"feature": "材质", "value": "雪松与黄铜"}
+    environment["visual_fingerprint"][5] = {"feature": "光照", "value": "冷窗光"}
+    provenance = environment["provenance"]["explicit_evidence"]
+    provenance.remove("linen and brass materials")
+    provenance.remove("cool window lighting")
+    provenance.extend(["雪松与黄铜", "冷窗光"])
+
+    plan = build_scene_variant_plan(environment, {"shot_deltas": {"framing": "wide"}})
+
+    assert plan["materials"] == ["雪松与黄铜"]
+    assert plan["lighting"] == ["冷窗光"]
+    assert plan["visual_fingerprint"] == environment["visual_fingerprint"]
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    [
+        (lambda story: story.pop("provenance"), "requires all evidence tiers"),
+        (
+            lambda story: story["provenance"].__setitem__("explicit_evidence", "style"),
+            "evidence tiers must be lists",
+        ),
+        (
+            lambda story: story["provenance"].__setitem__(
+                "prohibited_expansion", ["restrained ink wash"]
+            ),
+            "cannot also be explicit evidence",
+        ),
+    ],
+)
+def test_build_art_bible_rejects_missing_invalid_or_conflicting_provenance(mutate, message):
+    story = _story()
+    mutate(story)
+
+    with pytest.raises(AssetPlanError, match=message):
+        build_art_bible(story)
+
+
+def test_public_entry_points_convert_non_json_inputs_to_asset_plan_errors():
+    with pytest.raises(AssetPlanError, match="invalid style_override"):
+        build_art_bible(_story(), style_override={"palette": object()})
+
+    invalid_bible = _art_bible()
+    invalid_bible["palette"].append(object())
+    with pytest.raises(AssetPlanError, match="invalid art bible"):
+        build_environment_board_plan(invalid_bible, _environment_card())
+
+    invalid_character = _character_card()
+    invalid_character["identity_lock"].append(object())
+    with pytest.raises(AssetPlanError, match="invalid asset card"):
+        build_character_board_plan(_art_bible(), invalid_character)
+
+    invalid_prop = _prop_card()
+    invalid_prop["function"] = object()
+    with pytest.raises(AssetPlanError, match="invalid asset card"):
+        build_prop_board_plan(_art_bible(), invalid_prop)
+
+    with pytest.raises(AssetPlanError, match="invalid shot_intent"):
+        build_scene_variant_plan(_environment_card(), {"shot_deltas": {"camera": object()}})
+
+
+def test_board_plan_is_deep_copied_from_its_source_contracts():
+    bible = _art_bible()
+    environment = _environment_card()
+
+    plan = build_environment_board_plan(bible, environment)
+    plan["palette"].append("bronze")
+    plan["environment_anchors"][0]["value"] = "new arch"
+    plan["explicit_evidence"].append("new fact")
+
+    assert bible["palette"] == ["indigo", "cedar red"]
+    assert environment["environment_anchors"][0]["value"] == "weathered stone arch at the entrance"
+    assert "new fact" not in bible["explicit_evidence"]
+    assert "new fact" not in environment["provenance"]["explicit_evidence"]
