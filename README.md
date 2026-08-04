@@ -225,10 +225,19 @@ The character-to-video path is now represented as explicit, hash-bound stages:
 1. `accept-reference` records the human acceptance of one verified Flux angle.
 2. `plan-stage-execution` binds a Stage 3 camera img2img or Stage 4 Yusu Director plan to a fresh local capability report and the exact API graph.
 3. `approve-stage` and `consume-stage` require a newly displayed draft, an exact approval event, and an exclusive consumption record.
-4. `build-stage-submission` reconstructs the exact executable graph and request. `submit_stage(...)` is the only enqueue boundary, requires an injected trusted-local callable plus the canonical consumed-namespace receipt path, and reserves an exclusive submission intent before the call. `runtime.comfy_submit.ComfyPromptSubmitter` is only the local UTF-8 transport injected into that boundary; calling it directly does not prove approval, consumption, or idempotency.
-5. `record-stage` accepts only a succeeded receipt, matching raw history (when supplied), and a verified output artifact.
+4. `build-stage-submission` reconstructs the exact executable graph and request. `submit_stage(...)` is the only Stage 3/4 enqueue boundary, requires an injected trusted-local callable plus the canonical consumed-namespace receipt path, and reserves an exclusive submission intent before the call. `runtime.comfy_submit.ComfyPromptSubmitter` is only the local UTF-8 transport injected into that boundary; calling it directly does not prove approval, consumption, or idempotency.
+5. `submit-character-base` provides the equivalent consumed Stage 1 boundary; `wait-stage` only polls history. `record-stage` requires raw history (not an optional summary), while `record` can bind Stage 1 submission, consumption, receipt, and raw-history evidence.
 
-No approval event is synthesized from chat text, and no JSON-only command claims to have enqueued a job. The local runtime evidence now covers the complete exploratory chain: Stage 1 front-base acceptance, Stage 2 multiview generation, Stage 3 camera img2img, and Stage 4 LTX video. The camera UI-to-API converter still reports the observed 7 warnings / 3 errors, so Stage 3 uses the pinned normalization bridge and submits the normalized graph with the original UI workflow attached as UTF-8 provenance; unrelated conversion drift remains fail-closed.
+No approval event is synthesized from chat text. `submit-character-base` and
+`submit-stage` are explicit side-effect commands, but they only accept already
+approved/consumed evidence and write an intent/receipt before the loopback
+POST; `wait-stage` is read-only. The local runtime evidence now covers the
+complete exploratory chain: Stage 1 front-base acceptance, Stage 2 multiview
+generation, Stage 3 camera img2img, and Stage 4 LTX video. The camera UI-to-API
+converter still reports the observed 7 warnings / 3 errors, so Stage 3 uses
+the pinned normalization bridge and submits the normalized graph with the
+original UI workflow attached as UTF-8 provenance; unrelated conversion drift
+remains fail-closed.
 
 ### Production profile correction (2026-08-03)
 

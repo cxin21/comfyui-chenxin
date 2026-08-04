@@ -46,6 +46,11 @@ from runtime.stage_execution import (
     build_stage_submission,
     write_stage_consumption,
 )
+from runtime.local_orchestrator import (
+    submit_character_base_via_local_rest,
+    submit_stage_via_local_rest,
+    wait_for_stage_history,
+)
 from runtime.workflow_profile import ProfileError, structure_fingerprint
 
 
@@ -155,6 +160,31 @@ def _parser() -> argparse.ArgumentParser:
         "build-stage-submission", help="build the exact Stage 3/4 graph/request without enqueueing"
     )
     _add_json_source(stage_submit)
+
+    stage_execute = commands.add_parser(
+        "submit-stage",
+        help="after approval/consumption, submit one Stage 3/4 request to local ComfyUI",
+    )
+    _add_json_source(stage_execute)
+    stage_execute.add_argument("--base-url", default="http://127.0.0.1:8188")
+    stage_execute.add_argument("--timeout", type=float, default=30.0)
+
+    base_execute = commands.add_parser(
+        "submit-character-base",
+        help="after approval/consumption, submit the Stage 1 graph to local ComfyUI",
+    )
+    _add_json_source(base_execute)
+    base_execute.add_argument("--base-url", default="http://127.0.0.1:8188")
+    base_execute.add_argument("--timeout", type=float, default=30.0)
+
+    wait_stage = commands.add_parser(
+        "wait-stage",
+        help="poll local ComfyUI history until one prompt reaches a terminal state",
+    )
+    _add_json_source(wait_stage)
+    wait_stage.add_argument("--base-url", default="http://127.0.0.1:8188")
+    wait_stage.add_argument("--timeout", type=float, default=3600.0)
+    wait_stage.add_argument("--poll-interval", type=float, default=2.0)
 
     stage_record = commands.add_parser(
         "record-stage", help="build and retain a verified Stage 3/4 RunRecord"
@@ -385,6 +415,55 @@ def _dispatch(command: str, payload: dict, args) -> dict | tuple[dict, int]:
             Path(payload["consumption_path"]), profile=payload["profile"],
             capability_report=payload["capability_report"], **optional,
         )
+    if command == "submit-stage":
+        required = {
+            "approved_plan", "source_api_graph", "consumption", "consumption_path",
+            "profile", "capability_report",
+        }
+        if not required.issubset(payload):
+            raise CliUsageError("submit-stage is missing required approval/submission evidence")
+        optional = {
+            key: payload[key]
+            for key in ("ui_workflow", "reference_image_name", "reference_artifact", "image_ref")
+            if key in payload
+        }
+        return submit_stage_via_local_rest(
+            payload["approved_plan"],
+            payload["source_api_graph"],
+            payload["consumption"],
+            payload["consumption_path"],
+            profile=payload["profile"],
+            capability_report=payload["capability_report"],
+            base_url=args.base_url,
+            timeout=args.timeout,
+            **optional,
+        )
+    if command == "submit-character-base":
+        required = {
+            "approved_plan", "prompt_build", "source_api_graph", "consumption", "consumption_path",
+        }
+        if not required.issubset(payload):
+            raise CliUsageError("submit-character-base is missing required approval/submission evidence")
+        return submit_character_base_via_local_rest(
+            payload["approved_plan"],
+            payload["prompt_build"],
+            payload["source_api_graph"],
+            payload["consumption"],
+            payload["consumption_path"],
+            base_url=args.base_url,
+            timeout=args.timeout,
+            ui_workflow=payload.get("ui_workflow"),
+        )
+    if command == "wait-stage":
+        if set(payload) != {"prompt_id"}:
+            raise CliUsageError("wait-stage accepts only prompt_id")
+        api = ComfyApi(base_url=args.base_url, timeout=args.timeout)
+        return wait_for_stage_history(
+            api,
+            payload["prompt_id"],
+            timeout=args.timeout,
+            poll_interval=args.poll_interval,
+        )
     if command == "verify-video":
         metadata = payload.get("metadata")
         expected_fps = payload.get("expected_fps")
@@ -466,9 +545,11 @@ def _dispatch(command: str, payload: dict, args) -> dict | tuple[dict, int]:
         path = _write_run_record(args.run_dir, record)
         return {"record": record, "record_path": str(path)}
     if command == "record-stage":
+        if not isinstance(payload.get("history"), dict):
+            raise StageExecutionError("record-stage requires raw history evidence")
         record = build_stage_run_record(
             payload["approved_plan"], payload["submission"], payload["enqueue_receipt"],
-            payload["artifact"], history=payload.get("history"),
+            payload["artifact"], history=payload["history"], artifact_root=payload.get("artifact_root"),
         )
         path = _write_run_record(args.run_dir, record)
         return {"record": record, "record_path": str(path)}

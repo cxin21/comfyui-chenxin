@@ -46,6 +46,13 @@ def test_shot_plan_rejects_unaccepted_reference():
         build_shot_plan("base", "shot", reference, "front", True)
 
 
+def test_shot_plan_rejects_stage1_base_fallback_without_multiview_angle():
+    reference = _reference()
+    reference["artifact_type"] = "CharacterBaseImage"
+    with pytest.raises(StageError, match="CharacterAngleView"):
+        build_shot_plan("base", "shot", reference, "front", True)
+
+
 def test_ready_shot_build_requires_locked_identity_and_g1_proof():
     build = {
         "target": "image",

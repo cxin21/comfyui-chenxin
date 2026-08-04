@@ -1019,7 +1019,11 @@ def _validate_submission_request(submission: dict) -> None:
             )
 
 
-def _validate_artifact_bytes(artifact: dict, stage_plan: dict) -> dict:
+def _validate_artifact_bytes(
+    artifact: dict,
+    stage_plan: dict,
+    output_root: str | Path | None = None,
+) -> dict:
     artifact_type = "ShotImage" if stage_plan["stage"] == "shot-image" else "VideoClip"
     if artifact.get("artifact_type") != artifact_type or artifact.get("accepted") is not True:
         raise StageExecutionError(f"stage artifact must be an accepted {artifact_type}")
@@ -1034,11 +1038,29 @@ def _validate_artifact_bytes(artifact: dict, stage_plan: dict) -> dict:
         raise StageExecutionError("artifact_path does not exist") from exc
     if str(path) != str(resolved) or not resolved.is_file():
         raise StageExecutionError("artifact_path must be an absolute canonical file")
+    declared_root = output_root if output_root is not None else artifact.get("artifact_root")
+    if declared_root is not None:
+        if not isinstance(declared_root, (str, Path)):
+            raise StageExecutionError("artifact output root must be an absolute canonical directory")
+        root_text = str(declared_root)
+        root = Path(root_text)
+        if not root.is_absolute():
+            raise StageExecutionError("artifact output root must be an absolute canonical directory")
+        try:
+            resolved_root = root.resolve(strict=True)
+        except (OSError, RuntimeError) as exc:
+            raise StageExecutionError("artifact output root must be an existing canonical directory") from exc
+        if str(root) != str(resolved_root) or not resolved_root.is_dir():
+            raise StageExecutionError("artifact output root must be an existing canonical directory")
+        if not resolved.is_relative_to(resolved_root):
+            raise StageExecutionError("artifact_path must remain inside the canonical output root")
     actual_hash = _file_sha256(resolved)
     if actual_hash != declared_hash:
         raise StageExecutionError("artifact bytes do not match content_hash")
     normalized = copy.deepcopy(artifact)
     normalized["artifact_path"] = str(resolved)
+    if declared_root is not None:
+        normalized["artifact_root"] = str(resolved_root)
     if stage_plan["stage"] == "shot-image":
         if normalized.get("source_reference_hash") != stage_plan.get("reference_hash"):
             raise StageExecutionError("ShotImage reference lineage does not match the plan")
@@ -1072,43 +1094,68 @@ def build_stage_run_record(
     artifact: dict,
     *,
     history: dict | None = None,
+    artifact_root: str | Path | None = None,
 ) -> dict:
-    """Create a terminal Stage 3/4 RunRecord from immutable output evidence."""
+    """Create a terminal Stage 3/4 RunRecord from immutable output evidence.
+
+    Raw ComfyUI history is mandatory for a successful record.  A receipt and
+    a caller-authored artifact descriptor alone cannot prove that the server
+    executed the exact submitted graph.
+    """
     plan = _validate_approved_stage(approved_plan)
     safe_submission = _validate_stage_submission(submission, plan)
     receipt = _validate_stage_receipt(safe_submission, enqueue_receipt)
-    safe_artifact = _validate_artifact_bytes(artifact, plan["stage_plan"])
+    safe_artifact = _validate_artifact_bytes(artifact, plan["stage_plan"], artifact_root)
     prompt_id = receipt.get("prompt_id")
-    history_verified = False
-    if history is not None:
-        if not isinstance(history, dict) or not isinstance(history.get(prompt_id), dict):
-            raise StageExecutionError("raw ComfyUI history is missing the stage prompt_id")
-        entry = history[prompt_id]
-        prompt = entry.get("prompt")
-        status = entry.get("status")
-        if not isinstance(prompt, list) or len(prompt) < 3 or prompt[1] != prompt_id:
-            raise StageExecutionError("raw ComfyUI history prompt tuple is invalid")
-        if canonical_json(prompt[2]) != canonical_json(safe_submission["api_graph"]):
-            raise StageExecutionError("raw ComfyUI history graph does not match submission")
-        if len(prompt) < 4 or not isinstance(prompt[3], dict):
-            raise StageExecutionError("raw ComfyUI history enqueue metadata is missing")
-        history_extra = prompt[3].get("extra_data")
-        if not isinstance(history_extra, dict):
-            raise StageExecutionError("raw ComfyUI history enqueue metadata is invalid")
-        if history_extra.get("prompt_forge_enqueue_request_id") != safe_submission["enqueue_request_id"]:
-            raise StageExecutionError("raw ComfyUI history enqueue request identity does not match submission")
-        if status != {"status_str": "success", "completed": True}:
-            raise StageExecutionError("raw ComfyUI history status is not succeeded")
-        history_verified = True
+    if not isinstance(history, dict) or not isinstance(history.get(prompt_id), dict):
+        raise StageExecutionError("raw ComfyUI history is missing the stage prompt_id")
+    entry = history[prompt_id]
+    prompt = entry.get("prompt")
+    status = entry.get("status")
+    if not isinstance(prompt, list) or len(prompt) < 3 or prompt[1] != prompt_id:
+        raise StageExecutionError("raw ComfyUI history prompt tuple is invalid")
+    if canonical_json(prompt[2]) != canonical_json(safe_submission["api_graph"]):
+        raise StageExecutionError("raw ComfyUI history graph does not match submission")
+    if len(prompt) < 4 or not isinstance(prompt[3], dict):
+        raise StageExecutionError("raw ComfyUI history enqueue metadata is missing")
+    history_extra = prompt[3].get("extra_data")
+    if not isinstance(history_extra, dict):
+        raise StageExecutionError("raw ComfyUI history enqueue metadata is invalid")
+    if history_extra.get("prompt_forge_enqueue_request_id") != safe_submission["enqueue_request_id"]:
+        raise StageExecutionError("raw ComfyUI history enqueue request identity does not match submission")
+    if status != {"status_str": "success", "completed": True}:
+        raise StageExecutionError("raw ComfyUI history status is not succeeded")
+    history_verified = True
+    stage_plan = plan["stage_plan"]
+    lineage = {
+        "reference_hash": stage_plan.get("reference_hash") if plan["stage"] == "shot-image" else None,
+        "source_shot_hash": stage_plan.get("source_shot_hash") if plan["stage"] == "video" else None,
+        "artifact_hash": safe_artifact["content_hash"],
+    }
     record = {
         "schema_version": "1.0",
         "stage": plan["stage"],
         "terminal_status": "succeeded",
         "execution_plan_hash": plan["execution_plan_hash"],
+        "execution_plan": copy.deepcopy(plan),
+        "stage_plan": copy.deepcopy(stage_plan),
+        "workflow_profile_id": plan["workflow_profile_id"],
+        "workflow_profile_hash": plan["profile_hash"],
+        "workflow_fingerprint": plan.get("workflow_fingerprint"),
+        "source_api_graph_hash": plan["source_api_graph_hash"],
+        "executable_api_graph_hash": plan["executable_api_graph_hash"],
+        "capability_report_hash": plan["capability_report_hash"],
+        "patches": copy.deepcopy(plan.get("patches", [])),
+        "immutable_inputs": copy.deepcopy(plan.get("immutable_inputs", {})),
         "submission_hash": safe_submission["submission_hash"],
+        "submission": copy.deepcopy(safe_submission),
         "enqueue_receipt_hash": receipt["receipt_hash"],
+        "enqueue_receipt": copy.deepcopy(receipt),
         "prompt_id": prompt_id,
         "artifact": safe_artifact,
+        "lineage": lineage,
+        "history": copy.deepcopy(history),
+        "history_hash": content_hash(history),
         "history_verified": history_verified,
     }
     record["record_hash"] = content_hash(record)

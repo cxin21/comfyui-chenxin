@@ -76,6 +76,19 @@ _STAGE1_RUN_RECORD_KEYS = frozenset(
         "record_hash",
     )
 )
+_STAGE1_RUN_RECORD_EVIDENCE_KEYS = _STAGE1_RUN_RECORD_KEYS.union(
+    {
+        "approval_consumption",
+        "consumption_path",
+        "submission",
+        "submission_hash",
+        "enqueue_receipt",
+        "enqueue_receipt_hash",
+        "enqueue_receipt_path",
+        "raw_history",
+        "raw_history_hash",
+    }
+)
 _STAGE1_DRAFT_KEYS = frozenset(
     (
         "schema_version",
@@ -126,6 +139,58 @@ _MULTIVIEW_DRAFT_KEYS = frozenset(
         "expected_outputs",
         "execution_approved",
         "draft_hash",
+    )
+)
+_CHARACTER_BASE_SUBMISSION_KEYS = frozenset(
+    (
+        "schema_version",
+        "stage",
+        "submission_type",
+        "plan_hash",
+        "draft_hash",
+        "approval_id",
+        "consumption_id",
+        "consumption_root",
+        "enqueue_request_id",
+        "source_api_graph_hash",
+        "executable_api_graph_hash",
+        "workflow_fingerprint",
+        "api_graph",
+        "request",
+        "submission_hash",
+    )
+)
+_CHARACTER_BASE_INTENT_KEYS = frozenset(
+    (
+        "schema_version",
+        "intent_type",
+        "status",
+        "stage",
+        "consumption_id",
+        "enqueue_request_id",
+        "submission_hash",
+        "submitted_graph_hash",
+        "request",
+        "intent_hash",
+    )
+)
+_CHARACTER_BASE_RECEIPT_KEYS = frozenset(
+    (
+        "schema_version",
+        "receipt_type",
+        "stage",
+        "status",
+        "plan_hash",
+        "consumption_id",
+        "submission_hash",
+        "prompt_id",
+        "enqueue_request_id",
+        "submitted_graph_hash",
+        "request",
+        "response",
+        "response_digest",
+        "orchestrator",
+        "receipt_hash",
     )
 )
 _APPROVAL_PLAN_FIELDS = frozenset(
@@ -445,7 +510,8 @@ def _validated_stage1_source(
 ) -> tuple[dict, dict]:
     if not isinstance(stage1_record, dict) or stage1_record.get("schema_version") != "1.0":
         raise ExecutionError("an accepted Stage 1 RunRecord is required")
-    if set(stage1_record) != _STAGE1_RUN_RECORD_KEYS:
+    record_keys = set(stage1_record)
+    if record_keys not in {_STAGE1_RUN_RECORD_KEYS, _STAGE1_RUN_RECORD_EVIDENCE_KEYS}:
         raise ExecutionError("a complete Stage 1 RunRecord is required")
     record_hash = stage1_record.get("record_hash")
     unsigned_record = dict(stage1_record)
@@ -454,6 +520,16 @@ def _validated_stage1_source(
         raise ExecutionError("Stage 1 RunRecord record_hash must be a lowercase SHA-256 digest")
     if record_hash != content_hash(unsigned_record):
         raise ExecutionError("Stage 1 RunRecord record_hash is not self-consistent")
+    if record_keys == _STAGE1_RUN_RECORD_EVIDENCE_KEYS:
+        raw_history = stage1_record.get("raw_history")
+        if not isinstance(raw_history, dict) or stage1_record.get("raw_history_hash") != content_hash(raw_history):
+            raise ExecutionError("Stage 1 RunRecord raw history evidence is invalid")
+        if canonical_json(raw_history) != canonical_json(stage1_history):
+            raise ExecutionError("Stage 1 RunRecord raw history does not match supplied history")
+        if stage1_record.get("submission_hash") != content_hash(stage1_record.get("submission")):
+            raise ExecutionError("Stage 1 RunRecord submission evidence is invalid")
+        if stage1_record.get("enqueue_receipt_hash") != content_hash(stage1_record.get("enqueue_receipt")):
+            raise ExecutionError("Stage 1 RunRecord receipt evidence is invalid")
     if stage1_record.get("terminal_status") != "succeeded" or stage1_record.get("history_verified") is not True:
         raise ExecutionError("Stage 1 RunRecord must be a verified successful run")
     source_plan = stage1_record.get("execution_plan")
@@ -1436,6 +1512,343 @@ def build_approval_consumption(approved_plan: dict, enqueue_request_id: str) -> 
     return record
 
 
+def _validate_character_base_submission_request(submission: dict) -> None:
+    request = submission.get("request")
+    if not isinstance(request, dict) or set(request) != {"prompt", "client_id", "extra_data"}:
+        raise ExecutionError("character-base submission request schema is invalid")
+    if canonical_json(request.get("prompt")) != canonical_json(submission.get("api_graph")):
+        raise ExecutionError("character-base submission request graph does not match api_graph")
+    if request.get("client_id") != submission.get("enqueue_request_id"):
+        raise ExecutionError("character-base submission request client_id does not match enqueue_request_id")
+    extra_data = request.get("extra_data")
+    if not isinstance(extra_data, dict):
+        raise ExecutionError("character-base submission request provenance is invalid")
+    expected = {
+        "prompt_forge_stage": "character-base",
+        "prompt_forge_plan_hash": submission.get("plan_hash"),
+        "prompt_forge_consumption_id": submission.get("consumption_id"),
+        "prompt_forge_enqueue_request_id": submission.get("enqueue_request_id"),
+        "prompt_forge_workflow_fingerprint": submission.get("workflow_fingerprint"),
+    }
+    if any(extra_data.get(key) != value for key, value in expected.items()):
+        raise ExecutionError("character-base submission request provenance is invalid")
+    unexpected = set(extra_data) - set(expected) - {"extra_pnginfo"}
+    if unexpected:
+        raise ExecutionError("character-base submission request provenance contains unexpected fields")
+    pnginfo = extra_data.get("extra_pnginfo")
+    if pnginfo is not None:
+        if not isinstance(pnginfo, dict) or not isinstance(pnginfo.get("workflow"), dict):
+            raise ExecutionError("character-base submission UI provenance is invalid")
+        try:
+            if structure_fingerprint(pnginfo["workflow"]) != submission.get("workflow_fingerprint"):
+                raise ExecutionError("character-base submission UI fingerprint does not match plan")
+        except (TypeError, ValueError, KeyError) as exc:
+            raise ExecutionError("character-base submission UI workflow is malformed") from exc
+
+
+def build_character_base_submission(
+    *,
+    approved_plan: dict,
+    prompt_build: dict,
+    source_api_graph: dict,
+    approval_consumption: dict,
+    consumption_path: str | Path,
+    ui_workflow: dict | None = None,
+) -> dict:
+    """Reconstruct the exact approved Stage 1 graph/request without POSTing.
+
+    Stage 1 uses the same approval/consumption namespace as the historical
+    execution boundary, but now has an explicit submission object so a local
+    REST transport cannot bypass the plan hash or enqueue-once sentinel.
+    """
+    safe_plan = _validate_approved_plan(approved_plan, trusted_now=_utc_now())
+    if safe_plan["stage"] != "character-base":
+        raise ExecutionError("character-base submission requires an approved character-base plan")
+    if not isinstance(prompt_build, dict) or content_hash(prompt_build) != safe_plan["prompt_build_id"]:
+        raise ExecutionError("character-base submission PromptBuild does not match the approved plan")
+    if not isinstance(source_api_graph, dict) or content_hash(source_api_graph) != safe_plan["source_api_graph_hash"]:
+        raise ExecutionError("character-base submission source graph does not match the approved plan")
+    safe_consumption = _validate_approval_consumption_evidence(
+        safe_plan,
+        approval_consumption,
+        consumption_path,
+    )
+    from .adapters.camera import CameraAdapterError, patch_character_base
+
+    try:
+        executable = patch_character_base(source_api_graph, prompt_build, _CHARACTER_BASE_SLOTS)
+    except (CameraAdapterError, TypeError, KeyError) as exc:
+        raise ExecutionError(f"character-base submission graph failed validation: {exc}") from exc
+    if content_hash(executable) != safe_plan["executable_api_graph_hash"]:
+        raise ExecutionError("character-base submission executable graph does not match the approved plan")
+    request = {
+        "prompt": copy.deepcopy(executable),
+        "client_id": safe_consumption["enqueue_request_id"],
+        "extra_data": {
+            "prompt_forge_stage": "character-base",
+            "prompt_forge_plan_hash": safe_plan["plan_hash"],
+            "prompt_forge_consumption_id": safe_consumption["consumption_id"],
+            "prompt_forge_enqueue_request_id": safe_consumption["enqueue_request_id"],
+            "prompt_forge_workflow_fingerprint": safe_plan["workflow_fingerprint"],
+        },
+    }
+    if ui_workflow is not None:
+        if not isinstance(ui_workflow, dict):
+            raise ExecutionError("character-base submission UI workflow must be an object")
+        if structure_fingerprint(ui_workflow) != safe_plan["workflow_fingerprint"]:
+            raise ExecutionError("character-base submission UI fingerprint does not match the approved plan")
+        request["extra_data"]["extra_pnginfo"] = {"workflow": copy.deepcopy(ui_workflow)}
+    submission = {
+        "schema_version": "1.0",
+        "stage": "character-base",
+        "submission_type": "character-base-enqueue",
+        "plan_hash": safe_plan["plan_hash"],
+        "draft_hash": safe_plan["draft_hash"],
+        "approval_id": safe_plan["approval_id"],
+        "consumption_id": safe_consumption["consumption_id"],
+        "consumption_root": safe_consumption["consumption_root"],
+        "enqueue_request_id": safe_consumption["enqueue_request_id"],
+        "source_api_graph_hash": safe_plan["source_api_graph_hash"],
+        "executable_api_graph_hash": safe_plan["executable_api_graph_hash"],
+        "workflow_fingerprint": safe_plan["workflow_fingerprint"],
+        "api_graph": copy.deepcopy(executable),
+        "request": request,
+    }
+    _validate_character_base_submission_request(submission)
+    submission["submission_hash"] = content_hash(submission)
+    return submission
+
+
+def _validate_character_base_submission(submission: object) -> dict:
+    if not isinstance(submission, dict) or set(submission) != _CHARACTER_BASE_SUBMISSION_KEYS:
+        raise ExecutionError("character-base submission schema is invalid")
+    if (
+        submission.get("schema_version") != "1.0"
+        or submission.get("stage") != "character-base"
+        or submission.get("submission_type") != "character-base-enqueue"
+    ):
+        raise ExecutionError("character-base submission schema is invalid")
+    for field in (
+        "plan_hash",
+        "draft_hash",
+        "approval_id",
+        "consumption_id",
+        "source_api_graph_hash",
+        "executable_api_graph_hash",
+        "workflow_fingerprint",
+    ):
+        if not isinstance(submission.get(field), str) or not _SHA256_RE.fullmatch(submission[field]):
+            raise ExecutionError(f"character-base submission {field} is invalid")
+    if not isinstance(submission.get("consumption_root"), str):
+        raise ExecutionError("character-base submission consumption_root is invalid")
+    if not isinstance(submission.get("api_graph"), dict):
+        raise ExecutionError("character-base submission api_graph is invalid")
+    if content_hash(submission["api_graph"]) != submission["executable_api_graph_hash"]:
+        raise ExecutionError("character-base submission graph hash is invalid")
+    _text_request_id = submission.get("enqueue_request_id")
+    if not isinstance(_text_request_id, str) or not _text_request_id.strip() or len(_text_request_id) > 256:
+        raise ExecutionError("character-base submission enqueue_request_id is invalid")
+    _validate_character_base_submission_request(submission)
+    claimed = submission.get("submission_hash")
+    unsigned = dict(submission)
+    unsigned.pop("submission_hash", None)
+    if not isinstance(claimed, str) or claimed != content_hash(unsigned):
+        raise ExecutionError("character-base submission hash is invalid")
+    return copy.deepcopy(submission)
+
+
+def _validate_character_base_intent(value: object, expected: dict) -> dict:
+    if not isinstance(value, dict) or set(value) != _CHARACTER_BASE_INTENT_KEYS:
+        raise ExecutionError("existing character-base enqueue intent schema is invalid")
+    unsigned = dict(value)
+    claimed = unsigned.pop("intent_hash", None)
+    if not isinstance(claimed, str) or claimed != content_hash(unsigned):
+        raise ExecutionError("existing character-base enqueue intent hash is invalid")
+    if value != expected:
+        raise ExecutionError("existing character-base enqueue intent binds different evidence")
+    return copy.deepcopy(value)
+
+
+def _validate_character_base_receipt(submission: dict, receipt: object) -> dict:
+    if not isinstance(receipt, dict) or set(receipt) != _CHARACTER_BASE_RECEIPT_KEYS:
+        raise ExecutionError("character-base enqueue receipt schema is invalid")
+    unsigned = dict(receipt)
+    claimed = unsigned.pop("receipt_hash", None)
+    if not isinstance(claimed, str) or claimed != content_hash(unsigned):
+        raise ExecutionError("character-base enqueue receipt hash is invalid")
+    if (
+        receipt.get("schema_version") != "1.0"
+        or receipt.get("receipt_type") != "character-base-enqueue"
+        or receipt.get("stage") != "character-base"
+        or receipt.get("status") != "succeeded"
+        or receipt.get("plan_hash") != submission["plan_hash"]
+        or receipt.get("consumption_id") != submission["consumption_id"]
+        or receipt.get("submission_hash") != submission["submission_hash"]
+        or receipt.get("enqueue_request_id") != submission["enqueue_request_id"]
+        or receipt.get("submitted_graph_hash") != submission["executable_api_graph_hash"]
+        or receipt.get("orchestrator")
+        != {"name": "prompt-forge", "trust_model": "trusted-local-orchestrator"}
+    ):
+        raise ExecutionError("character-base enqueue receipt does not match submission")
+    response = receipt.get("response")
+    prompt_id = receipt.get("prompt_id")
+    if (
+        not isinstance(response, dict)
+        or not isinstance(prompt_id, str)
+        or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", prompt_id)
+        or response.get("prompt_id") != prompt_id
+        or response.get("node_errors") not in ({}, None)
+    ):
+        raise ExecutionError("character-base enqueue receipt prompt_id is invalid")
+    if receipt.get("response_digest") != content_hash(response):
+        raise ExecutionError("character-base enqueue receipt response digest is invalid")
+    if receipt.get("request") != submission["request"]:
+        raise ExecutionError("character-base enqueue receipt request does not match submission")
+    return copy.deepcopy(receipt)
+
+
+def _validate_character_base_receipt_file(
+    submission: dict,
+    receipt: dict,
+    receipt_path: str | Path,
+) -> dict:
+    safe = _validate_character_base_receipt(submission, receipt)
+    root = Path(_canonical_consumption_root(submission["consumption_root"], "character-base receipt"))
+    raw_path = Path(receipt_path)
+    try:
+        resolved = raw_path.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise ExecutionError("character-base enqueue receipt file is missing") from exc
+    expected = root / f'{submission["consumption_id"]}.character-base-enqueue-receipt.json'
+    if str(raw_path) != str(resolved) or resolved != expected.resolve() or not resolved.is_file():
+        raise ExecutionError("character-base enqueue receipt path is not canonical")
+    try:
+        on_disk = json.loads(resolved.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ExecutionError("character-base enqueue receipt file is unreadable") from exc
+    if canonical_json(on_disk) != canonical_json(safe):
+        raise ExecutionError("character-base enqueue receipt file does not match receipt")
+    return safe
+
+
+def submit_character_base(
+    *,
+    approved_plan: dict,
+    prompt_build: dict,
+    source_api_graph: dict,
+    approval_consumption: dict,
+    consumption_path: str | Path,
+    enqueue_workflow,
+    receipt_root: str | Path | None = None,
+    ui_workflow: dict | None = None,
+) -> dict:
+    """Submit one consumed Stage 1 graph through a trusted local callable."""
+    if not callable(enqueue_workflow):
+        raise ExecutionError("character-base submission requires a trusted enqueue callable")
+    submission = build_character_base_submission(
+        approved_plan=approved_plan,
+        prompt_build=prompt_build,
+        source_api_graph=source_api_graph,
+        approval_consumption=approval_consumption,
+        consumption_path=consumption_path,
+        ui_workflow=ui_workflow,
+    )
+    root = Path(_canonical_consumption_root(
+        receipt_root if receipt_root is not None else approval_consumption.get("consumption_root"),
+        "character-base receipt",
+    ))
+    expected_root = Path(_canonical_consumption_root(
+        submission["consumption_root"], "character-base receipt"
+    ))
+    if root != expected_root:
+        raise ExecutionError("character-base receipt root does not match consumed approval root")
+    intent = {
+        "schema_version": "1.0",
+        "intent_type": "prompt-forge-character-base-enqueue",
+        "status": "in-progress",
+        "stage": "character-base",
+        "consumption_id": submission["consumption_id"],
+        "enqueue_request_id": submission["enqueue_request_id"],
+        "submission_hash": submission["submission_hash"],
+        "submitted_graph_hash": submission["executable_api_graph_hash"],
+        "request": copy.deepcopy(submission["request"]),
+    }
+    intent["intent_hash"] = content_hash(intent)
+    intent_path = root / f'{submission["consumption_id"]}.character-base-enqueue-intent.json'
+    receipt_path = root / f'{submission["consumption_id"]}.character-base-enqueue-receipt.json'
+    try:
+        retained_intent = _write_submission_evidence(root, intent_path.name, intent)
+    except ExecutionError as exc:
+        if not intent_path.is_file():
+            raise
+        _validate_character_base_intent(
+            _read_submission_evidence(intent_path, "existing character-base enqueue intent"), intent
+        )
+        if receipt_path.is_file():
+            retained = _validate_character_base_receipt(
+                submission,
+                _read_submission_evidence(receipt_path, "existing character-base enqueue receipt"),
+            )
+            return {
+                "submission": submission,
+                "enqueue_receipt": retained,
+                "enqueue_receipt_path": str(receipt_path.resolve()),
+                "submission_intent_path": str(intent_path.resolve()),
+            }
+        raise ExecutionError(
+            f"character-base enqueue already has a retained intent; query server state before retrying: {intent_path}"
+        ) from exc
+    try:
+        response = enqueue_workflow(copy.deepcopy(submission["request"]))
+    except Exception as exc:
+        failure = {
+            "schema_version": "1.0",
+            "receipt_type": "character-base-enqueue-failure",
+            "status": "failed",
+            "intent_hash": intent["intent_hash"],
+            "consumption_id": submission["consumption_id"],
+            "enqueue_request_id": submission["enqueue_request_id"],
+            "submission_hash": submission["submission_hash"],
+            "submitted_graph_hash": submission["executable_api_graph_hash"],
+            "failure_class": exc.__class__.__name__,
+        }
+        failure["failure_hash"] = content_hash(failure)
+        _write_submission_evidence(root, f'{submission["consumption_id"]}.character-base-enqueue-failed.json', failure)
+        raise ExecutionError("character-base enqueue failed; query server state before retrying") from exc
+    if (
+        not isinstance(response, dict)
+        or not isinstance(response.get("prompt_id"), str)
+        or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", response["prompt_id"])
+        or response.get("node_errors") not in ({}, None)
+    ):
+        raise ExecutionError("character-base enqueue response is invalid")
+    receipt = {
+        "schema_version": "1.0",
+        "receipt_type": "character-base-enqueue",
+        "stage": "character-base",
+        "status": "succeeded",
+        "plan_hash": submission["plan_hash"],
+        "consumption_id": submission["consumption_id"],
+        "submission_hash": submission["submission_hash"],
+        "prompt_id": response["prompt_id"],
+        "enqueue_request_id": submission["enqueue_request_id"],
+        "submitted_graph_hash": submission["executable_api_graph_hash"],
+        "request": copy.deepcopy(submission["request"]),
+        "response": copy.deepcopy(response),
+        "response_digest": content_hash(response),
+        "orchestrator": {"name": "prompt-forge", "trust_model": "trusted-local-orchestrator"},
+    }
+    receipt["receipt_hash"] = content_hash(receipt)
+    receipt_path = _write_submission_evidence(root, receipt_path.name, receipt)
+    safe_receipt = _validate_character_base_receipt(submission, receipt)
+    return {
+        "submission": submission,
+        "enqueue_receipt": safe_receipt,
+        "enqueue_receipt_path": str(receipt_path),
+        "submission_intent_path": str(retained_intent),
+    }
+
+
 def build_multiview_submission(
     *,
     approved_plan: dict,
@@ -1962,6 +2375,11 @@ def build_run_record(
     *,
     history: dict,
     artifact_descriptor: dict | None = None,
+    submission: dict | None = None,
+    enqueue_receipt: dict | None = None,
+    enqueue_receipt_path: str | Path | None = None,
+    approval_consumption: dict | None = None,
+    consumption_path: str | Path | None = None,
 ) -> dict:
     """Record terminal history with an explicit accepted-output selector.
 
@@ -1979,6 +2397,49 @@ def build_run_record(
     if prompt_build["execution"].get("performed") is not False:
         raise ExecutionError("PromptBuild execution.performed must remain false")
     _validate_plan_lineage(execution_plan, prompt_build, api_graph)
+
+    bound_submission = None
+    bound_receipt = None
+    bound_consumption = None
+    if any(
+        value is not None
+        for value in (
+            submission,
+            enqueue_receipt,
+            enqueue_receipt_path,
+            approval_consumption,
+            consumption_path,
+        )
+    ):
+        if not all(
+            value is not None
+            for value in (
+                submission,
+                enqueue_receipt,
+                enqueue_receipt_path,
+                approval_consumption,
+                consumption_path,
+            )
+        ):
+            raise ExecutionError(
+                "Stage 1 RunRecord receipt binding requires submission, consumption, and receipt evidence"
+            )
+        safe_plan = _validate_approved_plan(execution_plan, trusted_now=None)
+        bound_submission = _validate_character_base_submission(submission)
+        if bound_submission["plan_hash"] != safe_plan["plan_hash"]:
+            raise ExecutionError("Stage 1 submission plan does not match the RunRecord plan")
+        bound_consumption = _validate_approval_consumption_evidence(
+            safe_plan,
+            approval_consumption,
+            consumption_path,
+        )
+        if bound_submission["consumption_id"] != bound_consumption["consumption_id"]:
+            raise ExecutionError("Stage 1 submission consumption does not match the RunRecord")
+        bound_receipt = _validate_character_base_receipt_file(
+            bound_submission,
+            enqueue_receipt,
+            enqueue_receipt_path,
+        )
 
     if not isinstance(prompt_id, str) or not prompt_id:
         raise ExecutionError("prompt_id is required for a terminal RunRecord")
@@ -2041,6 +2502,24 @@ def build_run_record(
         "input_hashes": safe_inputs,
         "output_hashes": safe_outputs,
     }
+    if bound_submission is not None:
+        if bound_receipt["prompt_id"] != prompt_id:
+            raise ExecutionError("Stage 1 receipt prompt_id does not match raw history")
+        if _history_enqueue_request_id(history, prompt_id) != bound_submission["enqueue_request_id"]:
+            raise ExecutionError("Stage 1 history enqueue request does not match submission")
+        record.update(
+            {
+                "approval_consumption": copy.deepcopy(bound_consumption),
+                "consumption_path": str(Path(consumption_path).resolve()),
+                "submission": copy.deepcopy(bound_submission),
+                "submission_hash": bound_submission["submission_hash"],
+                "enqueue_receipt": copy.deepcopy(bound_receipt),
+                "enqueue_receipt_hash": bound_receipt["receipt_hash"],
+                "enqueue_receipt_path": str(Path(enqueue_receipt_path).resolve()),
+                "raw_history": copy.deepcopy(history),
+                "raw_history_hash": content_hash(history),
+            }
+        )
     record["record_hash"] = content_hash(record)
     return record
 

@@ -618,9 +618,94 @@ def test_stage_run_record_binds_receipt_history_and_png_bytes(tmp_path):
     assert record["terminal_status"] == "succeeded"
     assert record["artifact"]["content_hash"] == image_hash
     assert record["record_hash"]
+    assert record["history_hash"] == content_hash(history)
+    assert record["execution_plan"] == approved
+    assert record["stage_plan"] == approved["stage_plan"]
+    assert record["lineage"]["reference_hash"] == approved["stage_plan"]["reference_hash"]
     image_path.write_bytes(b"tampered")
     with pytest.raises(stage_execution.StageExecutionError, match="bytes"):
         stage_execution.build_stage_run_record(
             approved, submission, receipt,
             record["artifact"], history=history,
+        )
+
+
+def test_stage_run_record_requires_raw_history_for_success(tmp_path):
+    report = _capability_report()
+    source_graph = _shot_graph()
+    draft = stage_execution.build_stage_execution_draft(
+        _shot_plan(report), source_graph, _camera_profile(), report,
+        ui_workflow=_shot_ui(), image_name="ref.png", reference_artifact=_accepted_reference(),
+    )
+    approved = stage_execution.approve_stage_execution_draft(draft, _event(draft, tmp_path), tmp_path)
+    consumption = stage_execution.build_stage_consumption(approved, "history-required")
+    consumption_path = stage_execution.write_stage_consumption(tmp_path, consumption)
+    submission = stage_execution.build_stage_submission(
+        approved, source_graph, consumption, consumption_path,
+        profile=_camera_profile(), capability_report=report, reference_image_name="ref.png",
+        ui_workflow=_shot_ui(), reference_artifact=_accepted_reference(),
+    )
+    receipt = stage_execution.submit_stage(
+        submission,
+        lambda request: {"prompt_id": "prompt-history-required", "node_errors": {}},
+        receipt_path=tmp_path / f"{consumption['consumption_id']}.stage-enqueue-receipt.json",
+    )
+    image_path = tmp_path / "shot-history-required.png"
+    image_path.write_bytes(_valid_png_bytes())
+    image_hash = hashlib.sha256(image_path.read_bytes()).hexdigest()
+    artifact = {
+        "artifact_type": "ShotImage",
+        "accepted": True,
+        "content_hash": image_hash,
+        "artifact_path": str(image_path.resolve()),
+        "source_reference_hash": "a" * 64,
+    }
+    with pytest.raises(stage_execution.StageExecutionError, match="raw ComfyUI history"):
+        stage_execution.build_stage_run_record(approved, submission, receipt, artifact)
+
+
+def test_stage_run_record_rejects_artifact_outside_declared_output_root(tmp_path):
+    report = _capability_report()
+    source_graph = _shot_graph()
+    draft = stage_execution.build_stage_execution_draft(
+        _shot_plan(report), source_graph, _camera_profile(), report,
+        ui_workflow=_shot_ui(), image_name="ref.png", reference_artifact=_accepted_reference(),
+    )
+    approved = stage_execution.approve_stage_execution_draft(draft, _event(draft, tmp_path), tmp_path)
+    consumption = stage_execution.build_stage_consumption(approved, "root-boundary")
+    consumption_path = stage_execution.write_stage_consumption(tmp_path, consumption)
+    submission = stage_execution.build_stage_submission(
+        approved, source_graph, consumption, consumption_path,
+        profile=_camera_profile(), capability_report=report, reference_image_name="ref.png",
+        ui_workflow=_shot_ui(), reference_artifact=_accepted_reference(),
+    )
+    receipt = stage_execution.submit_stage(
+        submission,
+        lambda request: {"prompt_id": "prompt-root-boundary", "node_errors": {}},
+        receipt_path=tmp_path / f'{consumption["consumption_id"]}.stage-enqueue-receipt.json',
+    )
+    image_path = tmp_path / "outside.png"
+    image_path.write_bytes(_valid_png_bytes())
+    image_hash = hashlib.sha256(image_path.read_bytes()).hexdigest()
+    history = {
+        "prompt-root-boundary": {
+            "prompt": [
+                "queue",
+                "prompt-root-boundary",
+                submission["api_graph"],
+                {"extra_data": {"prompt_forge_enqueue_request_id": submission["enqueue_request_id"]}},
+            ],
+            "status": {"status_str": "success", "completed": True},
+        }
+    }
+    artifact = {
+        "artifact_type": "ShotImage",
+        "accepted": True,
+        "content_hash": image_hash,
+        "artifact_path": str(image_path.resolve()),
+        "source_reference_hash": "a" * 64,
+    }
+    with pytest.raises(stage_execution.StageExecutionError, match="output root"):
+        stage_execution.build_stage_run_record(
+            approved, submission, receipt, artifact, history=history, artifact_root=tmp_path / "output",
         )

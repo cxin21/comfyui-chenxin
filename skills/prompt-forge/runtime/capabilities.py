@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta, timezone
 
 from .comfy_api import CapabilityError
+from .workflow_discovery import discover_workflow_candidates
 
 
 REPORT_TTL_SECONDS = 600
@@ -26,8 +27,20 @@ def _validated_adapter(adapter: dict) -> dict:
     return dict(adapter)
 
 
-def build_capability_report(api, adapter: dict, now: datetime) -> dict:
-    """Collect live, GET-only ComfyUI state into a report valid for ten minutes."""
+def build_capability_report(
+    api,
+    adapter: dict,
+    now: datetime,
+    *,
+    workflow_tools: dict | None = None,
+    workflow_specs: list[dict] | tuple[dict, ...] | None = None,
+) -> dict:
+    """Collect live ComfyUI state and explicit workflow-candidate evidence.
+
+    ``workflow_tools`` is an optional, negotiated local adapter boundary.  A
+    report without it still lists every configured candidate as unavailable;
+    it never silently reports an empty candidate set as success.
+    """
     adapter_metadata = _validated_adapter(adapter)
     generated_at = _utc_timestamp(now)
     valid_until = _utc_timestamp(now + timedelta(seconds=REPORT_TTL_SECONDS))
@@ -52,6 +65,15 @@ def build_capability_report(api, adapter: dict, now: datetime) -> dict:
         raise CapabilityError("saved workflow response must be a string list")
     if not isinstance(running, list) or not isinstance(pending, list):
         raise CapabilityError("queue response must contain list counts")
+    try:
+        workflow_candidates = discover_workflow_candidates(
+            saved_workflows=workflows,
+            workflow_tools=workflow_tools,
+            workflow_specs=workflow_specs,
+            now=now,
+        )
+    except (TypeError, ValueError) as exc:
+        raise CapabilityError(f"workflow candidate discovery failed: {exc}") from exc
 
     return {
         "schema_version": "1.0",
@@ -69,7 +91,7 @@ def build_capability_report(api, adapter: dict, now: datetime) -> dict:
         "node_type_count": len(object_info),
         "saved_workflows": list(workflows),
         "queue": {"running": len(running), "pending": len(pending)},
-        "workflow_candidates": [],
+        "workflow_candidates": workflow_candidates,
         "generated_at": generated_at,
         "valid_until": valid_until,
     }

@@ -4,6 +4,16 @@
 **Status:** approved design
 **Target environment:** ComfyUI `0.29.0` at `http://127.0.0.1:8188`, RTX 4060 Laptop GPU, 8 GB VRAM, `comfyui-mcp 0.49.0`
 
+**Implementation update (2026-08-04):** workflow discovery now reports every
+configured candidate instead of returning an empty list. The original Flux
+workflow remains an audit candidate because its live conversion is invalid;
+`PromptForge-Flux2-Klein-multiview-flat-v2.json` is the explicit production
+replacement. Stage 1 and Stage 3/4 have approved/consumed loopback submission
+bridges (`submit-character-base` and `submit-stage`), `wait-stage` only polls
+history, and terminal Stage 3/4 records require raw ComfyUI history. Existing
+live prompts remain exploratory evidence until a new run is recorded through
+the complete approval, receipt, history, and artifact chain.
+
 ## 1. First-principles decision
 
 The product is not a collection of prompts or a fixed ComfyUI graph. It is a

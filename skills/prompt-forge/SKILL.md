@@ -5,6 +5,8 @@ description: Use when compiling prompts for image or video models, or when an ex
 
 # Prompt Forge
 
+The runtime CLI now also provides `submit-character-base` for the approved and consumed Stage 1 graph, `submit-stage` for Stage 3/4, and `wait-stage` for read-only terminal polling. These commands do not approve, rebuild a plan, or retry an uncertain enqueue; they only cross the loopback transport boundary after the corresponding evidence has been validated.
+
 ## Stage 3/4 execution contract
 
 The character-to-video pipeline is ordered and fail-closed:
@@ -13,7 +15,7 @@ The character-to-video pipeline is ordered and fail-closed:
 2. `plan-stage-execution` binds the Stage 3 camera img2img or Stage 4 Yusu Director graph to a fresh local capability report, profile hash, and immutable PromptBuild lineage.
 3. `approve-stage` requires a newly displayed exact draft hash; `consume-stage` uses an exclusive one-time consumption record.
 4. `build-stage-submission` reconstructs the exact graph/request. Only `submit_stage(...)` with an injected trusted-local enqueue callable and the canonical consumed-namespace receipt path may cross the external side-effect boundary; it first writes an exclusive submission-intent sentinel. `runtime.comfy_submit.ComfyPromptSubmitter` is transport-only and must be injected there; calling its POST method directly bypasses approval and idempotency evidence.
-5. `record-stage` requires a succeeded receipt, matching raw history when available, and a verified PNG/video artifact with lineage and technical metadata.
+5. `record-stage` requires a succeeded receipt, matching raw ComfyUI history (the raw history is mandatory), and a verified PNG/video artifact with lineage and technical metadata. For Stage 1, `submit-character-base` now provides the same consumed intent/receipt boundary; `record` may bind that submission, consumption file, receipt file, and raw history into the RunRecord.
 
 Never synthesize approval from chat text, never treat a UI screenshot as an executable graph, and never claim a ComfyUI enqueue without a real response receipt. The camera source has one explicit `normalize-camera` bridge for the observed converter losses (LoRA widget text, disabled output switch and known orphan branches); it is an allowlisted, pinned repair of an MCP-produced graph, not a generic UI-to-API converter or a hand-written workflow. Any other conversion error remains a hard stop.
 
@@ -95,7 +97,7 @@ python "<SKILL_ROOT>/internals/prompt_compile.py" --from-stdin
 
 执行模式先通过 `runtime/runtime_cli.py discover` 获取 10 分钟有效的 CapabilityReport，并从当前 MCP 工具注册表协商真实能力。至少确认：本地 URL、队列为空、硬件、节点、保存工作流，以及 MCP 是否具备 workflow load、UI→API conversion、strip/slice、runtime classification、validation、enqueue、monitor、artifact/history retrieval 等能力。
 
-REST 只可作为 health、queue、object info、saved workflow 和 history 的只读回退。能力缺失时说明缺口和安全替代方案，不虚构工具，不自行实现通用 UI→API 转换器；相机只允许使用上面的 pinned normalization bridge。
+REST 只可作为 health、queue、object info、saved workflow 和 history 的只读回退；唯一例外是审批/消费之后显式调用 `submit-character-base` 或 `submit-stage`，它们只把已重建且已消费的请求交给 loopback transport，并由 intent/receipt 记录一次性副作用。能力缺失时说明缺口和安全替代方案，不虚构工具，不自行实现通用 UI→API 转换器；相机只允许使用上面的 pinned normalization bridge。`wait-stage` 只轮询 history，不会重新提交。
 
 ### 4. MCP load / strip / validate
 
@@ -129,11 +131,11 @@ consume 成功后使用实际协商到的 MCP enqueue/monitor 能力提交 execu
 
 ### 10. Artifact verification
 
-从 raw ComfyUI history 取得 prompt ID、真实 executable graph、terminal status 和 output descriptors；不得用摘要代替 raw history。raw-history graph 必须与获批并提交的 executable graph canonical-equal，否则拒绝 RunRecord。逐个验证新 output artifact 存在、可解码，且绝对路径位于已确认的 ComfyUI output 根目录内，并计算 SHA-256。只有 terminal success 与 artifact 均验证后才能声称生成成功。
+从 raw ComfyUI history 取得 prompt ID、真实 executable graph、terminal status 和 output descriptors；不得用摘要代替 raw history。raw-history graph 必须与获批并提交的 executable graph canonical-equal，否则拒绝 RunRecord。逐个验证新 output artifact 存在、可解码，且绝对路径位于已确认的 ComfyUI output 根目录内（`record-stage` 可用 `artifact_root` 显式绑定），并计算 SHA-256。只有 terminal success 与 artifact 均验证后才能声称生成成功。
 
 ### 11. RunRecord
 
-使用 `runtime_cli.py record --run-dir <dir>` 消费 raw history，生成并保留 append-only RunRecord。Record 只接受 `approve-plan` 产出的 approved plan，并重验 draft lineage、approval event/ID、plan hash、source/executable graph 与 PromptBuild。Record 保存 TaskContext/PromptBuild hashes、完整 PromptBuild、ExecutionPlan、已核对的 history status/output descriptors、prompt ID 与 artifact hashes；approval event、approved plan、raw history 及其 hash、artifact 绝对路径作为相邻执行证据保留。文件名为 `<record_hash>.json`：同内容重复写入幂等，不同内容绝不覆盖。
+使用 `runtime_cli.py record --run-dir <dir>` 消费 raw history，生成并保留 append-only RunRecord。Record 只接受 `approve-plan` 产出的 approved plan，并重验 draft lineage、approval event/ID、plan hash、source/executable graph 与 PromptBuild。Record 保存 TaskContext/PromptBuild hashes、完整 PromptBuild、ExecutionPlan、已核对的 history status/output descriptors、prompt ID 与 artifact hashes；若输入 Stage 1 的 submission/consumption/receipt 证据，还会保存这些对象及 hash、原始 history 及 hash，并核对 history 中的 stable enqueue request。文件名为 `<record_hash>.json`：同内容重复写入幂等，不同内容绝不覆盖。
 
 旧格式 RunRecord 若只有 `execution_approved=true`、没有绑定 displayed `draft_hash` 的严格 approval event，只能作为历史 render/graph/history 证据；它连当次展示后审批都不能证明，更不能授权新执行。不得追溯补造事件或把旧记录升级为 production approval evidence。
 

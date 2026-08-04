@@ -11,8 +11,10 @@ from runtime.execution import (
     ExecutionError,
     approve_execution_draft,
     build_approval_consumption,
+    build_character_base_submission,
     build_execution_draft,
     build_run_record,
+    submit_character_base,
 )
 from runtime.workflow_profile import structure_fingerprint
 
@@ -478,6 +480,121 @@ def test_approval_consumption_rejects_expired_or_tampered_plan(monkeypatch):
 
     with pytest.raises(ExecutionError, match="request"):
         build_approval_consumption(plan, " ")
+
+
+def test_character_base_submission_reconstructs_exact_graph_and_request(tmp_path):
+    draft = build_valid_draft()
+    event = approval_event(draft, consumption_root=str(tmp_path.resolve()))
+    plan = approve_execution_draft(draft, event, consumption_root=tmp_path)
+    consumption = build_approval_consumption(plan, "base-request-1")
+    consumption_path = tmp_path / f'{consumption["approval_id"]}.consumed.json'
+    consumption_path.write_text(json.dumps(consumption), encoding="utf-8")
+    submission = build_character_base_submission(
+        approved_plan=plan,
+        prompt_build=ready_build(),
+        source_api_graph=api_graph(),
+        approval_consumption=consumption,
+        consumption_path=consumption_path,
+        ui_workflow=ui_workflow(),
+    )
+
+    assert submission["stage"] == "character-base"
+    assert submission["api_graph"] == executable_graph()
+    assert submission["request"]["client_id"] == "base-request-1"
+    assert submission["request"]["extra_data"]["prompt_forge_stage"] == "character-base"
+    assert submission["request"]["extra_data"]["extra_pnginfo"]["workflow"] == ui_workflow()
+    assert submission["submission_hash"] == content_hash(
+        {key: value for key, value in submission.items() if key != "submission_hash"}
+    )
+
+
+def test_character_base_submission_is_exactly_once_and_retains_receipt(tmp_path):
+    draft = build_valid_draft()
+    event = approval_event(draft, consumption_root=str(tmp_path.resolve()))
+    plan = approve_execution_draft(draft, event, consumption_root=tmp_path)
+    consumption = build_approval_consumption(plan, "base-request-2")
+    consumption_path = tmp_path / f'{consumption["approval_id"]}.consumed.json'
+    consumption_path.write_text(json.dumps(consumption), encoding="utf-8")
+    calls = []
+
+    def enqueue(request):
+        calls.append(request)
+        return {"prompt_id": "base-prompt-1", "node_errors": {}}
+
+    kwargs = {
+        "approved_plan": plan,
+        "prompt_build": ready_build(),
+        "source_api_graph": api_graph(),
+        "approval_consumption": consumption,
+        "consumption_path": consumption_path,
+        "ui_workflow": ui_workflow(),
+        "enqueue_workflow": enqueue,
+    }
+    first = submit_character_base(
+        **kwargs,
+        receipt_root=tmp_path,
+    )
+    second = submit_character_base(
+        **kwargs,
+        receipt_root=tmp_path,
+    )
+
+    assert first["enqueue_receipt"]["prompt_id"] == "base-prompt-1"
+    assert second["enqueue_receipt"] == first["enqueue_receipt"]
+    assert len(calls) == 1
+
+
+def test_character_base_run_record_can_bind_submission_receipt_and_raw_history(tmp_path):
+    draft = build_valid_draft()
+    event = approval_event(draft, consumption_root=str(tmp_path.resolve()))
+    plan = approve_execution_draft(draft, event, consumption_root=tmp_path)
+    consumption = build_approval_consumption(plan, "base-record-request")
+    consumption_path = tmp_path / f'{consumption["approval_id"]}.consumed.json'
+    consumption_path.write_text(json.dumps(consumption), encoding="utf-8")
+    submission = build_character_base_submission(
+        approved_plan=plan,
+        prompt_build=ready_build(),
+        source_api_graph=api_graph(),
+        approval_consumption=consumption,
+        consumption_path=consumption_path,
+    )
+    receipt_result = submit_character_base(
+        approved_plan=plan,
+        prompt_build=ready_build(),
+        source_api_graph=api_graph(),
+        approval_consumption=consumption,
+        consumption_path=consumption_path,
+        enqueue_workflow=lambda request: {"prompt_id": "base-record-prompt", "node_errors": {}},
+        receipt_root=tmp_path,
+    )
+    history = history_response(
+        executable_graph(), prompt_id="base-record-prompt"
+    )
+    history["base-record-prompt"]["prompt"][3] = {
+        "extra_data": {
+            "prompt_forge_enqueue_request_id": submission["enqueue_request_id"],
+        }
+    }
+    record = build_run_record(
+        task_context(),
+        ready_build(),
+        api_graph(),
+        plan,
+        "base-record-prompt",
+        "succeeded",
+        {},
+        {"character.png": "a" * 64},
+        history=history,
+        submission=submission,
+        enqueue_receipt=receipt_result["enqueue_receipt"],
+        enqueue_receipt_path=receipt_result["enqueue_receipt_path"],
+        approval_consumption=consumption,
+        consumption_path=consumption_path,
+    )
+
+    assert record["submission_hash"] == submission["submission_hash"]
+    assert record["enqueue_receipt_hash"] == receipt_result["enqueue_receipt"]["receipt_hash"]
+    assert record["raw_history_hash"] == content_hash(history)
 
 
 def test_run_record_requires_valid_task_context_before_lineage_checks():

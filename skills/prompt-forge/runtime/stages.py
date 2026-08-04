@@ -55,8 +55,8 @@ def _accepted_reference(reference: object) -> dict:
     if not isinstance(reference, dict) or reference.get("accepted") is not True:
         raise StageError("an accepted reference is required")
     artifact_type = reference.get("artifact_type")
-    if artifact_type not in {"CharacterAngleView", "CharacterBaseImage"}:
-        raise StageError("reference must be a CharacterAngleView or CharacterBaseImage")
+    if artifact_type != "CharacterAngleView":
+        raise StageError("Stage 3 reference must be a CharacterAngleView from Stage 2")
     content = _required_text(reference.get("content_hash"), "reference content_hash")
     result = copy.deepcopy(reference)
     result["content_hash"] = content

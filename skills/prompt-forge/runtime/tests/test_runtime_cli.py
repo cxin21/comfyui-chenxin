@@ -235,6 +235,107 @@ def test_discover_command_builds_report_from_negotiated_adapter(monkeypatch, cap
     assert report["saved_workflows"] == ["文生图相机视角.json"]
 
 
+def test_submit_stage_command_is_explicit_and_delegates_local_post(monkeypatch, capsys):
+    observed = {}
+
+    def fake_submit(*args, **payload):
+        payload["positional"] = args
+        observed.update(payload)
+        return {"receipt": {"prompt_id": "prompt-cli-stage"}, "history": {}}
+
+    monkeypatch.setattr(runtime_cli, "submit_stage_via_local_rest", fake_submit)
+    payload = {
+        "approved_plan": {},
+        "source_api_graph": {},
+        "consumption": {},
+        "consumption_path": "C:/run/consumed.json",
+        "profile": {},
+        "capability_report": {},
+    }
+
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(payload)))
+    exit_code = runtime_cli.main(["submit-stage", "--from-stdin"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.err == ""
+    assert json.loads(captured.out)["receipt"]["prompt_id"] == "prompt-cli-stage"
+    assert observed["base_url"] == "http://127.0.0.1:8188"
+
+
+def test_submit_character_base_command_delegates_local_post(monkeypatch, capsys):
+    observed = {}
+
+    def fake_submit(*args, **payload):
+        payload["positional"] = args
+        observed.update(payload)
+        return {"enqueue_receipt": {"prompt_id": "prompt-cli-base"}, "history": {}}
+
+    monkeypatch.setattr(runtime_cli, "submit_character_base_via_local_rest", fake_submit)
+    payload = {
+        "approved_plan": {},
+        "prompt_build": {},
+        "source_api_graph": {},
+        "consumption": {},
+        "consumption_path": "C:/run/consumed.json",
+    }
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(payload)))
+    exit_code = runtime_cli.main(["submit-character-base", "--from-stdin"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.err == ""
+    assert json.loads(captured.out)["enqueue_receipt"]["prompt_id"] == "prompt-cli-base"
+    assert observed["base_url"] == "http://127.0.0.1:8188"
+
+
+def test_wait_stage_command_delegates_read_only_history_poll(monkeypatch, capsys):
+    class FakeApi:
+        def __init__(self, base_url, timeout):
+            self.base_url = base_url
+            self.timeout = timeout
+
+    observed = {}
+
+    def fake_wait(api, prompt_id, *, timeout, poll_interval):
+        observed.update({"base_url": api.base_url, "prompt_id": prompt_id, "timeout": timeout, "poll_interval": poll_interval})
+        return {prompt_id: {"status": {"status_str": "success", "completed": True}}}
+
+    monkeypatch.setattr(runtime_cli, "ComfyApi", FakeApi)
+    monkeypatch.setattr(runtime_cli, "wait_for_stage_history", fake_wait)
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps({"prompt_id": "prompt-wait"})))
+    exit_code = runtime_cli.main([
+        "wait-stage", "--from-stdin", "--timeout", "12", "--poll-interval", "3",
+    ])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.err == ""
+    assert observed == {
+        "base_url": "http://127.0.0.1:8188",
+        "prompt_id": "prompt-wait",
+        "timeout": 12.0,
+        "poll_interval": 3.0,
+    }
+
+
+def test_record_stage_rejects_missing_raw_history_before_writing(tmp_path):
+    payload = tmp_path / "record-stage.json"
+    payload.write_text(
+        json.dumps({
+            "approved_plan": {},
+            "submission": {},
+            "enqueue_receipt": {},
+            "artifact": {},
+        }),
+        encoding="utf-8",
+    )
+    result = _run("record-stage", "--input", payload, "--run-dir", tmp_path / "runs")
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "raw history" in result.stderr
+
+
 def test_patch_camera_accepts_stdin_and_emits_only_json():
     payload = {
         "api_graph": _api_graph(),
