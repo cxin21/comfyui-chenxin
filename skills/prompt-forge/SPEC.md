@@ -72,8 +72,14 @@ split decisions. `ready_to_execute=false` is a hard stop.
 - Video contract complete for the requested generation mode.
 - English LTX text preserves declared Chinese dialogue code points exactly while
   translating the surrounding scene, action, and camera text.
-- LTX intervals use only monotonic, non-overlapping, positive-duration
-  `〖start-end s〗` markers; hidden or placeholder timelines fail closed.
+- LTX intervals use only positive-duration `〖start-end s〗` markers, start at
+  zero, and form one monotonic gap-free execution timeline. Adjacent floating
+  boundaries use a small numeric tolerance; hidden or placeholder timelines
+  fail closed.
+- Dialogue is established by `dialogue_attribution` or an explicit dialogue
+  marker, not by quotation marks alone. Attributed speaker names and exact text
+  occur in both language prompts; quoted signage, titles, and UI labels remain
+  legal non-dialogue text.
 - At least 0.90 deterministic corpus pass rate, with image, editing and video
   model coverage.
 - Trigger corpus contains balanced positive and negative boundary cases.

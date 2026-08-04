@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 
 
@@ -17,6 +18,15 @@ _BARE_TIMELINE_RE = re.compile(
 )
 _CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
 _QUOTED_RE = re.compile(r"[“‘\"']([^”’\"']+)[”’\"']")
+_EXPLICIT_DIALOGUE_RE = re.compile(
+    r"(?:对白|台词|dialogue|spoken\s+line)\s*[:：]\s*"
+    r"[“‘\"']([^”’\"']+)[”’\"']",
+    re.IGNORECASE,
+)
+_EXPLICIT_DIALOGUE_MARKER_RE = re.compile(
+    r"(?:对白|台词|dialogue|spoken\s+line)\s*[:：]",
+    re.IGNORECASE,
+)
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 _EXTREME_WIDE_RE = re.compile(
     r"\b(?:extreme|ultra)[\s-]+wide(?:\s+shot)?\b|\bextreme\s+long\s+shot\b|超远景",
@@ -155,15 +165,20 @@ def parse_ltx_timeline(prompt: str) -> list[dict]:
         raise ValueError("LTX timeline contains a malformed or hidden interval")
 
     segments: list[dict] = []
-    previous_start = -1.0
     previous_end = -1.0
     for index, match in enumerate(matches):
         start = float(match.group("start"))
         end = float(match.group("end"))
         if start < 0 or end <= start:
             raise ValueError("LTX timeline intervals must have positive duration")
-        if start < previous_start or start < previous_end:
-            raise ValueError("LTX timeline intervals must be monotonic and non-overlapping")
+        if index == 0 and not math.isclose(start, 0.0, abs_tol=1e-9):
+            raise ValueError("LTX timeline must start at 0 seconds")
+        if index > 0 and not math.isclose(
+            start, previous_end, rel_tol=1e-9, abs_tol=1e-9
+        ):
+            raise ValueError(
+                "LTX timeline intervals must be contiguous without gaps or overlaps"
+            )
         text_start = match.end()
         text_end = matches[index + 1].start() if index + 1 < len(matches) else len(prompt)
         text = prompt[text_start:text_end].strip()
@@ -177,7 +192,6 @@ def parse_ltx_timeline(prompt: str) -> list[dict]:
                 "text": text,
             }
         )
-        previous_start = start
         previous_end = end
     return segments
 
@@ -444,14 +458,28 @@ def _validate_dialogue(
         return ["dialogue_attribution must be a list"]
     errors: list[str] = []
     declared_text: list[str] = []
+    declared_speakers: list[str] = []
     for item in attribution:
         if not isinstance(item, dict):
             errors.append("dialogue_attribution must contain objects")
             continue
         speaker = item.get("speaker")
+        speaker_en = item.get("speaker_en", speaker)
         text = item.get("text")
         if not isinstance(speaker, str) or not speaker.strip():
             errors.append("dialogue attribution requires a speaker")
+        else:
+            speaker = speaker.strip()
+            declared_speakers.append(speaker)
+            if speaker not in positive_zh:
+                errors.append("dialogue speaker is missing from positive_zh")
+        if not isinstance(speaker_en, str) or not speaker_en.strip():
+            errors.append("dialogue attribution requires speaker_en or a shared speaker")
+        else:
+            speaker_en = speaker_en.strip()
+            declared_speakers.append(speaker_en)
+            if speaker_en not in positive_en:
+                errors.append("dialogue speaker is missing from positive_en")
         if not isinstance(text, str) or not text.strip():
             errors.append("dialogue attribution requires exact dialogue text")
             continue
@@ -459,21 +487,33 @@ def _validate_dialogue(
         declared_text.append(text)
         if text not in positive_zh:
             errors.append("dialogue text is missing from positive_zh")
-        if _CJK_RE.search(text) and text not in positive_en:
-            errors.append("Chinese dialogue must be copied exactly into positive_en")
+        if text not in positive_en:
+            if _CJK_RE.search(text):
+                errors.append("Chinese dialogue must be copied exactly into positive_en")
+            else:
+                errors.append("dialogue text is missing from positive_en")
 
-    quoted_dialogue = {
+    explicitly_marked_dialogue = {
         match.group(1).strip()
         for prompt in (positive_zh, positive_en)
-        for match in _QUOTED_RE.finditer(prompt)
-        if _CJK_RE.search(match.group(1))
+        for match in _EXPLICIT_DIALOGUE_RE.finditer(prompt)
     }
-    if not quoted_dialogue.issubset(set(declared_text)):
-        errors.append("dialogue in the positive prompt lacks speaker attribution")
+    has_explicit_marker = any(
+        _EXPLICIT_DIALOGUE_MARKER_RE.search(prompt)
+        for prompt in (positive_zh, positive_en)
+    )
+    if has_explicit_marker and not declared_text:
+        errors.append("explicit dialogue marker requires speaker attribution")
+    elif not explicitly_marked_dialogue.issubset(set(declared_text)):
+        errors.append("explicit dialogue in the positive prompt lacks speaker attribution")
 
     translated_surroundings = positive_en
-    for text in declared_text:
-        translated_surroundings = translated_surroundings.replace(text, "")
+    for preserved_text in declared_text + declared_speakers:
+        translated_surroundings = translated_surroundings.replace(preserved_text, "")
+    translated_surroundings = _QUOTED_RE.sub(
+        lambda match: "" if _CJK_RE.search(match.group(1)) else match.group(0),
+        translated_surroundings,
+    )
     if _CJK_RE.search(translated_surroundings):
         errors.append("positive_en contains untranslated Chinese outside dialogue")
     return errors

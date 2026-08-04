@@ -152,7 +152,13 @@ Video builds keep PromptBuild 1.0 and add:
     }
   ],
   "dialogue_attribution": [
-    {"speaker": "女剑士", "text": "快走。", "start": 1.7, "end": 4.2}
+    {
+      "speaker": "女剑士",
+      "speaker_en": "The swordswoman",
+      "text": "快走。",
+      "start": 1.7,
+      "end": 4.2
+    }
   ],
   "continuity_requirements": ["same character", "same courtyard"],
   "split_recommendation": {"required": false, "reason": ""},
@@ -161,10 +167,21 @@ Video builds keep PromptBuild 1.0 and add:
 ```
 
 `parse_ltx_timeline` accepts only explicit `〖start-end s〗` markers with
-positive duration in monotonic, non-overlapping order. Bare, hidden, malformed,
-zero-duration, or placeholder intervals fail closed. Chinese dialogue declared
-in `dialogue_attribution` is copied code-point-for-code-point into
-`positive_en`; all surrounding scene, action, and camera text is English.
+positive duration. The first segment starts at `0`, and each following start
+equals the preceding end within floating-point tolerance, so the execution
+timeline is monotonic, non-overlapping, and gap-free. Bare, hidden, malformed,
+zero-duration, non-zero-start, gap, overlap, or placeholder intervals fail
+closed.
+
+Dialogue is bound by `dialogue_attribution`, not inferred from quotation marks.
+Each entry's `speaker` occurs in `positive_zh`; `speaker_en` (or the shared
+`speaker` when omitted) occurs in `positive_en`; `text` occurs exactly in both.
+Chinese dialogue is therefore copied code-point-for-code-point into
+`positive_en`. An explicit `对白:`, `台词:`, `dialogue:`, or `spoken line:`
+marker also requires a matching attribution. Quoted signage, titles, and UI
+labels do not become dialogue merely because they use quotation marks and may
+preserve source glyphs. Other surrounding scene, action, and camera text is
+English.
 
 `input_type` is one of `reference`, `script`, `storyboard`, or
 `character_sheet`; the corresponding value in PromptIntent `global_prompts` is

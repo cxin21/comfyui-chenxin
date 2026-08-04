@@ -179,7 +179,13 @@ def valid_evidence_bound_video_build():
             },
         ],
         "dialogue_attribution": [
-            {"speaker": "女剑士", "text": "快走。", "start": 1.7, "end": 4.2}
+            {
+                "speaker": "女剑士",
+                "speaker_en": "The swordswoman",
+                "text": "快走。",
+                "start": 1.7,
+                "end": 4.2,
+            }
         ],
         "continuity_requirements": ["the swordswoman", "the same courtyard"],
         "split_recommendation": {"required": False, "reason": ""},
@@ -232,12 +238,22 @@ def test_parse_ltx_timeline_accepts_dynamic_monotonic_seconds():
     ]
 
 
+def test_parse_ltx_timeline_accepts_float_tolerance_at_adjacent_boundary():
+    parser = getattr(prompt_quality, "parse_ltx_timeline", None)
+    assert parser is not None, "parse_ltx_timeline must be implemented"
+
+    assert len(parser("〖0-0.3 s〗first 〖0.3000000001-0.6 s〗second")) == 2
+
+
 @pytest.mark.parametrize(
     "timeline",
     [
         "〖0-0 s〗still",
         "〖0-2 s〗first 〖1.5-3 s〗overlap",
         "〖2-3 s〗later 〖0-1 s〗earlier",
+        "〖1-2 s〗first 〖5-6 s〗gap and non-zero start",
+        "〖0.5-1 s〗non-zero start",
+        "〖0-1 s〗first 〖2-3 s〗gap",
         "〖start-end s〗placeholder",
         "0-2s hidden timeline; 2-4s hidden timeline",
         "〖0-2 s〗valid plus 2-4s hidden timeline",
@@ -269,6 +285,65 @@ def test_evidence_bound_ltx_build_preserves_chinese_dialogue_and_speaker():
 
     assert any("dialogue" in error for error in errors)
     assert any("Chinese dialogue" in error for error in errors)
+
+
+def test_evidence_bound_ltx_build_requires_attributed_speaker_in_both_prompts():
+    build = valid_evidence_bound_video_build()
+    build["dialogue_attribution"][0]["speaker"] = "旁白"
+    build["dialogue_attribution"][0]["speaker_en"] = "Narrator"
+
+    errors = validate_ltx_prompt_build(build, valid_video_intent())
+
+    assert any("speaker" in error for error in errors)
+
+
+def test_quoted_signage_is_not_inferred_as_unattributed_dialogue():
+    build = valid_evidence_bound_video_build()
+    positive_zh = (
+        "参考图1（人物）：保持同一位女剑士与同一庭院。"
+        "女剑士抬剑，布料和头发持续飘动，镜头缓慢推进。"
+        "〖0-1.7 s〗女剑士抬头。〖1.7-4.2 s〗女剑士走过写有“青云客栈”的招牌。"
+    )
+    positive_en = (
+        "Reference image 1 (character): preserve the same swordswoman and courtyard. "
+        "The swordswoman raises her sword as cloth and hair trail continuously; the camera slowly dollies in. "
+        "〖0-1.7 s〗The swordswoman looks up. "
+        "〖1.7-4.2 s〗The swordswoman passes a sign titled “青云客栈”."
+    )
+    build.update(
+        {
+            "prompt": positive_en,
+            "positive_zh": positive_zh,
+            "positive_en": positive_en,
+            "timeline_segments": [
+                {
+                    "start": 0.0,
+                    "end": 1.7,
+                    "text_zh": "女剑士抬头。",
+                    "text_en": "The swordswoman looks up.",
+                },
+                {
+                    "start": 1.7,
+                    "end": 4.2,
+                    "text_zh": "女剑士走过写有“青云客栈”的招牌。",
+                    "text_en": "The swordswoman passes a sign titled “青云客栈”.",
+                },
+            ],
+            "dialogue_attribution": [],
+        }
+    )
+
+    assert validate_ltx_prompt_build(build, valid_video_intent()) == []
+
+
+def test_explicit_dialogue_marker_requires_attribution_without_quotation_marks():
+    errors = prompt_quality._validate_dialogue(
+        [],
+        "对白：快走。",
+        "Dialogue: Go now.",
+    )
+
+    assert any("speaker attribution" in error for error in errors)
 
 
 def test_evidence_bound_ltx_build_rejects_a_second_negative_channel():
