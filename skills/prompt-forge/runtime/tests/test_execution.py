@@ -91,6 +91,21 @@ def profile():
     }
 
 
+def base_alias_profile():
+    selected = profile()
+    selected.update(
+        {
+            "profile_id": "camera-anima-base-v1",
+            "source_profile_id": "camera-anima-v1",
+            "execution_profile_id": "camera-anima-v1",
+            "enabled_groups": [],
+            "enabled_optional_branches": [],
+            "expected_artifact_type": "CharacterBaseImage",
+        }
+    )
+    return selected
+
+
 def capability_report(**overrides):
     report = {
         "schema_version": "1.0",
@@ -207,6 +222,44 @@ def test_character_base_draft_rejects_unavailable_workflow_candidate():
     report["workflow_candidates"][0]["status"] = "unavailable"
     with pytest.raises(ExecutionError, match="workflow candidate"):
         build_valid_draft(capability_report=report)
+
+
+def test_character_base_execution_accepts_pinned_base_profile_alias():
+    selected_profile = base_alias_profile()
+    draft = build_execution_draft(
+        "character-base",
+        ready_build(),
+        "camera-anima-v1",
+        UI_FINGERPRINT,
+        exact_patches(),
+        **plan_kwargs(profile=selected_profile),
+    )
+    assert draft["workflow_profile_id"] == "camera-anima-v1"
+    assert draft["profile_hash"] == content_hash(selected_profile)
+
+
+def test_character_base_execution_explicitly_rejects_asset_board_profiles():
+    selected_profile = base_alias_profile()
+    selected_profile.update(
+        {
+            "profile_id": "camera-anima-asset-board-environment-v1",
+            "board_role": "environment",
+            "expected_artifact_type": "EnvironmentBoard",
+        }
+    )
+    with pytest.raises(ExecutionError, match="asset-board"):
+        execution_module._validate_character_base_profile(
+            selected_profile, "camera-anima-v1"
+        )
+
+
+def test_character_base_execution_rejects_non_clean_base_profile_alias():
+    selected_profile = base_alias_profile()
+    selected_profile["enabled_groups"] = [3]
+    with pytest.raises(ExecutionError, match="clean"):
+        execution_module._validate_character_base_profile(
+            selected_profile, "camera-anima-v1"
+        )
 
 
 def task_context():

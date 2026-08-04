@@ -2,6 +2,7 @@
   "schema_version": "1.0",
   "profile_id": "camera-anima-base-v1",
   "source_profile_id": "camera-anima-v1",
+  "execution_profile_id": "camera-anima-v1",
   "workflow_fingerprint": "7fa7a85e005182c6be42a3f3193add3fb41531ef0fae28e1cbd54a791e72e20a",
   "runtime_classification": "local",
   "slots": {
@@ -45,6 +46,10 @@
     "composition_value",
     "style_enabled",
     "style_value"
+  ],
+  "output_topology": [
+    {"id": 35, "type": "Image Saver Simple"},
+    {"id": 490, "type": "PreviewImage"}
   ],
   "camera_defaults": {
     "direction": "front",

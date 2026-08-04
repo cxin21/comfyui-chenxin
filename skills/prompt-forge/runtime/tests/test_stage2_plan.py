@@ -34,6 +34,7 @@ from runtime.story_assets import art_bible_hash
 
 PROFILE_PATH = Path(__file__).parents[1] / "profiles" / "flux2-klein-multiview.json"
 V2_PROFILE_PATH = Path(__file__).parents[1] / "profiles" / "flux2-klein-multiview-flat-v2.json"
+CAMERA_PROFILE_DIR = Path(__file__).parents[1] / "profiles"
 API_PATH = Path(__file__).parent / "fixtures" / "flux-api-minimal.json"
 CAMERA_API_PATH = Path(__file__).parent / "fixtures" / "camera-api-minimal.json"
 CAMERA_UI_PATH = Path(__file__).parent / "fixtures" / "camera-ui-minimal.json"
@@ -104,23 +105,47 @@ def _board_character_card():
     }
 
 
+def _camera_profile(name):
+    return json.loads((CAMERA_PROFILE_DIR / name).read_text(encoding="utf-8"))
+
+
 def test_asset_board_plan_preserves_typed_contract_hashes_and_variant_parent():
     bible = _board_art_bible()
     asset = _board_environment_card()
+    asset["is_variant"] = True
     asset["parent_artifact_hash"] = "c" * 64
-    plan = stages_module.build_asset_board_plan("environment", bible, asset, workflow_fingerprint="d" * 64, profile_hash="e" * 64)
+    asset["source_artifact_hash"] = "c" * 64
+    selected_profile = _camera_profile("camera-anima-asset-board-environment.json")
+    plan = stages_module.build_asset_board_plan(
+        "environment", bible, asset,
+        workflow_fingerprint=selected_profile["workflow_fingerprint"],
+        profile_hash=content_hash(selected_profile),
+        profile=selected_profile,
+    )
     assert plan["expected_artifact_type"] == "EnvironmentBoard"
     assert plan["asset_id"] == "environment-workshop"
     assert plan["source_story_hash"] == "b" * 64
     assert plan["art_bible_hash"] == art_bible_hash(bible)
     assert plan["visual_fingerprint_hash"] == content_hash(asset["visual_fingerprint"])
-    assert plan["workflow_fingerprint"] == "d" * 64
-    assert plan["profile_hash"] == "e" * 64
+    assert plan["workflow_fingerprint"] == selected_profile["workflow_fingerprint"]
+    assert plan["profile_hash"] == content_hash(selected_profile)
     assert plan["parent_artifact_hash"] == "c" * 64
+    assert plan["lineage_id"] == content_hash({
+        "asset_card_hash": plan["asset_card_hash"],
+        "art_bible_hash": plan["art_bible_hash"],
+        "profile_hash": plan["profile_hash"],
+        "parent_artifact_hash": "c" * 64,
+    })
 
 
 def test_character_base_plan_requires_character_asset_and_clean_camera_controls():
-    plan = stages_module.build_character_base_plan(_board_character_card(), workflow_fingerprint="d" * 64, profile_hash="e" * 64)
+    selected_profile = _camera_profile("camera-anima-base.json")
+    plan = stages_module.build_character_base_plan(
+        _board_character_card(),
+        workflow_fingerprint=selected_profile["workflow_fingerprint"],
+        profile_hash=content_hash(selected_profile),
+        profile=selected_profile,
+    )
     assert plan["expected_artifact_type"] == "CharacterBaseImage"
     assert plan["asset_id"] == "character-lee"
     assert plan["camera"] == {"direction": "front", "elevation": "eye-level", "distance": "full_body", "roll": 0.0}
@@ -132,8 +157,101 @@ def test_character_base_plan_requires_character_asset_and_clean_camera_controls(
     }
     assert plan["enabled_groups"] == []
     assert plan["enabled_optional_branches"] == []
+    assert plan["workflow_profile_id"] == "camera-anima-v1"
+    assert plan["lineage_id"] == content_hash({
+        "asset_card_hash": plan["asset_card_hash"],
+        "profile_hash": plan["profile_hash"],
+    })
     with pytest.raises(stages_module.StageError, match="character"):
-        stages_module.build_character_base_plan(_board_environment_card(), workflow_fingerprint="d" * 64, profile_hash="e" * 64)
+        stages_module.build_character_base_plan(
+            _board_environment_card(),
+            workflow_fingerprint=selected_profile["workflow_fingerprint"],
+            profile_hash=content_hash(selected_profile),
+            profile=selected_profile,
+        )
+
+
+def test_render_plans_reject_caller_hashes_that_disagree_with_loaded_profile():
+    bible = _board_art_bible()
+    asset = _board_environment_card()
+    selected_profile = _camera_profile("camera-anima-asset-board-environment.json")
+    with pytest.raises(stages_module.StageError, match="workflow_fingerprint"):
+        stages_module.build_asset_board_plan(
+            "environment", bible, asset,
+            workflow_fingerprint="d" * 64,
+            profile_hash=content_hash(selected_profile),
+            profile=selected_profile,
+        )
+    with pytest.raises(stages_module.StageError, match="profile_hash"):
+        stages_module.build_asset_board_plan(
+            "environment", bible, asset,
+            workflow_fingerprint=selected_profile["workflow_fingerprint"],
+            profile_hash="e" * 64,
+            profile=selected_profile,
+        )
+
+
+def test_parent_hash_requires_explicit_consistent_variant_contract():
+    bible = _board_art_bible()
+    selected_profile = _camera_profile("camera-anima-asset-board-environment.json")
+    kwargs = {
+        "workflow_fingerprint": selected_profile["workflow_fingerprint"],
+        "profile_hash": content_hash(selected_profile),
+        "profile": selected_profile,
+    }
+    parent_only = _board_environment_card()
+    parent_only["parent_artifact_hash"] = "c" * 64
+    with pytest.raises(stages_module.StageError, match="variant"):
+        stages_module.build_asset_board_plan("environment", bible, parent_only, **kwargs)
+
+    inconsistent = _board_environment_card()
+    inconsistent.update({
+        "is_variant": True,
+        "parent_artifact_hash": "c" * 64,
+        "source_artifact_hash": "f" * 64,
+    })
+    with pytest.raises(stages_module.StageError, match="source.*parent"):
+        stages_module.build_asset_board_plan("environment", bible, inconsistent, **kwargs)
+
+
+@pytest.mark.parametrize(
+    "mutation, match",
+    [
+        (lambda asset: asset.update(accepted=False), "accepted"),
+        (lambda asset: asset.update(source_artifact_type="CharacterBoard"), "derivative"),
+        (lambda asset: asset.update(props=["sword"]), "scene or prop"),
+    ],
+)
+def test_character_base_rejects_unaccepted_derived_or_contaminated_assets(mutation, match):
+    asset = _board_character_card()
+    mutation(asset)
+    selected_profile = _camera_profile("camera-anima-base.json")
+    with pytest.raises(stages_module.StageError, match=match):
+        stages_module.build_character_base_plan(
+            asset,
+            workflow_fingerprint=selected_profile["workflow_fingerprint"],
+            profile_hash=content_hash(selected_profile),
+            profile=selected_profile,
+        )
+
+
+def test_character_base_rejects_scene_or_prop_facts_inside_identity_contract():
+    selected_profile = _camera_profile("camera-anima-base.json")
+    for field, fact in (
+        ("identity_lock", "standing in a workshop room"),
+        ("face_lock", {"feature": "accessory", "value": "holding a sword weapon"}),
+    ):
+        asset = _board_character_card()
+        asset[field].append(fact)
+        value = fact if isinstance(fact, str) else fact["value"]
+        asset["provenance"]["explicit_evidence"].append(value)
+        with pytest.raises(stages_module.StageError, match="scene or prop"):
+            stages_module.build_character_base_plan(
+                asset,
+                workflow_fingerprint=selected_profile["workflow_fingerprint"],
+                profile_hash=content_hash(selected_profile),
+                profile=selected_profile,
+            )
 
 
 def _v1_profile():

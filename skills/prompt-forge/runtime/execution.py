@@ -266,8 +266,27 @@ def _character_base_patches(prompt_build: dict) -> list[dict]:
 def _validate_character_base_profile(profile: object, profile_id: object) -> None:
     if not isinstance(profile, dict) or profile.get("schema_version") != "1.0":
         raise ExecutionError("a versioned workflow profile is required")
-    if profile_id != _CHARACTER_BASE_PROFILE_ID or profile.get("profile_id") != profile_id:
+    if profile.get("board_role") is not None:
+        raise ExecutionError(
+            "asset-board profiles are prompt-only and cannot use character-base execution"
+        )
+    selected_profile_id = profile.get("profile_id")
+    alias_is_valid = (
+        selected_profile_id == "camera-anima-base-v1"
+        and profile.get("source_profile_id") == _CHARACTER_BASE_PROFILE_ID
+        and profile.get("execution_profile_id") == _CHARACTER_BASE_PROFILE_ID
+    )
+    if (
+        profile_id != _CHARACTER_BASE_PROFILE_ID
+        or (selected_profile_id != profile_id and not alias_is_valid)
+    ):
         raise ExecutionError("character-base requires profile camera-anima-v1")
+    if alias_is_valid and (
+        profile.get("enabled_groups") != []
+        or profile.get("enabled_optional_branches") != []
+        or profile.get("expected_artifact_type") != "CharacterBaseImage"
+    ):
+        raise ExecutionError("character-base alias must remain a clean base profile")
     if profile.get("runtime_classification") != "local":
         raise ExecutionError("character-base profile must be local")
     if profile.get("expected_outputs") != _CHARACTER_BASE_OUTPUTS:

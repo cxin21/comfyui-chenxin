@@ -5,7 +5,11 @@ from pathlib import Path
 import pytest
 
 import runtime.adapters.camera as camera_module
-from runtime.adapters.camera import CameraAdapterError, patch_character_base
+from runtime.adapters.camera import (
+    CameraAdapterError,
+    is_pinned_camera_normalization_profile,
+    patch_character_base,
+)
 from runtime.execution import ExecutionError
 
 
@@ -154,15 +158,19 @@ def test_camera_extra_patch_changes_only_declared_angle_and_extra_fields():
         "immutable": "extra-lock",
     }
     profile = {
+        "workflow_fingerprint": "7fa7a85e005182c6be42a3f3193add3fb41531ef0fae28e1cbd54a791e72e20a",
         "slots": {"camera_angle": {"id": 583, "type": "CameraAngleNode"}, "camera_extra": {"id": 585, "type": "CameraExtraConfigNode"}},
         "camera_angle_allowlist": ["pos_x", "pos_y", "pos_z", "roll"],
         "camera_extra_allowlist": ["extreme_type", "extreme_weight", "lens_enabled", "lens_value", "dof_enabled", "dof_value", "dof_weight", "movement_enabled", "movement_value", "composition_enabled", "composition_value", "style_enabled", "style_value"],
+        "output_topology": [{"id": 900, "type": "SaveImage"}],
+        "expected_outputs": ["image/png"],
     }
     patched = camera_module.patch_camera_controls(
         graph,
         camera={"direction": "right_45", "elevation": "eye-level", "distance": "medium", "roll": 0.0},
         camera_extra={"extreme_type": "none", "extreme_weight": 0.0, "lens_enabled": True, "lens_value": "50mm lens", "dof_enabled": True, "dof_value": "shallow depth of field", "dof_weight": 1.0, "movement_enabled": False, "movement_value": "", "composition_enabled": True, "composition_value": "rule of thirds", "style_enabled": False, "style_value": ""},
         profile=profile,
+        workflow_fingerprint=profile["workflow_fingerprint"],
     )
     assert patched["583"]["inputs"]["pos_x"] == 0.25
     assert patched["585"]["inputs"]["lens_value"] == "50mm lens"
@@ -170,6 +178,86 @@ def test_camera_extra_patch_changes_only_declared_angle_and_extra_fields():
     assert patched["585"]["inputs"]["immutable"] == "extra-lock"
     assert graph["583"]["inputs"]["pos_x"] == 0.0
     assert graph["585"]["inputs"]["lens_enabled"] is False
+
+
+@pytest.mark.parametrize(
+    "role, contamination",
+    [
+        ("environment", "1girl"),
+        ("environment", "empty room background"),
+        ("environment", "discarded weapon"),
+        ("prop", "character hands"),
+        ("prop", "sword weapon"),
+        ("character", "room background"),
+        ("character", "sword weapon"),
+    ],
+)
+def test_asset_board_roles_reject_semantic_contamination_and_numeric_prefixes(
+    role, contamination
+):
+    selected_profile = json.loads(
+        (PROFILE_DIR / f"camera-anima-asset-board-{role}.json").read_text(encoding="utf-8")
+    )
+    with pytest.raises(CameraAdapterError, match=f"{role} board"):
+        camera_module.patch_asset_board_prompt(
+            load_graph(), contamination, "watermark", selected_profile
+        )
+
+
+def test_camera_controls_reject_profile_slot_alias_and_output_topology_drift():
+    graph = load_graph()
+    graph["583"]["inputs"] = {
+        "pos_x": 0.0,
+        "pos_y": 0.0,
+        "pos_z": 1.0,
+        "roll": 0.0,
+    }
+    graph["585"]["inputs"] = {
+        "extreme_type": "none", "extreme_weight": 0.0,
+        "lens_enabled": False, "lens_value": "", "dof_enabled": False,
+        "dof_value": "", "dof_weight": 0.0, "movement_enabled": False,
+        "movement_value": "", "composition_enabled": False,
+        "composition_value": "", "style_enabled": False, "style_value": "",
+    }
+    selected_profile = {
+        "workflow_fingerprint": "7fa7a85e005182c6be42a3f3193add3fb41531ef0fae28e1cbd54a791e72e20a",
+        "slots": {
+            "camera_angle": {"id": 900, "type": "SaveImage"},
+            "camera_extra": {"id": 585, "type": "CameraExtraConfigNode"},
+        },
+        "camera_angle_allowlist": ["pos_x", "pos_y", "pos_z", "roll"],
+        "camera_extra_allowlist": ["extreme_type", "extreme_weight", "lens_enabled", "lens_value", "dof_enabled", "dof_value", "dof_weight", "movement_enabled", "movement_value", "composition_enabled", "composition_value", "style_enabled", "style_value"],
+        "output_topology": [{"id": 900, "type": "SaveImage"}],
+        "expected_outputs": ["image/png"],
+    }
+    camera = {"direction": "front", "elevation": "eye-level", "distance": "medium", "roll": 0.0}
+    camera_extra = {key: graph["585"]["inputs"][key] for key in selected_profile["camera_extra_allowlist"]}
+    with pytest.raises(CameraAdapterError, match="583"):
+        camera_module.patch_camera_controls(
+            graph, camera=camera, camera_extra=camera_extra,
+            profile=selected_profile,
+            workflow_fingerprint=selected_profile["workflow_fingerprint"],
+        )
+
+    selected_profile["slots"]["camera_angle"] = {"id": 583, "type": "CameraAngleNode"}
+    selected_profile["output_topology"] = [{"id": 999, "type": "SaveImage"}]
+    with pytest.raises(CameraAdapterError, match="topology"):
+        camera_module.patch_camera_controls(
+            graph, camera=camera, camera_extra=camera_extra,
+            profile=selected_profile,
+            workflow_fingerprint=selected_profile["workflow_fingerprint"],
+        )
+
+
+def test_camera_profile_aliases_share_only_the_pinned_normalization_contract():
+    for name in (
+        "camera-anima-base.json",
+        "camera-anima-asset-board-environment.json",
+        "camera-anima-asset-board-character.json",
+        "camera-anima-asset-board-prop.json",
+    ):
+        selected_profile = json.loads((PROFILE_DIR / name).read_text(encoding="utf-8"))
+        assert is_pinned_camera_normalization_profile(selected_profile) is True
 
 
 @pytest.mark.parametrize("role, artifact_type", [("environment", "EnvironmentBoard"), ("character", "CharacterBoard"), ("prop", "PropBoard")])

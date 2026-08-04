@@ -38,6 +38,35 @@ _NEUTRAL_CAMERA_EXTRA = {
     "composition_enabled": False, "composition_value": "",
     "style_enabled": False, "style_value": "",
 }
+_CAMERA_EXECUTION_PROFILE_ID = "camera-anima-v1"
+_CHARACTER_DERIVATIVE_FIELDS = frozenset(
+    (
+        "is_variant",
+        "parent_artifact_hash",
+        "parent_artifact_type",
+        "source_artifact_hash",
+        "source_artifact_type",
+        "derived_from",
+        "derivative_type",
+    )
+)
+_CHARACTER_SCENE_PROP_FIELDS = frozenset(
+    (
+        "scene",
+        "scene_id",
+        "scene_lock",
+        "environment",
+        "environment_id",
+        "prop",
+        "props",
+        "prop_ids",
+        "prop_lock",
+    )
+)
+_CHARACTER_SCENE_PROP_FACT = re.compile(
+    r"(?<![A-Za-z_])(scene|room|background|environment|prop|weapon|sword)(?![A-Za-z_])",
+    re.IGNORECASE,
+)
 
 # The profiled LTX Director graph requests a 1280x720 target box, but its
 # maintain-aspect-ratio image adapter snaps the 1216x832 Stage 3 camera frame
@@ -81,9 +110,71 @@ def _validated_asset(asset_card: object, asset_type: str) -> dict:
         raise StageError(f"invalid {asset_type} asset: {exc}") from exc
 
 
+def _validated_render_profile(
+    profile: object,
+    expected_profile_id: str,
+    workflow_fingerprint: str,
+    profile_hash: str,
+) -> dict:
+    if not isinstance(profile, dict) or profile.get("schema_version") != "1.0":
+        raise StageError("a loaded versioned camera profile is required")
+    if profile.get("profile_id") != expected_profile_id:
+        raise StageError(f"render profile must be {expected_profile_id}")
+    selected_fingerprint = _required_sha256(
+        profile.get("workflow_fingerprint"), "profile workflow_fingerprint"
+    )
+    if _required_sha256(workflow_fingerprint, "workflow_fingerprint") != selected_fingerprint:
+        raise StageError("workflow_fingerprint does not match the loaded profile")
+    try:
+        selected_hash = content_hash(profile)
+    except (TypeError, ValueError) as exc:
+        raise StageError(f"camera profile is not canonical JSON: {exc}") from exc
+    if _required_sha256(profile_hash, "profile_hash") != selected_hash:
+        raise StageError("profile_hash does not match the loaded profile")
+    if (
+        profile.get("source_profile_id") != _CAMERA_EXECUTION_PROFILE_ID
+        or profile.get("execution_profile_id") != _CAMERA_EXECUTION_PROFILE_ID
+        or profile.get("enabled_groups") != []
+        or profile.get("enabled_optional_branches") != []
+        or profile.get("expected_outputs") != ["image/png"]
+    ):
+        raise StageError("camera profile is not a clean pinned render contract")
+    return copy.deepcopy(profile)
+
+
 def _variant_parent(asset: dict) -> str | None:
-    parent = asset.get("parent_artifact_hash")
-    return None if parent is None else _required_sha256(parent, "parent_artifact_hash")
+    variant_fields = {"parent_artifact_hash", "source_artifact_hash"}
+    present = variant_fields.intersection(asset)
+    marker = asset.get("is_variant")
+    if not present and marker is not True:
+        if marker not in (None, False):
+            raise StageError("asset variant marker must be boolean")
+        return None
+    if marker is not True or present != variant_fields:
+        raise StageError("asset parent hash requires an explicit complete variant contract")
+    parent = _required_sha256(asset["parent_artifact_hash"], "parent_artifact_hash")
+    source = _required_sha256(asset["source_artifact_hash"], "source_artifact_hash")
+    if source != parent:
+        raise StageError("variant source_artifact_hash must match parent_artifact_hash")
+    return parent
+
+
+def _validate_character_base_source(character: dict) -> None:
+    if character.get("accepted") is False:
+        raise StageError("character base rejects an asset with accepted=False")
+    if _CHARACTER_DERIVATIVE_FIELDS.intersection(character):
+        raise StageError("character base rejects derivative source metadata")
+    if _CHARACTER_SCENE_PROP_FIELDS.intersection(character):
+        raise StageError("character base rejects scene or prop contamination")
+    facts = list(character.get("identity_lock", []))
+    for face_fact in character.get("face_lock", []):
+        if isinstance(face_fact, dict):
+            facts.append(face_fact.get("value"))
+    if any(
+        isinstance(fact, str) and _CHARACTER_SCENE_PROP_FACT.search(fact)
+        for fact in facts
+    ):
+        raise StageError("character base identity contains scene or prop facts")
 
 
 def build_asset_board_plan(
@@ -93,31 +184,54 @@ def build_asset_board_plan(
     *,
     workflow_fingerprint: str,
     profile_hash: str,
+    profile: dict,
 ) -> dict:
     """Bind a validated asset-board intent to one role-specific camera profile."""
     if asset_type not in _ASSET_BOARD_BUILDERS:
         raise StageError("asset_type must be environment, character, or prop")
     asset = _validated_asset(asset_card, asset_type)
+    selected_profile = _validated_render_profile(
+        profile,
+        f"camera-anima-asset-board-{asset_type}-v1",
+        workflow_fingerprint,
+        profile_hash,
+    )
+    if (
+        selected_profile.get("board_role") != asset_type
+        or selected_profile.get("expected_artifact_type")
+        != _BOARD_ARTIFACT_TYPES[asset_type]
+    ):
+        raise StageError(f"{asset_type} board profile role contract is invalid")
     try:
         board_intent = _ASSET_BOARD_BUILDERS[asset_type](art_bible, asset)
         bible_digest = art_bible_hash(art_bible)
     except (AssetPlanError, ContractError) as exc:
         raise StageError(f"invalid {asset_type} board contract: {exc}") from exc
+    parent = _variant_parent(asset)
+    asset_digest = asset_card_hash(asset)
+    selected_profile_hash = content_hash(selected_profile)
     plan = {
         "schema_version": "1.0", "stage": "asset-board", "plan_state": "draft",
         "local_only": True, "asset_type": asset_type, "asset_id": asset["asset_id"],
         "source_story_hash": asset["source_story_hash"], "art_bible_hash": bible_digest,
-        "asset_card_hash": asset_card_hash(asset),
+        "asset_card_hash": asset_digest,
         "visual_fingerprint_hash": content_hash(asset["visual_fingerprint"]),
         "workflow_profile_id": f"camera-anima-asset-board-{asset_type}-v1",
-        "workflow_fingerprint": _required_sha256(workflow_fingerprint, "workflow_fingerprint"),
-        "profile_hash": _required_sha256(profile_hash, "profile_hash"),
+        "workflow_fingerprint": selected_profile["workflow_fingerprint"],
+        "profile_hash": selected_profile_hash,
         "board_intent": board_intent, "enabled_groups": [],
         "enabled_optional_branches": [],
         "expected_artifact_type": _BOARD_ARTIFACT_TYPES[asset_type],
         "expected_outputs": ["image/png"], "execution_approved": False,
     }
-    if (parent := _variant_parent(asset)) is not None:
+    lineage_contract = {
+        "asset_card_hash": asset_digest,
+        "art_bible_hash": bible_digest,
+        "profile_hash": selected_profile_hash,
+        "parent_artifact_hash": parent,
+    }
+    plan["lineage_id"] = content_hash(lineage_contract)
+    if parent is not None:
         plan["parent_artifact_hash"] = parent
     plan["plan_hash"] = content_hash(plan)
     return plan
@@ -128,31 +242,45 @@ def build_character_base_plan(
     *,
     workflow_fingerprint: str,
     profile_hash: str,
+    profile: dict,
     distance: str = "full_body",
 ) -> dict:
     """Build a clean identity-master plan from one validated CharacterAsset."""
     character = _validated_asset(character_asset, "character")
+    _validate_character_base_source(character)
+    selected_profile = _validated_render_profile(
+        profile,
+        "camera-anima-base-v1",
+        workflow_fingerprint,
+        profile_hash,
+    )
+    if selected_profile.get("expected_artifact_type") != "CharacterBaseImage":
+        raise StageError("character base profile artifact contract is invalid")
     if distance not in {"medium", "full_body"}:
         raise StageError("character base distance must be medium or full_body")
+    asset_digest = asset_card_hash(character)
+    selected_profile_hash = content_hash(selected_profile)
     plan = {
         "schema_version": "1.0", "stage": "character-base", "plan_state": "draft",
         "local_only": True, "asset_id": character["asset_id"],
         "source_story_hash": character["source_story_hash"],
-        "asset_card_hash": asset_card_hash(character),
+        "asset_card_hash": asset_digest,
         "visual_fingerprint_hash": content_hash(character["visual_fingerprint"]),
         "identity_lock": copy.deepcopy(character["identity_lock"]),
         "face_lock": copy.deepcopy(character["face_lock"]),
-        "workflow_profile_id": "camera-anima-base-v1",
-        "workflow_fingerprint": _required_sha256(workflow_fingerprint, "workflow_fingerprint"),
-        "profile_hash": _required_sha256(profile_hash, "profile_hash"),
+        "workflow_profile_id": selected_profile["execution_profile_id"],
+        "render_profile_id": selected_profile["profile_id"],
+        "workflow_fingerprint": selected_profile["workflow_fingerprint"],
+        "profile_hash": selected_profile_hash,
         "camera": {"direction": "front", "elevation": "eye-level", "distance": distance, "roll": 0.0},
         "camera_extra": copy.deepcopy(_NEUTRAL_CAMERA_EXTRA),
         "enabled_groups": [], "enabled_optional_branches": [],
         "expected_artifact_type": "CharacterBaseImage", "expected_outputs": ["image/png"],
         "execution_approved": False,
     }
-    if (parent := _variant_parent(character)) is not None:
-        plan["parent_artifact_hash"] = parent
+    plan["lineage_id"] = content_hash(
+        {"asset_card_hash": asset_digest, "profile_hash": selected_profile_hash}
+    )
     plan["plan_hash"] = content_hash(plan)
     return plan
 

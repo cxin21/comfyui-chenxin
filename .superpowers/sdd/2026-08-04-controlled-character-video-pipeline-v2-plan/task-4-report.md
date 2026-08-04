@@ -34,3 +34,40 @@ All four new JSON profiles were parsed successfully. The existing skipped camera
 ## Scope
 
 No submission path or live ComfyUI generation was added. User-owned `stage_execution.py` and `test_stage_execution.py` changes, the design document, and the untracked plan documents were not modified or staged by Task 4.
+
+## Fix round 1: profile binding, lineage, and fail-closed isolation
+
+The review failures traced to five disconnected trust boundaries: camera normalization recognized only the legacy profile ID; stage plans trusted caller-shaped hashes; asset-card validation intentionally admitted unknown derivative metadata; role matching used `\w` boundaries that let `1girl` bypass `girl`; and CameraExtra patching trusted arbitrary profile slot selectors.
+
+Repairs:
+
+- Base and board profiles now declare their legacy execution alias and pinned output topology. The normalization adapter accepts only those named aliases with the exact inherited bridge. Character-base execution accepts the clean base alias and explicitly rejects board profiles.
+- Both Task 4 stage builders require the loaded profile object, recompute its canonical content hash, compare the supplied fingerprint/hash, and derive the emitted profile fields from that object.
+- Every Task 4 plan now has a deterministic hash-bound `lineage_id`. Parent lineage is copied only for an explicit complete variant whose source and parent hashes agree.
+- Character-base planning rejects explicit non-acceptance, derivative/source metadata, top-level scene/prop fields, and scene/prop facts embedded inside identity or face locks.
+- Role vocabularies and ASCII-letter token boundaries close numeric-prefix and semantic bypasses while leaving character identity tokens such as `1girl` valid in character boards.
+- Camera controls require fixed nodes 583/585, the pinned workflow fingerprint, declared output topology, complete CameraExtra inputs, and unchanged data outside the allowlist.
+
+RED evidence:
+
+```text
+pytest -q test_camera_adapter.py test_stage2_plan.py test_execution.py
+# 18 failed, 107 passed, 1 skipped
+
+pytest -q test_execution.py -k non_clean_base_profile_alias
+# 1 failed: alias enabled_groups=[3] was not rejected
+```
+
+GREEN and final verification:
+
+```text
+pytest -q skills/prompt-forge/runtime/tests/test_camera_adapter.py skills/prompt-forge/runtime/tests/test_camera_img2img.py skills/prompt-forge/runtime/tests/test_stage2_plan.py skills/prompt-forge/runtime/tests/test_execution.py
+# 150 passed, 1 skipped
+
+python -m compileall -q <Task 4 Python sources and focused tests>
+ruff check <Task 4 Python sources and focused tests>
+# All checks passed
+
+git diff --check
+# exit 0; repository line-ending warnings only
+```

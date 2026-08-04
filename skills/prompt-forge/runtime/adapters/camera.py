@@ -49,6 +49,20 @@ _POSTPROCESS_LINKS = (
     (96, "images", 76, 0),
     (111, "image", 96, 0),
 )
+_CAMERA_PROFILE_ID = "camera-anima-v1"
+_CAMERA_PROFILE_ALIASES = frozenset(
+    (
+        "camera-anima-base-v1",
+        "camera-anima-asset-board-environment-v1",
+        "camera-anima-asset-board-character-v1",
+        "camera-anima-asset-board-prop-v1",
+    )
+)
+_PINNED_CAMERA_WORKFLOW_FINGERPRINT = "7fa7a85e005182c6be42a3f3193add3fb41531ef0fae28e1cbd54a791e72e20a"
+_CAMERA_CONTROL_SELECTORS = {
+    "camera_angle": {"id": 583, "type": "CameraAngleNode"},
+    "camera_extra": {"id": 585, "type": "CameraExtraConfigNode"},
+}
 
 # CameraAngleNode expresses azimuth as a normalized half-turn.  Keep this
 # mapping explicit so a Stage 3 plan cannot silently degrade into the UI's
@@ -91,10 +105,16 @@ class CameraAdapterError(ValueError):
 
 def is_pinned_camera_normalization_profile(profile: object) -> bool:
     """Return whether a profile carries the exact production camera bridge."""
+    if not isinstance(profile, dict) or profile.get("api_normalization") != _CAMERA_API_NORMALIZATION:
+        return False
+    profile_id = profile.get("profile_id")
     return (
-        isinstance(profile, dict)
-        and profile.get("profile_id") == "camera-anima-v1"
-        and profile.get("api_normalization") == _CAMERA_API_NORMALIZATION
+        profile_id == _CAMERA_PROFILE_ID
+        or (
+            profile_id in _CAMERA_PROFILE_ALIASES
+            and profile.get("source_profile_id") == _CAMERA_PROFILE_ID
+            and profile.get("execution_profile_id") == _CAMERA_PROFILE_ID
+        )
     )
 
 
@@ -167,7 +187,10 @@ def normalize_camera_api_graph(
             int(node_id) if isinstance(node_id, str) and node_id.isdigit() else node_id
             for node_id in graph
         }.intersection(_CAMERA_MARKER_IDS)
-        if profile.get("profile_id") == "camera-anima-v1" and present_markers:
+        if (
+            profile.get("profile_id") == _CAMERA_PROFILE_ID
+            or profile.get("source_profile_id") == _CAMERA_PROFILE_ID
+        ) and present_markers:
             raise CameraAdapterError("camera API normalization requires the pinned contract")
         return copy.deepcopy(graph)
     if not is_pinned_camera_normalization_profile(profile):
@@ -411,11 +434,45 @@ def _finite_number(value: object, label: str) -> float:
 
 
 def patch_camera_controls(
-    graph: dict, *, camera: dict, camera_extra: dict, profile: dict
+    graph: dict,
+    *,
+    camera: dict,
+    camera_extra: dict,
+    profile: dict,
+    workflow_fingerprint: str,
 ) -> dict:
     """Patch only the complete profiled CameraAngle and CameraExtra contract."""
     if not isinstance(graph, dict) or not isinstance(profile, dict):
         raise CameraAdapterError("camera graph and profile must be objects")
+    if (
+        workflow_fingerprint != profile.get("workflow_fingerprint")
+        or not isinstance(workflow_fingerprint, str)
+        or not re.fullmatch(r"[0-9a-f]{64}", workflow_fingerprint)
+    ):
+        raise CameraAdapterError("camera workflow fingerprint does not match the profile")
+    if workflow_fingerprint != _PINNED_CAMERA_WORKFLOW_FINGERPRINT:
+        raise CameraAdapterError("camera workflow fingerprint is not the pinned contract")
+    slots = profile.get("slots")
+    if not isinstance(slots, dict) or any(
+        slots.get(name) != selector
+        for name, selector in _CAMERA_CONTROL_SELECTORS.items()
+    ):
+        raise CameraAdapterError("camera profile must use fixed slots 583 and 585")
+    if profile.get("expected_outputs") != ["image/png"]:
+        raise CameraAdapterError("camera profile output contract is invalid")
+    topology = profile.get("output_topology")
+    if not isinstance(topology, list) or not topology:
+        raise CameraAdapterError("camera profile output topology is required")
+    for output in topology:
+        if (
+            not isinstance(output, dict)
+            or set(output) != {"id", "type"}
+            or not isinstance(output["id"], int)
+            or isinstance(output["id"], bool)
+            or not isinstance(output["type"], str)
+            or graph.get(str(output["id"]), {}).get("class_type") != output["type"]
+        ):
+            raise CameraAdapterError("camera graph output topology does not match the profile")
     if not isinstance(camera, dict) or set(camera) != {"direction", "elevation", "distance", "roll"}:
         raise CameraAdapterError("camera controls require direction, elevation, distance and roll")
     if not isinstance(camera_extra, dict) or set(camera_extra) != _CAMERA_EXTRA_FIELDS:
@@ -462,7 +519,11 @@ def patch_camera_controls(
 
 
 def _board_term_present(prompt: str, term: str) -> bool:
-    return re.search(rf"(?<!\w){re.escape(term)}(?!\w)", prompt, re.IGNORECASE) is not None
+    return re.search(
+        rf"(?<![A-Za-z_]){re.escape(term)}(?![A-Za-z_])",
+        prompt,
+        re.IGNORECASE,
+    ) is not None
 
 
 def patch_asset_board_prompt(graph: dict, positive: str, negative: str, profile: dict) -> dict:
