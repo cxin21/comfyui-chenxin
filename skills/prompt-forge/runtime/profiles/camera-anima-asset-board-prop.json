@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "camera-anima-asset-board-prop-v1",
+  "source_profile_id": "camera-anima-v1",
+  "board_role": "prop",
+  "workflow_fingerprint": "7fa7a85e005182c6be42a3f3193add3fb41531ef0fae28e1cbd54a791e72e20a",
+  "runtime_classification": "local",
+  "slots": {
+    "positive_prompt": {"id": 24, "type": "ImpactWildcardProcessor", "title": "POSITIVE"},
+    "negative_prompt": {"id": 25, "type": "ImpactWildcardProcessor", "title": "NEGATIVE"},
+    "camera_angle": {"id": 583, "type": "CameraAngleNode"},
+    "camera_extra": {"id": 585, "type": "CameraExtraConfigNode"}
+  },
+  "api_normalization": {
+    "schema_version": "1.0",
+    "literal_inputs": [
+      {"node_id": 26, "input_name": "text", "ui_node_id": 26, "widget_index": 1}
+    ],
+    "output_fallbacks": [
+      {"source_node_id": 111, "output_index": 0, "target_node_id": 35, "target_input": "images"},
+      {"source_node_id": 111, "output_index": 0, "target_node_id": 490, "target_input": "images"}
+    ],
+    "remove_nodes": [28, 41, 52, 62, 67, 70, 77]
+  },
+  "forbidden_positive_terms": ["person", "people", "human", "man", "woman", "boy", "girl", "hand", "hands"],
+  "negative_constraints": ["people", "human figures", "hands"],
+  "enabled_groups": [],
+  "enabled_optional_branches": [],
+  "allowed_mutations": [
+    "positive_prompt.wildcard_text",
+    "positive_prompt.populated_text",
+    "negative_prompt.wildcard_text",
+    "negative_prompt.populated_text"
+  ],
+  "expected_artifact_type": "PropBoard",
+  "expected_outputs": ["image/png"]
+}

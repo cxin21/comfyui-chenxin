@@ -4,11 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from runtime.adapters.camera import patch_character_base
+import runtime.adapters.camera as camera_module
+from runtime.adapters.camera import CameraAdapterError, patch_character_base
 from runtime.execution import ExecutionError
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "camera-api-minimal.json"
+PROFILE_DIR = Path(__file__).parents[1] / "profiles"
 
 
 def ready_build():
@@ -100,3 +102,91 @@ def test_patch_rejects_wrong_node_class_and_invalid_build_prompts():
     build["negative_prompt"] = ""
     with pytest.raises(ExecutionError, match="negative_prompt"):
         patch_character_base(load_graph(), build, {"positive_prompt": 24, "negative_prompt": 25})
+
+
+def _board_profile(role):
+    return {
+        "schema_version": "1.0",
+        "profile_id": f"camera-anima-asset-board-{role}-v1",
+        "board_role": role,
+        "workflow_fingerprint": "a" * 64,
+        "slots": {
+            "positive_prompt": {"id": 24, "type": "ImpactWildcardProcessor", "title": "POSITIVE"},
+            "negative_prompt": {"id": 25, "type": "ImpactWildcardProcessor", "title": "NEGATIVE"},
+        },
+        "forbidden_positive_terms": {"character": ["scene", "background", "prop"], "environment": ["person", "people", "human"], "prop": ["person", "people", "human", "hand"]}[role],
+        "negative_constraints": {"character": ["scene", "background", "props"], "environment": ["people", "human figures"], "prop": ["people", "human figures", "hands"]}[role],
+        "enabled_groups": [],
+        "enabled_optional_branches": [],
+        "allowed_mutations": ["positive_prompt.wildcard_text", "positive_prompt.populated_text", "negative_prompt.wildcard_text", "negative_prompt.populated_text"],
+        "expected_outputs": ["image/png"],
+    }
+
+
+def test_character_board_profile_rejects_scene_reference_role():
+    with pytest.raises(CameraAdapterError, match="character board"):
+        camera_module.patch_asset_board_prompt(load_graph(), "single character; scene background", "", _board_profile("character"))
+
+
+def test_asset_board_prompt_patches_only_profiled_slots_and_preserves_profile():
+    graph = load_graph()
+    source = copy.deepcopy(graph)
+    selected_profile = _board_profile("environment")
+    original_profile = copy.deepcopy(selected_profile)
+    patched = camera_module.patch_asset_board_prompt(graph, "empty workshop panorama", "watermark", selected_profile)
+    assert patched["24"]["inputs"]["wildcard_text"] == "empty workshop panorama"
+    assert patched["25"]["inputs"]["wildcard_text"] == "watermark, people, human figures"
+    assert patched["583"] == source["583"]
+    assert patched["585"] == source["585"]
+    assert graph == source
+    assert selected_profile == original_profile
+
+
+def test_camera_extra_patch_changes_only_declared_angle_and_extra_fields():
+    graph = load_graph()
+    graph["583"]["inputs"] = {"pos_x": 0.0, "pos_y": 0.0, "pos_z": 1.0, "roll": 0.0, "immutable": "angle-lock"}
+    graph["585"]["inputs"] = {
+        "extreme_type": "none", "extreme_weight": 0.0,
+        "lens_enabled": False, "lens_value": "", "dof_enabled": False,
+        "dof_value": "", "dof_weight": 0.0, "movement_enabled": False,
+        "movement_value": "", "composition_enabled": False,
+        "composition_value": "", "style_enabled": False, "style_value": "",
+        "immutable": "extra-lock",
+    }
+    profile = {
+        "slots": {"camera_angle": {"id": 583, "type": "CameraAngleNode"}, "camera_extra": {"id": 585, "type": "CameraExtraConfigNode"}},
+        "camera_angle_allowlist": ["pos_x", "pos_y", "pos_z", "roll"],
+        "camera_extra_allowlist": ["extreme_type", "extreme_weight", "lens_enabled", "lens_value", "dof_enabled", "dof_value", "dof_weight", "movement_enabled", "movement_value", "composition_enabled", "composition_value", "style_enabled", "style_value"],
+    }
+    patched = camera_module.patch_camera_controls(
+        graph,
+        camera={"direction": "right_45", "elevation": "eye-level", "distance": "medium", "roll": 0.0},
+        camera_extra={"extreme_type": "none", "extreme_weight": 0.0, "lens_enabled": True, "lens_value": "50mm lens", "dof_enabled": True, "dof_value": "shallow depth of field", "dof_weight": 1.0, "movement_enabled": False, "movement_value": "", "composition_enabled": True, "composition_value": "rule of thirds", "style_enabled": False, "style_value": ""},
+        profile=profile,
+    )
+    assert patched["583"]["inputs"]["pos_x"] == 0.25
+    assert patched["585"]["inputs"]["lens_value"] == "50mm lens"
+    assert patched["583"]["inputs"]["immutable"] == "angle-lock"
+    assert patched["585"]["inputs"]["immutable"] == "extra-lock"
+    assert graph["583"]["inputs"]["pos_x"] == 0.0
+    assert graph["585"]["inputs"]["lens_enabled"] is False
+
+
+@pytest.mark.parametrize("role, artifact_type", [("environment", "EnvironmentBoard"), ("character", "CharacterBoard"), ("prop", "PropBoard")])
+def test_asset_board_profiles_pin_role_and_keep_optional_branches_off(role, artifact_type):
+    selected_profile = json.loads((PROFILE_DIR / f"camera-anima-asset-board-{role}.json").read_text(encoding="utf-8"))
+    assert selected_profile["profile_id"] == f"camera-anima-asset-board-{role}-v1"
+    assert selected_profile["board_role"] == role
+    assert selected_profile["expected_artifact_type"] == artifact_type
+    assert selected_profile["enabled_groups"] == []
+    assert selected_profile["enabled_optional_branches"] == []
+
+
+def test_character_base_profile_is_clean_and_neutral():
+    selected_profile = json.loads((PROFILE_DIR / "camera-anima-base.json").read_text(encoding="utf-8"))
+    assert selected_profile["profile_id"] == "camera-anima-base-v1"
+    assert selected_profile["camera_defaults"] == {"direction": "front", "elevation": "eye-level", "distance": "full_body", "roll": 0.0}
+    assert selected_profile["camera_extra_defaults"]["lens_enabled"] is False
+    assert selected_profile["camera_extra_defaults"]["dof_enabled"] is False
+    assert selected_profile["enabled_groups"] == []
+    assert selected_profile["enabled_optional_branches"] == []

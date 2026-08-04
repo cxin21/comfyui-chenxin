@@ -5,9 +5,16 @@ from __future__ import annotations
 import copy
 import re
 
-from .contracts import content_hash
+from .asset_plans import (
+    AssetPlanError,
+    build_character_board_plan,
+    build_environment_board_plan,
+    build_prop_board_plan,
+)
+from .contracts import ContractError, content_hash
 from .prompt_quality import validate_anima_prompt_build, validate_ltx_prompt_build
 from .reference_select import VIEW_ALIASES, VIEW_DEGREES
+from .story_assets import art_bible_hash, asset_card_hash, validate_asset_card
 
 
 class StageError(ValueError):
@@ -15,6 +22,22 @@ class StageError(ValueError):
 
 
 _G1_NODE_IDS = [21, 58, 57, 59]
+_ASSET_BOARD_BUILDERS = {
+    "environment": build_environment_board_plan,
+    "character": build_character_board_plan,
+    "prop": build_prop_board_plan,
+}
+_BOARD_ARTIFACT_TYPES = {
+    "environment": "EnvironmentBoard", "character": "CharacterBoard", "prop": "PropBoard",
+}
+_NEUTRAL_CAMERA_EXTRA = {
+    "extreme_type": "none", "extreme_weight": 0.0,
+    "lens_enabled": False, "lens_value": "",
+    "dof_enabled": False, "dof_value": "", "dof_weight": 0.0,
+    "movement_enabled": False, "movement_value": "",
+    "composition_enabled": False, "composition_value": "",
+    "style_enabled": False, "style_value": "",
+}
 
 # The profiled LTX Director graph requests a 1280x720 target box, but its
 # maintain-aspect-ratio image adapter snaps the 1216x832 Stage 3 camera frame
@@ -42,6 +65,96 @@ def _required_text(value: object, label: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise StageError(f"{label} is required")
     return value.strip()
+
+
+def _required_sha256(value: object, label: str) -> str:
+    value = _required_text(value, label)
+    if re.fullmatch(r"[0-9a-f]{64}", value) is None:
+        raise StageError(f"{label} must be a lowercase SHA-256 digest")
+    return value
+
+
+def _validated_asset(asset_card: object, asset_type: str) -> dict:
+    try:
+        return validate_asset_card(asset_card, asset_type)
+    except ContractError as exc:
+        raise StageError(f"invalid {asset_type} asset: {exc}") from exc
+
+
+def _variant_parent(asset: dict) -> str | None:
+    parent = asset.get("parent_artifact_hash")
+    return None if parent is None else _required_sha256(parent, "parent_artifact_hash")
+
+
+def build_asset_board_plan(
+    asset_type: str,
+    art_bible: dict,
+    asset_card: dict,
+    *,
+    workflow_fingerprint: str,
+    profile_hash: str,
+) -> dict:
+    """Bind a validated asset-board intent to one role-specific camera profile."""
+    if asset_type not in _ASSET_BOARD_BUILDERS:
+        raise StageError("asset_type must be environment, character, or prop")
+    asset = _validated_asset(asset_card, asset_type)
+    try:
+        board_intent = _ASSET_BOARD_BUILDERS[asset_type](art_bible, asset)
+        bible_digest = art_bible_hash(art_bible)
+    except (AssetPlanError, ContractError) as exc:
+        raise StageError(f"invalid {asset_type} board contract: {exc}") from exc
+    plan = {
+        "schema_version": "1.0", "stage": "asset-board", "plan_state": "draft",
+        "local_only": True, "asset_type": asset_type, "asset_id": asset["asset_id"],
+        "source_story_hash": asset["source_story_hash"], "art_bible_hash": bible_digest,
+        "asset_card_hash": asset_card_hash(asset),
+        "visual_fingerprint_hash": content_hash(asset["visual_fingerprint"]),
+        "workflow_profile_id": f"camera-anima-asset-board-{asset_type}-v1",
+        "workflow_fingerprint": _required_sha256(workflow_fingerprint, "workflow_fingerprint"),
+        "profile_hash": _required_sha256(profile_hash, "profile_hash"),
+        "board_intent": board_intent, "enabled_groups": [],
+        "enabled_optional_branches": [],
+        "expected_artifact_type": _BOARD_ARTIFACT_TYPES[asset_type],
+        "expected_outputs": ["image/png"], "execution_approved": False,
+    }
+    if (parent := _variant_parent(asset)) is not None:
+        plan["parent_artifact_hash"] = parent
+    plan["plan_hash"] = content_hash(plan)
+    return plan
+
+
+def build_character_base_plan(
+    character_asset: dict,
+    *,
+    workflow_fingerprint: str,
+    profile_hash: str,
+    distance: str = "full_body",
+) -> dict:
+    """Build a clean identity-master plan from one validated CharacterAsset."""
+    character = _validated_asset(character_asset, "character")
+    if distance not in {"medium", "full_body"}:
+        raise StageError("character base distance must be medium or full_body")
+    plan = {
+        "schema_version": "1.0", "stage": "character-base", "plan_state": "draft",
+        "local_only": True, "asset_id": character["asset_id"],
+        "source_story_hash": character["source_story_hash"],
+        "asset_card_hash": asset_card_hash(character),
+        "visual_fingerprint_hash": content_hash(character["visual_fingerprint"]),
+        "identity_lock": copy.deepcopy(character["identity_lock"]),
+        "face_lock": copy.deepcopy(character["face_lock"]),
+        "workflow_profile_id": "camera-anima-base-v1",
+        "workflow_fingerprint": _required_sha256(workflow_fingerprint, "workflow_fingerprint"),
+        "profile_hash": _required_sha256(profile_hash, "profile_hash"),
+        "camera": {"direction": "front", "elevation": "eye-level", "distance": distance, "roll": 0.0},
+        "camera_extra": copy.deepcopy(_NEUTRAL_CAMERA_EXTRA),
+        "enabled_groups": [], "enabled_optional_branches": [],
+        "expected_artifact_type": "CharacterBaseImage", "expected_outputs": ["image/png"],
+        "execution_approved": False,
+    }
+    if (parent := _variant_parent(character)) is not None:
+        plan["parent_artifact_hash"] = parent
+    plan["plan_hash"] = content_hash(plan)
+    return plan
 
 
 def _canonical_view(value: object) -> str:

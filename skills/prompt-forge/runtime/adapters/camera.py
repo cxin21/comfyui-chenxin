@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import copy
+import math
+import re
 from pathlib import PurePosixPath
 
 from ..contracts import canonical_json
@@ -69,6 +71,18 @@ _CAMERA_DISTANCE_POS_Z = {
     "full_body": -0.5,
     "wide": -0.9,
 }
+_CAMERA_ANGLE_FIELDS = frozenset(("pos_x", "pos_y", "pos_z", "roll"))
+_CAMERA_EXTRA_FIELDS = frozenset((
+    "extreme_type", "extreme_weight", "lens_enabled", "lens_value",
+    "dof_enabled", "dof_value", "dof_weight", "movement_enabled",
+    "movement_value", "composition_enabled", "composition_value",
+    "style_enabled", "style_value",
+))
+_BOARD_ROLES = frozenset(("environment", "character", "prop"))
+_BOARD_MUTATIONS = [
+    "positive_prompt.wildcard_text", "positive_prompt.populated_text",
+    "negative_prompt.wildcard_text", "negative_prompt.populated_text",
+]
 
 
 class CameraAdapterError(ValueError):
@@ -358,6 +372,136 @@ def _patch_camera_angle(graph: dict, camera: object, profile: dict) -> tuple[dic
             raise CameraAdapterError(f"camera angle node is missing {input_name}")
         target[input_name] = mapping[value]
     return patched, node_id
+
+
+def _profiled_node(graph: dict, profile: dict, slot_name: str) -> tuple[int, dict]:
+    slots = profile.get("slots") if isinstance(profile, dict) else None
+    selector = slots.get(slot_name) if isinstance(slots, dict) else None
+    if not isinstance(selector, dict):
+        raise CameraAdapterError(f"camera profile requires the {slot_name} slot")
+    node_id = selector.get("id")
+    if not isinstance(node_id, int) or isinstance(node_id, bool) or node_id < 0:
+        raise CameraAdapterError(f"camera profile {slot_name} node id is invalid")
+    node = graph.get(str(node_id))
+    if not isinstance(node, dict) or node.get("class_type") != selector.get("type"):
+        raise CameraAdapterError(f"camera {slot_name} node does not match the profile")
+    if not isinstance(node.get("inputs"), dict):
+        raise CameraAdapterError(f"camera {slot_name} node inputs are invalid")
+    return node_id, node
+
+
+def _require_exact_allowlist(profile: dict, field: str, expected: frozenset[str]) -> None:
+    values = profile.get(field)
+    if not isinstance(values, list) or len(values) != len(expected) or set(values) != expected:
+        raise CameraAdapterError(f"camera profile {field} is incomplete")
+
+
+def _masked_camera_graph(graph: dict, angle_id: int, extra_id: int) -> dict:
+    masked = copy.deepcopy(graph)
+    for node_id, fields in ((angle_id, _CAMERA_ANGLE_FIELDS), (extra_id, _CAMERA_EXTRA_FIELDS)):
+        for field in fields:
+            masked[str(node_id)]["inputs"][field] = _REMOVED
+    return masked
+
+
+def _finite_number(value: object, label: str) -> float:
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
+        raise CameraAdapterError(f"camera {label} must be a finite number")
+    return float(value)
+
+
+def patch_camera_controls(
+    graph: dict, *, camera: dict, camera_extra: dict, profile: dict
+) -> dict:
+    """Patch only the complete profiled CameraAngle and CameraExtra contract."""
+    if not isinstance(graph, dict) or not isinstance(profile, dict):
+        raise CameraAdapterError("camera graph and profile must be objects")
+    if not isinstance(camera, dict) or set(camera) != {"direction", "elevation", "distance", "roll"}:
+        raise CameraAdapterError("camera controls require direction, elevation, distance and roll")
+    if not isinstance(camera_extra, dict) or set(camera_extra) != _CAMERA_EXTRA_FIELDS:
+        raise CameraAdapterError("camera_extra must provide the complete allowlisted field set")
+    _require_exact_allowlist(profile, "camera_angle_allowlist", _CAMERA_ANGLE_FIELDS)
+    _require_exact_allowlist(profile, "camera_extra_allowlist", _CAMERA_EXTRA_FIELDS)
+    angle_id, angle_node = _profiled_node(graph, profile, "camera_angle")
+    extra_id, extra_node = _profiled_node(graph, profile, "camera_extra")
+    if missing := sorted(_CAMERA_ANGLE_FIELDS.difference(angle_node["inputs"])):
+        raise CameraAdapterError("camera angle node is missing: " + ", ".join(missing))
+    if missing := sorted(_CAMERA_EXTRA_FIELDS.difference(extra_node["inputs"])):
+        raise CameraAdapterError("CameraExtra node is missing: " + ", ".join(missing))
+    direction, elevation, distance = camera["direction"], camera["elevation"], camera["distance"]
+    if direction not in _CAMERA_DIRECTION_POS_X:
+        raise CameraAdapterError(f"camera direction is unsupported: {direction!r}")
+    if elevation not in _CAMERA_ELEVATION_POS_Y:
+        raise CameraAdapterError(f"camera elevation is unsupported: {elevation!r}")
+    if distance not in _CAMERA_DISTANCE_POS_Z:
+        raise CameraAdapterError(f"camera distance is unsupported: {distance!r}")
+    for field in ("lens_enabled", "dof_enabled", "movement_enabled", "composition_enabled", "style_enabled"):
+        if not isinstance(camera_extra[field], bool):
+            raise CameraAdapterError(f"camera_extra {field} must be a boolean")
+    for field in ("extreme_type", "lens_value", "dof_value", "movement_value", "composition_value", "style_value"):
+        if not isinstance(camera_extra[field], str):
+            raise CameraAdapterError(f"camera_extra {field} must be a string")
+    for enabled, value in (("lens_enabled", "lens_value"), ("dof_enabled", "dof_value"), ("movement_enabled", "movement_value"), ("composition_enabled", "composition_value"), ("style_enabled", "style_value")):
+        if camera_extra[enabled] and not camera_extra[value].strip():
+            raise CameraAdapterError(f"camera_extra {value} is required when enabled")
+    for field in ("extreme_weight", "dof_weight"):
+        if _finite_number(camera_extra[field], field) < 0:
+            raise CameraAdapterError(f"camera_extra {field} must be non-negative")
+    patched = copy.deepcopy(graph)
+    patched[str(angle_id)]["inputs"].update({
+        "pos_x": _CAMERA_DIRECTION_POS_X[direction],
+        "pos_y": _CAMERA_ELEVATION_POS_Y[elevation],
+        "pos_z": _CAMERA_DISTANCE_POS_Z[distance],
+        "roll": _finite_number(camera["roll"], "roll"),
+    })
+    for field in _CAMERA_EXTRA_FIELDS:
+        patched[str(extra_id)]["inputs"][field] = copy.deepcopy(camera_extra[field])
+    if canonical_json(_masked_camera_graph(graph, angle_id, extra_id)) != canonical_json(_masked_camera_graph(patched, angle_id, extra_id)):
+        raise CameraAdapterError("camera controls changed data outside the allowlist")
+    return patched
+
+
+def _board_term_present(prompt: str, term: str) -> bool:
+    return re.search(rf"(?<!\w){re.escape(term)}(?!\w)", prompt, re.IGNORECASE) is not None
+
+
+def patch_asset_board_prompt(graph: dict, positive: str, negative: str, profile: dict) -> dict:
+    """Patch prompt slots while enforcing one board role and no optional branches."""
+    if not isinstance(profile, dict) or profile.get("schema_version") != "1.0":
+        raise CameraAdapterError("asset board requires a versioned profile")
+    role = profile.get("board_role")
+    if role not in _BOARD_ROLES or profile.get("profile_id") != f"camera-anima-asset-board-{role}-v1":
+        raise CameraAdapterError("asset board profile role is invalid")
+    fingerprint = profile.get("workflow_fingerprint")
+    if not isinstance(fingerprint, str) or not re.fullmatch(r"[0-9a-f]{64}", fingerprint):
+        raise CameraAdapterError(f"{role} board workflow fingerprint is invalid")
+    if profile.get("enabled_groups") != [] or profile.get("enabled_optional_branches") != []:
+        raise CameraAdapterError(f"{role} board must keep groups and optional branches disabled")
+    if profile.get("allowed_mutations") != _BOARD_MUTATIONS or profile.get("expected_outputs") != ["image/png"]:
+        raise CameraAdapterError(f"{role} board profile contract is invalid")
+    if not isinstance(positive, str) or not positive.strip() or not isinstance(negative, str):
+        raise CameraAdapterError(f"{role} board prompts are invalid")
+    forbidden, constraints = profile.get("forbidden_positive_terms"), profile.get("negative_constraints")
+    if not isinstance(forbidden, list) or not forbidden or not isinstance(constraints, list) or not constraints:
+        raise CameraAdapterError(f"{role} board role constraints are incomplete")
+    if not all(isinstance(item, str) and item.strip() for item in (*forbidden, *constraints)):
+        raise CameraAdapterError(f"{role} board role constraints are incomplete")
+    if contamination := next((term for term in forbidden if _board_term_present(positive, term)), None):
+        raise CameraAdapterError(f"{role} board prompt violates role isolation: {contamination}")
+    parts = [part.strip() for part in negative.split(",") if part.strip()]
+    present = {part.casefold() for part in parts}
+    parts.extend(term for term in constraints if term.casefold() not in present)
+    slots = profile.get("slots")
+    selectors = {
+        "positive_prompt": {"id": 24, "type": _NODE_CLASS, "title": "POSITIVE"},
+        "negative_prompt": {"id": 25, "type": _NODE_CLASS, "title": "NEGATIVE"},
+    }
+    if not isinstance(slots, dict) or any(slots.get(name) != value for name, value in selectors.items()):
+        raise CameraAdapterError(f"{role} board prompt slots are invalid")
+    try:
+        return patch_character_base(graph, {"prompt": positive.strip(), "negative_prompt": ", ".join(parts)}, {name: value["id"] for name, value in selectors.items()})
+    except ExecutionError as exc:
+        raise CameraAdapterError(f"{role} board camera graph is invalid: {exc}") from exc
 
 
 def patch_character_base(graph: dict, prompt_build: dict, slots: dict[str, int]) -> dict:

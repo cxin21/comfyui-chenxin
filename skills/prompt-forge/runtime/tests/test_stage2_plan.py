@@ -28,6 +28,8 @@ from runtime.execution import (
 import runtime.execution as execution_module
 import runtime.multiview_evidence as multiview_evidence
 import runtime.runtime_cli as runtime_cli
+import runtime.stages as stages_module
+from runtime.story_assets import art_bible_hash
 
 
 PROFILE_PATH = Path(__file__).parents[1] / "profiles" / "flux2-klein-multiview.json"
@@ -38,6 +40,100 @@ CAMERA_UI_PATH = Path(__file__).parent / "fixtures" / "camera-ui-minimal.json"
 CAMERA_FINGERPRINT = "96aac5b2fc5e565eadf4b9aba8d7c59016d327589fc40153be737b6187f27011"
 FINGERPRINT = "fff6236efa6727ac6584d61f640a63f9602b2d07a545d216b96a870a681e6faf"
 POSE_IDS = [368, 151, 152, 154, 360, 364, 148, 149, 147, 373, 150, 367]
+
+
+def _board_fingerprint():
+    return [
+        {"feature": "silhouette", "value": "arched workshop silhouette"},
+        {"feature": "proportions", "value": "long narrow proportions"},
+        {"feature": "palette", "value": "indigo and cedar palette"},
+        {"feature": "materials", "value": "stone and cedar materials"},
+        {"feature": "surface", "value": "weathered matte surface"},
+        {"feature": "lighting", "value": "cool window lighting"},
+    ]
+
+
+def _board_provenance(*facts):
+    return {"explicit_evidence": list(facts), "reasonable_inference": [], "prohibited_expansion": []}
+
+
+def _board_art_bible():
+    bible = {
+        "style": "restrained ink wash", "medium": "digital watercolor",
+        "visual_grammar": "negative space foregrounds the key",
+        "palette": ["indigo", "cedar red"], "materials": ["linen", "cedar", "bronze"],
+        "lighting": "cool window light with warm sidelight", "motifs": ["sealed thresholds"],
+        "world_taboos": ["no modern electronics"],
+        "continuity_strategy": "reuse fixed anchors and palette",
+        "style_prompt": "restrained ink wash, digital watercolor",
+    }
+    bible["provenance"] = _board_provenance(
+        "restrained ink wash", "digital watercolor", "negative space foregrounds the key",
+        "indigo", "cedar red", "linen", "cedar", "bronze",
+        "cool window light with warm sidelight", "sealed thresholds",
+        "no modern electronics", "reuse fixed anchors and palette",
+        "restrained ink wash, digital watercolor",
+    )
+    return bible
+
+
+def _board_environment_card():
+    fingerprint = _board_fingerprint()
+    anchors = [
+        {"feature": "entrance", "value": "weathered stone arch at the entrance"},
+        {"feature": "emblem", "value": "red lacquer seal above the doorway"},
+        {"feature": "counter", "value": "narrow cedar counter along the east wall"},
+    ]
+    return {
+        "schema_version": "1.0", "asset_type": "environment",
+        "asset_id": "environment-workshop", "source_story_hash": "b" * 64,
+        "visual_fingerprint": fingerprint, "environment_anchors": anchors,
+        "provenance": _board_provenance(*(item["value"] for item in (*anchors, *fingerprint))),
+    }
+
+
+def _board_character_card():
+    fingerprint = _board_fingerprint()
+    identity = ["young woman with a heart-shaped face", "short black bob with blunt fringe", "indigo linen coat with brass buttons"]
+    face_lock = [{"feature": "eyes", "value": "deep brown almond eyes"}]
+    return {
+        "schema_version": "1.0", "asset_type": "character", "asset_id": "character-lee",
+        "source_story_hash": "a" * 64, "visual_fingerprint": fingerprint,
+        "identity_lock": identity, "face_lock": face_lock,
+        "provenance": _board_provenance(*identity, face_lock[0]["value"], *(item["value"] for item in fingerprint)),
+    }
+
+
+def test_asset_board_plan_preserves_typed_contract_hashes_and_variant_parent():
+    bible = _board_art_bible()
+    asset = _board_environment_card()
+    asset["parent_artifact_hash"] = "c" * 64
+    plan = stages_module.build_asset_board_plan("environment", bible, asset, workflow_fingerprint="d" * 64, profile_hash="e" * 64)
+    assert plan["expected_artifact_type"] == "EnvironmentBoard"
+    assert plan["asset_id"] == "environment-workshop"
+    assert plan["source_story_hash"] == "b" * 64
+    assert plan["art_bible_hash"] == art_bible_hash(bible)
+    assert plan["visual_fingerprint_hash"] == content_hash(asset["visual_fingerprint"])
+    assert plan["workflow_fingerprint"] == "d" * 64
+    assert plan["profile_hash"] == "e" * 64
+    assert plan["parent_artifact_hash"] == "c" * 64
+
+
+def test_character_base_plan_requires_character_asset_and_clean_camera_controls():
+    plan = stages_module.build_character_base_plan(_board_character_card(), workflow_fingerprint="d" * 64, profile_hash="e" * 64)
+    assert plan["expected_artifact_type"] == "CharacterBaseImage"
+    assert plan["asset_id"] == "character-lee"
+    assert plan["camera"] == {"direction": "front", "elevation": "eye-level", "distance": "full_body", "roll": 0.0}
+    assert plan["camera_extra"] == {
+        "extreme_type": "none", "extreme_weight": 0.0, "lens_enabled": False,
+        "lens_value": "", "dof_enabled": False, "dof_value": "", "dof_weight": 0.0,
+        "movement_enabled": False, "movement_value": "", "composition_enabled": False,
+        "composition_value": "", "style_enabled": False, "style_value": "",
+    }
+    assert plan["enabled_groups"] == []
+    assert plan["enabled_optional_branches"] == []
+    with pytest.raises(stages_module.StageError, match="character"):
+        stages_module.build_character_base_plan(_board_environment_card(), workflow_fingerprint="d" * 64, profile_hash="e" * 64)
 
 
 def _v1_profile():
