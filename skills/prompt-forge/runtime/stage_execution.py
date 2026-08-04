@@ -29,10 +29,12 @@ from .artifacts import verify_video_artifact
 from .capabilities import report_is_fresh
 from .contracts import canonical_json, content_hash
 from .execution import (
+    ExecutionError,
     _canonical_consumption_root,
     _normalize_history_graph_numbers,
     _utc_now,
     _validate_approval_event,
+    validate_stage_handoff,
 )
 from .workflow_profile import structure_fingerprint
 from .multiview_evidence import MultiviewEvidenceError, validate_png_file
@@ -422,6 +424,10 @@ def build_stage_execution_draft(
         if reference_artifact is None:
             raise StageExecutionError("Stage 3 requires explicit reference acceptance evidence")
         accepted_reference = _validate_reference_acceptance(reference_artifact, plan.get("reference_hash"))
+        try:
+            validate_stage_handoff(plan, accepted_reference)
+        except ExecutionError as exc:
+            raise StageExecutionError(f"stage handoff validation failed: {exc}") from exc
         if accepted_reference.get("lineage_id") is not None:
             reference_lineage = _lineage_id(
                 accepted_reference["lineage_id"], "reference artifact lineage_id"
@@ -458,9 +464,13 @@ def build_stage_execution_draft(
             or workflow_fingerprint != profile_fingerprint
         ):
             raise StageExecutionError("Stage 4 workflow fingerprint does not match the LTX profile")
-        _validate_image_ref(
+        accepted_image = _validate_image_ref(
             image_ref, plan.get("source_shot_hash"), plan.get("lineage_id")
         )
+        try:
+            validate_stage_handoff(plan, accepted_image)
+        except ExecutionError as exc:
+            raise StageExecutionError(f"stage handoff validation failed: {exc}") from exc
         try:
             if plan.get("workflow_hash") is not None and plan["workflow_hash"] != source_hash:
                 raise StageExecutionError("LTX API graph does not match the stage plan workflow hash")

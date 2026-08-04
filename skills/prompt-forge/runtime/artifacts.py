@@ -25,6 +25,11 @@ _PROFILE_KEYS = frozenset(("artifact_type", "view_label"))
 _IMAGE_KEYS = frozenset(("filename", "subfolder", "type"))
 _SAFE_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _ALLOWED_IMAGE_TYPES = frozenset(("output", "temp"))
+_SHOT_DERIVATIVE_TYPES = {
+    "ShotRefined": "detailer",
+    "ShotStyleVariant": "style",
+    "ShotCutout": "cutout",
+}
 
 
 def _require_identifier(value: object, field_name: str) -> str:
@@ -108,6 +113,27 @@ def is_stage3_reference_eligible(artifact: object) -> bool:
         and artifact.get("reference_eligible") is True
         and artifact.get("semantic_conflict") is False
         and artifact.get("hash_verified") is True
+    )
+
+
+def is_ltx_input_eligible(artifact: object) -> bool:
+    """Return whether a clean or separately accepted shot may feed LTX."""
+    if not isinstance(artifact, dict) or artifact.get("accepted") is not True:
+        return False
+    content = artifact.get("content_hash")
+    if not isinstance(content, str) or not re.fullmatch(r"[0-9a-f]{64}", content):
+        return False
+    artifact_type = artifact.get("artifact_type")
+    if artifact_type == "ShotImage":
+        return artifact.get("parent_artifact_hash") is None
+    derivative_type = _SHOT_DERIVATIVE_TYPES.get(artifact_type)
+    parent = artifact.get("parent_artifact_hash")
+    return (
+        derivative_type is not None
+        and artifact.get("derivative_type") == derivative_type
+        and isinstance(parent, str)
+        and bool(re.fullmatch(r"[0-9a-f]{64}", parent))
+        and parent != content
     )
 
 

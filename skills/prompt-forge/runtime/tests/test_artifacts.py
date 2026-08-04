@@ -8,11 +8,13 @@ from runtime.artifacts import (
     ArtifactError,
     ArtifactNormalizationError,
     accept_stage3_reference,
+    is_ltx_input_eligible,
     is_stage3_reference_eligible,
     normalize_image_outputs,
     probe_video,
     verify_video_artifact,
 )
+from runtime.stages import build_video_plan
 
 
 def test_outputs_are_normalized_and_deduplicated():
@@ -181,6 +183,63 @@ def test_stage3_reference_eligibility_requires_acceptance_semantics_and_verified
     assert is_stage3_reference_eligible(artifact) is True
     artifact["hash_verified"] = False
     assert is_stage3_reference_eligible(artifact) is False
+
+
+def test_ltx_input_eligibility_requires_separate_derivative_acceptance_and_parent_hash():
+    derivative = {
+        "artifact_type": "ShotStyleVariant",
+        "derivative_type": "style",
+        "accepted": False,
+        "content_hash": "a" * 64,
+        "parent_artifact_hash": "b" * 64,
+    }
+    assert is_ltx_input_eligible(derivative) is False
+    derivative["accepted"] = True
+    assert is_ltx_input_eligible(derivative) is True
+    derivative.pop("parent_artifact_hash")
+    assert is_ltx_input_eligible(derivative) is False
+
+
+def test_clean_shot_master_is_not_misclassified_as_a_derivative():
+    shot = {
+        "artifact_type": "ShotImage",
+        "accepted": True,
+        "content_hash": "a" * 64,
+    }
+    assert is_ltx_input_eligible(shot) is True
+    shot["parent_artifact_hash"] = "b" * 64
+    assert is_ltx_input_eligible(shot) is False
+
+
+def test_video_plan_preserves_separately_accepted_derivative_lineage():
+    shot = {
+        "artifact_type": "ShotRefined",
+        "derivative_type": "detailer",
+        "accepted": True,
+        "content_hash": "a" * 64,
+        "parent_artifact_hash": "b" * 64,
+        "task_context_hash": "c" * 64,
+        "source_story_hash": "d" * 64,
+        "art_bible_hash": "e" * 64,
+        "lineage_id": "lineage-1",
+    }
+    build = {
+        "ready_to_execute": True,
+        "target": "video",
+        "dialect": "video-timeline",
+        "prompt": "The subject moves as the camera dollies in.",
+        "negative_prompt": "",
+    }
+
+    plan = build_video_plan(shot, build, "f" * 64, "1" * 64, True)
+
+    assert plan["source_shot_artifact_type"] == "ShotRefined"
+    assert plan["parent_shot_hash"] == "b" * 64
+    assert plan["task_context_hash"] == "c" * 64
+    assert plan["source_story_hash"] == "d" * 64
+    assert plan["art_bible_hash"] == "e" * 64
+
+
 def test_video_requires_expected_fps_and_frames():
     result = verify_video_artifact(
         {"filename": "clip.mp4", "size_bytes": 1000, "fps": 24, "frame_count": 24},

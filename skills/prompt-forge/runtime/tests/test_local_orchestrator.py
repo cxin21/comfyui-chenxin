@@ -3,6 +3,7 @@ import copy
 import pytest
 
 from runtime.contracts import content_hash
+from runtime.execution import ExecutionError, validate_stage_handoff
 from runtime.stage_execution import StageExecutionError
 from runtime.local_orchestrator import (
     submit_character_base_via_local_rest,
@@ -114,6 +115,84 @@ def test_submit_stage_via_local_rest_fails_before_post_when_queue_is_busy(monkey
         submit_stage_via_local_rest(**_payload(tmp_path), base_url="http://127.0.0.1:8188")
 
     assert _FakeSubmitter.calls == []
+
+
+def test_handoff_rejects_cross_story_lineage_and_acceptance_before_any_enqueue(monkeypatch, tmp_path):
+    plan = {
+        "stage": "shot-image",
+        "reference_hash": "a" * 64,
+        "task_context_hash": "b" * 64,
+        "source_story_hash": "c" * 64,
+        "art_bible_hash": "d" * 64,
+        "lineage_id": "lineage-1",
+    }
+    reference = {
+        "artifact_type": "CharacterAngleView",
+        "accepted": True,
+        "reference_eligible": True,
+        "semantic_conflict": False,
+        "hash_verified": True,
+        "content_hash": "a" * 64,
+        "task_context_hash": "b" * 64,
+        "source_story_hash": "9" * 64,
+        "art_bible_hash": "d" * 64,
+        "lineage_id": "lineage-1",
+    }
+    api_calls = []
+    monkeypatch.setattr(
+        "runtime.local_orchestrator.ComfyApi",
+        lambda *args, **kwargs: api_calls.append((args, kwargs)),
+    )
+    _FakeSubmitter.calls = []
+
+    with pytest.raises((ExecutionError, StageExecutionError), match="source_story_hash"):
+        submit_stage_via_local_rest(
+            plan,
+            {},
+            {},
+            tmp_path / "consumed.json",
+            profile={},
+            capability_report={},
+            reference_artifact=reference,
+        )
+
+    assert api_calls == []
+    assert _FakeSubmitter.calls == []
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("accepted", False, "accepted"),
+        ("lineage_id", "lineage-2", "lineage_id"),
+        ("artifact_type", "CharacterBaseImage", "artifact_type"),
+    ],
+)
+def test_validate_stage_handoff_rejects_single_field_drift(field, value, message):
+    plan = {
+        "stage": "shot-image",
+        "reference_hash": "a" * 64,
+        "task_context_hash": "b" * 64,
+        "source_story_hash": "c" * 64,
+        "art_bible_hash": "d" * 64,
+        "lineage_id": "lineage-1",
+    }
+    reference = {
+        "artifact_type": "CharacterAngleView",
+        "accepted": True,
+        "reference_eligible": True,
+        "semantic_conflict": False,
+        "hash_verified": True,
+        "content_hash": "a" * 64,
+        "task_context_hash": "b" * 64,
+        "source_story_hash": "c" * 64,
+        "art_bible_hash": "d" * 64,
+        "lineage_id": "lineage-1",
+    }
+    reference[field] = value
+
+    with pytest.raises(ExecutionError, match=message):
+        validate_stage_handoff(plan, reference)
 
 
 def test_submit_character_base_via_local_rest_uses_live_queue_and_transport(monkeypatch, tmp_path):

@@ -226,6 +226,40 @@ def test_shot_execution_draft_rebinds_graph_and_g1_without_mutating_sources():
     assert draft["draft_hash"] == content_hash(unsigned)
 
 
+def test_shot_execution_rejects_cross_story_handoff_before_draft_creation():
+    report = _capability_report()
+    plan = _shot_plan(report)
+    plan.update(
+        {
+            "task_context_hash": "b" * 64,
+            "source_story_hash": "c" * 64,
+            "art_bible_hash": "d" * 64,
+        }
+    )
+    plan["plan_hash"] = content_hash(
+        {key: value for key, value in plan.items() if key != "plan_hash"}
+    )
+    reference = _accepted_reference()
+    reference.update(
+        {
+            "task_context_hash": "b" * 64,
+            "source_story_hash": "9" * 64,
+            "art_bible_hash": "d" * 64,
+        }
+    )
+
+    with pytest.raises(stage_execution.StageExecutionError, match="source_story_hash"):
+        stage_execution.build_stage_execution_draft(
+            plan,
+            _shot_graph(),
+            _camera_profile(),
+            report,
+            ui_workflow=_shot_ui(),
+            image_name="runs/lineage/ref.png",
+            reference_artifact=reference,
+        )
+
+
 def test_shot_execution_draft_rejects_profile_fingerprint_drift():
     report = _capability_report()
     plan = _shot_plan(report)

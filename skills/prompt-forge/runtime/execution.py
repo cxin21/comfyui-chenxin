@@ -35,6 +35,55 @@ class ExecutionError(ValueError):
     """Raised when execution evidence does not satisfy the runtime boundary."""
 
 
+def validate_stage_handoff(stage_plan: object, artifact: object) -> dict:
+    """Validate the exact accepted upstream artifact before any enqueue work."""
+    if not isinstance(stage_plan, dict):
+        raise ExecutionError("stage handoff requires a stage plan")
+    if not isinstance(artifact, dict):
+        raise ExecutionError("stage handoff requires an artifact")
+    stage = stage_plan.get("stage")
+    if stage not in {"shot-image", "video"}:
+        raise ExecutionError("stage handoff target is unsupported")
+    if artifact.get("accepted") is not True:
+        raise ExecutionError("stage handoff artifact must be accepted")
+
+    if stage == "shot-image":
+        if artifact.get("artifact_type") != "CharacterAngleView":
+            raise ExecutionError("stage handoff artifact_type must be CharacterAngleView")
+        if (
+            artifact.get("reference_eligible") is not True
+            or artifact.get("semantic_conflict") is not False
+            or artifact.get("hash_verified") is not True
+        ):
+            raise ExecutionError("stage handoff CharacterAngleView is not reference eligible")
+        expected_hash = stage_plan.get("reference_hash")
+    else:
+        from .artifacts import is_ltx_input_eligible
+
+        if not is_ltx_input_eligible(artifact):
+            raise ExecutionError("stage handoff requires an accepted ShotImage")
+        expected_hash = stage_plan.get("source_shot_hash")
+        expected_type = stage_plan.get("source_shot_artifact_type")
+        if expected_type is not None and artifact.get("artifact_type") != expected_type:
+            raise ExecutionError("stage handoff artifact_type does not match the video plan")
+        expected_parent = stage_plan.get("parent_shot_hash")
+        if expected_parent is not None and artifact.get("parent_artifact_hash") != expected_parent:
+            raise ExecutionError("stage handoff parent_artifact_hash does not match the video plan")
+
+    if artifact.get("content_hash") != expected_hash:
+        raise ExecutionError("stage handoff content_hash does not match the stage plan")
+    for field in (
+        "task_context_hash",
+        "source_story_hash",
+        "art_bible_hash",
+        "lineage_id",
+    ):
+        expected = stage_plan.get(field)
+        if expected is not None and artifact.get(field) != expected:
+            raise ExecutionError(f"stage handoff {field} does not match the stage plan")
+    return copy.deepcopy(artifact)
+
+
 _CHARACTER_BASE_PROFILE_ID = "camera-anima-v1"
 _CHARACTER_BASE_OUTPUTS = ["image/png"]
 _CHARACTER_BASE_SLOTS = {"positive_prompt": 24, "negative_prompt": 25}

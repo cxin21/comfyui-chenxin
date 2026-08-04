@@ -11,10 +11,23 @@ from .asset_plans import (
     build_environment_board_plan,
     build_prop_board_plan,
 )
-from .contracts import ContractError, content_hash
+from .artifacts import is_ltx_input_eligible
+from .contracts import ContractError, content_hash, validate_json_compatible
 from .prompt_quality import validate_anima_prompt_build, validate_ltx_prompt_build
-from .reference_select import VIEW_ALIASES, VIEW_DEGREES
-from .story_assets import art_bible_hash, asset_card_hash, validate_asset_card
+from .reference_select import (
+    VIEW_ALIASES,
+    VIEW_DEGREES,
+    ReferenceSelectionError,
+    select_reference_for_shot,
+)
+from .story_assets import (
+    art_bible_hash,
+    asset_card_hash,
+    story_breakdown_hash,
+    validate_art_bible,
+    validate_asset_card,
+    validate_story_breakdown,
+)
 
 
 class StageError(ValueError):
@@ -88,6 +101,190 @@ def ltx_output_frame_count(duration_frames: int) -> int:
     if not isinstance(duration_frames, int) or isinstance(duration_frames, bool) or duration_frames <= 0:
         raise StageError("LTX duration_frames must be a positive integer")
     return max(9, ((duration_frames - 1 + 7) // 8) * 8 + 1)
+
+
+def _record_id(record: object, *fields: str) -> str | None:
+    if not isinstance(record, dict):
+        return None
+    for field in fields:
+        value = record.get(field)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _find_record(records: object, expected_id: str, *fields: str) -> dict | None:
+    if not isinstance(records, list):
+        return None
+    matches = [
+        record
+        for record in records
+        if _record_id(record, *fields) == expected_id
+    ]
+    if len(matches) > 1:
+        raise StageError(f"story contains duplicate asset id {expected_id!r}")
+    return copy.deepcopy(matches[0]) if matches else None
+
+
+def _evidence_tiers(*contracts: dict) -> dict[str, list]:
+    result = {
+        "explicit_evidence": [],
+        "reasonable_inference": [],
+        "prohibited_expansion": [],
+    }
+    for contract in contracts:
+        source = contract.get("provenance", contract)
+        if not isinstance(source, dict):
+            continue
+        for key in result:
+            values = source.get(key, [])
+            if not isinstance(values, list):
+                raise StageError(f"{key} must be a list")
+            for value in values:
+                if value not in result[key]:
+                    result[key].append(copy.deepcopy(value))
+    return result
+
+
+def _timeline_node(story: dict, scene: dict, timeline_node_id: str) -> dict | None:
+    sources = (
+        scene.get("timeline_nodes"),
+        story.get("timeline_nodes"),
+        story.get("timeline"),
+    )
+    matches: list[dict] = []
+    for source in sources:
+        if not isinstance(source, list):
+            continue
+        for node in source:
+            if _record_id(node, "timeline_node_id", "node_id", "id") == timeline_node_id:
+                matches.append(node)
+    if len(matches) > 1 and any(match != matches[0] for match in matches[1:]):
+        raise StageError(f"timeline node {timeline_node_id!r} is ambiguous")
+    return copy.deepcopy(matches[0]) if matches else None
+
+
+def _required_id_list(value: object, label: str) -> list[str]:
+    if not isinstance(value, list) or any(
+        not isinstance(item, str) or not item.strip() for item in value
+    ):
+        raise StageError(f"{label} must be a list of non-empty identifiers")
+    normalized = [item.strip() for item in value]
+    if len(set(normalized)) != len(normalized):
+        raise StageError(f"{label} must not contain duplicates")
+    return normalized
+
+
+def build_shot_intent(
+    story: dict,
+    art_bible: dict,
+    *,
+    scene_id: str,
+    timeline_node_id: str,
+    character_ids: list[str],
+    environment_id: str | None,
+    prop_ids: list[str],
+    desired_view: str,
+    camera: dict,
+) -> dict:
+    """Compile one evidence-bound shot intent without inventing missing facts."""
+    try:
+        story_copy = validate_story_breakdown(story)
+        bible_copy = validate_art_bible(art_bible)
+        validate_json_compatible(camera, "shot camera")
+    except ContractError as exc:
+        raise StageError(f"invalid shot intent source: {exc}") from exc
+    scene_key = _required_text(scene_id, "scene_id")
+    node_key = _required_text(timeline_node_id, "timeline_node_id")
+    cast = _required_id_list(character_ids, "character_ids")
+    props = _required_id_list(prop_ids, "prop_ids")
+    if environment_id is not None:
+        environment_id = _required_text(environment_id, "environment_id")
+    if not isinstance(camera, dict) or not camera:
+        raise StageError("camera must be a non-empty object")
+    view = _canonical_view(desired_view)
+
+    scene = _find_record(story_copy.get("scenes"), scene_key, "scene_id", "asset_id", "id")
+    if scene is None:
+        raise StageError(f"scene_id {scene_key!r} is not present in StoryBreakdown")
+    node = _timeline_node(story_copy, scene, node_key)
+    uncertainty = copy.deepcopy(story_copy.get("uncertainty", []))
+    if not isinstance(uncertainty, list):
+        raise StageError("story uncertainty must be a list")
+    if node is None:
+        uncertainty.append(f"timeline node {node_key!r} is not present in StoryBreakdown")
+
+    known_characters = {
+        value
+        for record in story_copy.get("characters", [])
+        if (value := _record_id(record, "character_id", "asset_id", "id")) is not None
+    }
+    for character_id in cast:
+        if character_id not in known_characters:
+            uncertainty.append(f"character asset {character_id!r} is not present in StoryBreakdown")
+    if environment_id is not None:
+        scene_environment = _record_id(scene, "environment_id", "asset_id")
+        if scene_environment not in {None, environment_id}:
+            raise StageError("environment_id conflicts with the selected story scene")
+        if scene_environment is None:
+            uncertainty.append(
+                f"environment asset {environment_id!r} is not explicit in the selected scene"
+            )
+    known_props = {
+        value
+        for record in story_copy.get("props", [])
+        if (value := _record_id(record, "prop_id", "asset_id", "id")) is not None
+    }
+    for prop_id in props:
+        if prop_id not in known_props:
+            uncertainty.append(f"prop asset {prop_id!r} is not present in StoryBreakdown")
+
+    node = node or {}
+    declared_deltas = copy.deepcopy(node.get("shot_deltas", {}))
+    if not isinstance(declared_deltas, dict):
+        raise StageError("timeline node shot_deltas must be an object")
+    evidence = _evidence_tiers(story_copy, bible_copy)
+    story_digest = story_breakdown_hash(story_copy)
+    bible_digest = art_bible_hash(bible_copy)
+    intent = {
+        "schema_version": "1.0",
+        "artifact_type": "ShotIntent",
+        "source_story_hash": story_digest,
+        "art_bible_hash": bible_digest,
+        "scene_id": scene_key,
+        "timeline_node_id": node_key,
+        "character_ids": cast,
+        "environment_id": environment_id,
+        "prop_ids": props,
+        "desired_view": view,
+        "camera": copy.deepcopy(camera),
+        "action": copy.deepcopy(node.get("action")),
+        "dialogue": copy.deepcopy(node.get("dialogue")),
+        "emotion": copy.deepcopy(node.get("emotion")),
+        "continuity_locks": {
+            "style": {
+                key: copy.deepcopy(bible_copy[key])
+                for key in (
+                    "style", "medium", "visual_grammar", "palette", "materials",
+                    "lighting", "motifs", "world_taboos", "continuity_strategy",
+                )
+            },
+            "scene": copy.deepcopy(scene),
+            "character_ids": list(cast),
+            "environment_id": environment_id,
+            "prop_ids": list(props),
+        },
+        "shot_deltas": declared_deltas,
+        "uncertainty": uncertainty,
+        **evidence,
+    }
+    task_context_hash = story_copy.get("task_context_hash")
+    if task_context_hash is not None:
+        intent["task_context_hash"] = _required_text(
+            task_context_hash, "task_context_hash"
+        )
+    intent["shot_intent_hash"] = content_hash(intent)
+    return intent
 
 
 def _required_text(value: object, label: str) -> str:
@@ -341,6 +538,168 @@ def _g1_proof(proof: object) -> dict:
     return copy.deepcopy(proof)
 
 
+def _bound_board(
+    board: object,
+    *,
+    artifact_type: str,
+    asset_id: str,
+    intent: dict,
+) -> dict:
+    label = artifact_type.removesuffix("Board").casefold()
+    if not isinstance(board, dict) or board.get("accepted") is not True:
+        raise StageError(f"an accepted {label} board is required")
+    if board.get("artifact_type") != artifact_type:
+        raise StageError(f"{label} board artifact_type is invalid")
+    if board.get("asset_id") != asset_id:
+        raise StageError(f"{label} board asset_id does not match ShotIntent")
+    digest = board.get("content_hash")
+    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise StageError(f"{label} board content_hash must be a lowercase SHA-256 digest")
+    for field in ("source_story_hash", "art_bible_hash"):
+        if board.get(field) != intent.get(field):
+            raise StageError(f"{label} board {field} does not match ShotIntent")
+    expected_context = intent.get("task_context_hash")
+    if expected_context is not None and board.get("task_context_hash") != expected_context:
+        raise StageError(f"{label} board task_context_hash does not match ShotIntent")
+    return copy.deepcopy(board)
+
+
+def _scene_aware_shot_bindings(
+    intent: object,
+    reference: dict,
+    desired_view: str,
+    character_board: object,
+    environment: object,
+    props: object,
+) -> dict:
+    if not isinstance(intent, dict) or intent.get("artifact_type") != "ShotIntent":
+        raise StageError("a typed ShotIntent is required")
+    claimed_intent_hash = intent.get("shot_intent_hash")
+    unsigned_intent = dict(intent)
+    unsigned_intent.pop("shot_intent_hash", None)
+    if (
+        not isinstance(claimed_intent_hash, str)
+        or not re.fullmatch(r"[0-9a-f]{64}", claimed_intent_hash)
+        or claimed_intent_hash != content_hash(unsigned_intent)
+    ):
+        raise StageError("ShotIntent hash is not self-consistent")
+    for field in ("source_story_hash", "art_bible_hash"):
+        value = intent.get(field)
+        if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+            raise StageError(f"ShotIntent {field} must be a lowercase SHA-256 digest")
+
+    character_ids = _required_id_list(intent.get("character_ids"), "ShotIntent character_ids")
+    if len(character_ids) != 1:
+        raise StageError("Stage 3 currently requires exactly one character board")
+    character = _bound_board(
+        character_board,
+        artifact_type="CharacterBoard",
+        asset_id=character_ids[0],
+        intent=intent,
+    )
+    character_hash = character["content_hash"]
+
+    if (
+        reference.get("reference_eligible") is not True
+        or reference.get("semantic_conflict") is not False
+        or reference.get("hash_verified") is not True
+    ):
+        raise StageError("Stage 3 reference is not eligible")
+    for field in ("source_story_hash", "art_bible_hash"):
+        if reference.get(field) != intent.get(field):
+            raise StageError(f"Stage 3 reference {field} does not match ShotIntent")
+    if reference.get("character_board_hash") != character_hash:
+        raise StageError("Stage 3 reference character_board_hash does not match")
+    expected_context = intent.get("task_context_hash")
+    if expected_context is not None and reference.get("task_context_hash") != expected_context:
+        raise StageError("Stage 3 reference task_context_hash does not match ShotIntent")
+
+    try:
+        selection = select_reference_for_shot(
+            desired_view,
+            {"views": [reference.get("view_label")]},
+            [reference],
+        )
+    except ReferenceSelectionError as exc:
+        raise StageError(f"Stage 3 reference orientation is invalid: {exc}") from exc
+
+    environment_id = intent.get("environment_id")
+    environment_board = None
+    if environment_id is not None:
+        environment_board = _bound_board(
+            environment,
+            artifact_type="EnvironmentBoard",
+            asset_id=_required_text(environment_id, "ShotIntent environment_id"),
+            intent=intent,
+        )
+    elif environment is not None:
+        raise StageError("ShotIntent does not permit an environment board")
+
+    prop_ids = _required_id_list(intent.get("prop_ids"), "ShotIntent prop_ids")
+    if not isinstance(props, list):
+        raise StageError("prop boards must be a list")
+    prop_boards: dict[str, dict] = {}
+    for board in props:
+        if not isinstance(board, dict):
+            raise StageError("prop board must be an object")
+        prop_id = board.get("asset_id")
+        if prop_id in prop_boards:
+            raise StageError("prop boards contain a duplicate asset_id")
+        if prop_id not in prop_ids:
+            raise StageError("prop board is not referenced by ShotIntent")
+        prop_boards[prop_id] = _bound_board(
+            board,
+            artifact_type="PropBoard",
+            asset_id=prop_id,
+            intent=intent,
+        )
+    missing_props = [prop_id for prop_id in prop_ids if prop_id not in prop_boards]
+    if missing_props:
+        raise StageError(f"an accepted prop board is required for {missing_props[0]}")
+
+    lineage_id = reference.get("lineage_id")
+    if lineage_id is not None:
+        for board in [character, environment_board, *prop_boards.values()]:
+            if board is not None and board.get("lineage_id") != lineage_id:
+                raise StageError("asset board lineage_id does not match the selected reference")
+
+    selection_record = {
+        "selection_reason": selection["selection_reason"],
+        "distance_degrees": selection["distance_degrees"],
+        "desired_view": selection["desired_view"],
+        "selected_view": selection["selected_view"],
+        "content_hash": reference["content_hash"],
+    }
+    for field in ("parent_artifact_hash", "source_artifact_hash"):
+        if reference.get(field) is not None:
+            selection_record[field] = reference[field]
+    selection_record["character_board_hash"] = character_hash
+
+    return {
+        "shot_intent_hash": claimed_intent_hash,
+        "source_story_hash": intent["source_story_hash"],
+        "art_bible_hash": intent["art_bible_hash"],
+        "character_board_hash": character_hash,
+        "environment_board_hash": (
+            environment_board["content_hash"] if environment_board is not None else None
+        ),
+        "prop_board_hashes": {
+            prop_id: prop_boards[prop_id]["content_hash"] for prop_id in prop_ids
+        },
+        "reference_selection": selection_record,
+        "continuity_locks": copy.deepcopy(intent.get("continuity_locks")),
+        "shot_deltas": copy.deepcopy(intent.get("shot_deltas")),
+        "explicit_evidence": copy.deepcopy(intent.get("explicit_evidence", [])),
+        "reasonable_inference": copy.deepcopy(intent.get("reasonable_inference", [])),
+        "prohibited_expansion": copy.deepcopy(intent.get("prohibited_expansion", [])),
+        **(
+            {"task_context_hash": expected_context}
+            if expected_context is not None
+            else {}
+        ),
+    }
+
+
 def build_shot_plan(
     base_prompt_build_hash: str,
     shot_prompt_build_hash: str,
@@ -355,6 +714,10 @@ def build_shot_plan(
     profile_hash: str | None = None,
     capability_report_hash: str | None = None,
     camera: dict | None = None,
+    shot_intent: dict | None = None,
+    character_board: dict | None = None,
+    environment: dict | None = None,
+    props: list[dict] | None = None,
 ) -> dict:
     """Build a draft for a shot-specific camera img2img run.
 
@@ -427,6 +790,17 @@ def build_shot_plan(
         ):
             raise StageError("Stage 3 reference lineage_id is invalid")
         plan["lineage_id"] = lineage_id
+    if shot_intent is not None:
+        plan.update(
+            _scene_aware_shot_bindings(
+                shot_intent,
+                selected,
+                view,
+                character_board,
+                environment,
+                [] if props is None else props,
+            )
+        )
     if shot_prompt_build is not None:
         plan["prompt_build"] = copy.deepcopy(shot_prompt_build)
     plan["plan_hash"] = content_hash(plan)
@@ -438,7 +812,15 @@ def build_video_plan(*args, **kwargs):
     if len(args) < 5:
         raise StageError("video plan requires shot, PromptBuild, workflow hash, profile hash and approval")
     shot, prompt_build, workflow_hash, profile_hash, execution_approved = args[:5]
-    if not isinstance(shot, dict) or shot.get("artifact_type") != "ShotImage" or shot.get("accepted") is not True:
+    legacy_clean_shot = (
+        isinstance(shot, dict)
+        and shot.get("artifact_type") == "ShotImage"
+        and shot.get("accepted") is True
+        and isinstance(shot.get("content_hash"), str)
+        and bool(shot["content_hash"].strip())
+        and shot.get("parent_artifact_hash") is None
+    )
+    if not legacy_clean_shot and not is_ltx_input_eligible(shot):
         raise StageError("video plan requires an accepted ShotImage")
     shot_hash = _required_text(shot.get("content_hash"), "ShotImage content_hash")
     if not isinstance(prompt_build, dict):
@@ -492,6 +874,7 @@ def build_video_plan(*args, **kwargs):
         "workflow_fingerprint": kwargs.get("workflow_fingerprint"),
         "capability_report_hash": kwargs.get("capability_report_hash"),
         "source_shot_hash": shot_hash,
+        "source_shot_artifact_type": shot["artifact_type"],
         "prompt_build_hash": content_hash(prompt_build),
         "prompt_build": copy.deepcopy(prompt_build),
         "prompt_intent_hash": content_hash(intent) if intent is not None else None,
@@ -520,5 +903,13 @@ def build_video_plan(*args, **kwargs):
         ):
             raise StageError("Stage 4 ShotImage lineage_id is invalid")
         plan["lineage_id"] = lineage_id
+    for field in ("task_context_hash", "source_story_hash", "art_bible_hash"):
+        if shot.get(field) is not None:
+            value = shot[field]
+            if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+                raise StageError(f"Stage 4 ShotImage {field} is invalid")
+            plan[field] = value
+    if shot.get("parent_artifact_hash") is not None:
+        plan["parent_shot_hash"] = shot["parent_artifact_hash"]
     plan["plan_hash"] = content_hash(plan)
     return plan

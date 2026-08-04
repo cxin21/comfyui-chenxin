@@ -21,7 +21,12 @@ from .stage_execution import (
     build_stage_submission,
     submit_stage,
 )
-from .execution import build_character_base_submission, submit_character_base
+from .execution import (
+    ExecutionError,
+    build_character_base_submission,
+    submit_character_base,
+    validate_stage_handoff,
+)
 
 
 _REST_ADAPTER = {
@@ -76,6 +81,20 @@ def submit_stage_via_local_rest(
     remains part of the plan hash; the fresh report cannot rewrite that plan.
     ``submit_stage`` then owns the exclusive intent/receipt sentinel.
     """
+    handoff_artifact = (
+        reference_artifact if approved_plan.get("stage") == "shot-image" else image_ref
+    ) if isinstance(approved_plan, dict) else None
+    expected_hash = (
+        approved_plan.get("reference_hash")
+        if isinstance(approved_plan, dict) and approved_plan.get("stage") == "shot-image"
+        else approved_plan.get("source_shot_hash") if isinstance(approved_plan, dict) else None
+    )
+    if handoff_artifact is not None or expected_hash is not None:
+        try:
+            validate_stage_handoff(approved_plan, handoff_artifact)
+        except ExecutionError as exc:
+            raise StageExecutionError(f"stage handoff validation failed: {exc}") from exc
+
     timeout_value = _validate_timeout(timeout)
     api = ComfyApi(base_url=base_url, timeout=timeout_value)
     frozen_url = capability_report.get("comfyui", {}).get("url") if isinstance(capability_report, dict) else None
