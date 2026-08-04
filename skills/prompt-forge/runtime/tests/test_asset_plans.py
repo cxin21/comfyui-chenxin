@@ -374,3 +374,72 @@ def test_board_builders_cannot_bypass_prohibited_art_bible_visual_facts(
 
     with pytest.raises(AssetPlanError, match="prohibited expansion cannot become an art bible fact"):
         builder(bible, asset_factory())
+
+
+def test_art_bible_rejects_conflicting_top_level_and_nested_provenance_sources():
+    bible = _art_bible()
+    bible["style"] = "forbidden style"
+    bible["explicit_evidence"].append("forbidden style")
+    bible["prohibited_expansion"] = ["forbidden style"]
+    bible["provenance"] = {
+        "explicit_evidence": list(bible["explicit_evidence"]),
+        "reasonable_inference": list(bible["reasonable_inference"]),
+        "prohibited_expansion": [],
+    }
+
+    with pytest.raises(AssetPlanError, match="multiple provenance sources"):
+        build_environment_board_plan(bible, _environment_card())
+
+
+@pytest.mark.parametrize(
+    "visual_system_change",
+    [
+        lambda visual_system: visual_system.__setitem__("palette", [[]]),
+        lambda visual_system: visual_system.__setitem__("materials", {"surface": []}),
+    ],
+)
+def test_build_art_bible_rejects_empty_nested_visual_collections(visual_system_change):
+    story = _story()
+    visual_system_change(story["visual_system"])
+
+    with pytest.raises(AssetPlanError, match="must contain a visual fact"):
+        build_art_bible(story)
+
+
+def test_structured_evidence_scopes_same_value_to_its_field():
+    story = _story()
+    story["visual_system"]["primary_style"] = "shared"
+    story["visual_system"]["style"] = "shared"
+    story["provenance"]["explicit_evidence"].append(
+        {"field": "style", "value": "shared"}
+    )
+    story["provenance"]["prohibited_expansion"] = [
+        {"field": "palette", "value": "shared"}
+    ]
+
+    assert build_art_bible(story)["style"] == "shared"
+
+
+def test_structured_evidence_scopes_different_values_to_the_same_field():
+    story = _story()
+    story["visual_system"]["primary_style"] = "style-a"
+    story["visual_system"]["style"] = "style-a"
+    story["provenance"]["explicit_evidence"].remove("restrained ink wash")
+    story["provenance"]["explicit_evidence"].append(
+        {"field": "style", "value": "style-a"}
+    )
+    story["provenance"]["prohibited_expansion"] = [
+        {"field": "style", "value": "style-b"}
+    ]
+
+    assert build_art_bible(story)["style"] == "style-a"
+
+
+def test_plain_evidence_conflicts_with_scoped_structured_prohibition():
+    story = _story()
+    story["provenance"]["prohibited_expansion"] = [
+        {"field": "style", "value": "restrained ink wash"}
+    ]
+
+    with pytest.raises(AssetPlanError, match="prohibited expansion cannot also be explicit evidence"):
+        build_art_bible(story)

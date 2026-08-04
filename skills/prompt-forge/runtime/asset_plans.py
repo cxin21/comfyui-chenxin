@@ -58,13 +58,14 @@ _FINGERPRINT_FEATURE_ALIASES = {
     "materials": {"material", "materials", "material_detail", "材质", "材料"},
     "lighting": {"light", "lighting", "illumination", "光照", "照明", "灯光"},
 }
+_ScopedRef = tuple[str | None, str]
 
 
-def _tier_references(entries: list[Any], label: str) -> set[str]:
-    references: set[str] = set()
+def _tier_references(entries: list[Any], label: str) -> set[_ScopedRef]:
+    references: set[_ScopedRef] = set()
     for entry in entries:
         if isinstance(entry, str) and entry.strip():
-            references.add(entry)
+            references.add((None, entry))
             continue
         if (
             not isinstance(entry, dict)
@@ -77,15 +78,38 @@ def _tier_references(entries: list[Any], label: str) -> set[str]:
             raise AssetPlanError(
                 f"{label} entries must be non-empty strings or {{'field', 'value'}} objects"
             )
-        references.update(
-            {entry["field"], entry["value"], f"{entry['field']}:{entry['value']}"}
-        )
+        references.add((entry["field"], entry["value"]))
     return references
+
+
+def _scoped_match(field: str, value: str, references: set[_ScopedRef]) -> bool:
+    return any(
+        reference_value == value
+        and (reference_field is None or reference_field == field)
+        for reference_field, reference_value in references
+    )
+
+
+def _scoped_overlap(left: set[_ScopedRef], right: set[_ScopedRef]) -> bool:
+    return any(
+        left_value == right_value
+        and (
+            left_field is None
+            or right_field is None
+            or left_field == right_field
+        )
+        for left_field, left_value in left
+        for right_field, right_value in right
+    )
 
 
 def _copy_tiers(value: dict[str, Any]) -> dict[str, list[Any]]:
     """Validate and copy complete evidence tiers without silent degradation."""
-    provenance = value["provenance"] if "provenance" in value else value
+    has_nested = "provenance" in value
+    has_top_level = any(key in value for key in _TIER_KEYS)
+    if has_nested and has_top_level:
+        raise AssetPlanError("multiple provenance sources are not allowed")
+    provenance = value["provenance"] if has_nested else value
     if not isinstance(provenance, dict):
         raise AssetPlanError("provenance must be an object")
     if not all(key in provenance for key in _TIER_KEYS):
@@ -98,9 +122,9 @@ def _copy_tiers(value: dict[str, Any]) -> dict[str, list[Any]]:
         for key in _TIER_KEYS
     }
     prohibited = references["prohibited_expansion"]
-    if references["explicit_evidence"] & prohibited:
+    if _scoped_overlap(references["explicit_evidence"], prohibited):
         raise AssetPlanError("prohibited expansion cannot also be explicit evidence")
-    if references["reasonable_inference"] & prohibited:
+    if _scoped_overlap(references["reasonable_inference"], prohibited):
         raise AssetPlanError("prohibited expansion cannot also be reasonable inference")
     return {key: copy.deepcopy(provenance[key]) for key in _TIER_KEYS}
 
@@ -134,11 +158,19 @@ def _visual_facts(value: Any, root_field: str, path: str | None = None) -> list[
     if isinstance(value, str) and value.strip():
         return [(root_field, current_path, value)]
     if isinstance(value, list):
+        if not value:
+            raise AssetPlanError(
+                f"art bible visual fact at '{current_path}' must contain a visual fact"
+            )
         facts: list[tuple[str, str, str]] = []
         for index, child in enumerate(value):
             facts.extend(_visual_facts(child, root_field, f"{current_path}[{index}]"))
         return facts
     if isinstance(value, dict):
+        if not value:
+            raise AssetPlanError(
+                f"art bible visual fact at '{current_path}' must contain a visual fact"
+            )
         facts = []
         for key, child in value.items():
             facts.extend(_visual_facts(child, root_field, f"{current_path}.{key}"))
@@ -150,15 +182,21 @@ def _visual_facts(value: Any, root_field: str, path: str | None = None) -> list[
 
 def _validate_art_bible_facts(art_bible: dict[str, Any]) -> None:
     tiers = _copy_tiers(art_bible)
-    references = {key: _tier_references(tiers[key], f"provenance.{key}") for key in _TIER_KEYS}
+    references = {
+        key: _tier_references(tiers[key], f"provenance.{key}") for key in _TIER_KEYS
+    }
     allowed = references["explicit_evidence"] | references["reasonable_inference"]
     prohibited = references["prohibited_expansion"]
     for field in _BIBLE_FIELDS:
         for root_field, path, fact in _visual_facts(art_bible[field], field):
-            exact_references = {fact, f"{root_field}:{fact}", f"{path}:{fact}"}
-            if exact_references & prohibited:
+            if _scoped_match(root_field, fact, prohibited) or _scoped_match(
+                path, fact, prohibited
+            ):
                 raise AssetPlanError("prohibited expansion cannot become an art bible fact")
-            if not exact_references & allowed:
+            if not (
+                _scoped_match(root_field, fact, allowed)
+                or _scoped_match(path, fact, allowed)
+            ):
                 raise AssetPlanError(
                     f"art bible visual fact at '{path}' must be referenced by evidence or inference"
                 )
