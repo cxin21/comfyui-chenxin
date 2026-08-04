@@ -213,6 +213,16 @@ def test_face_lock_requires_structured_visual_feature_and_accepts_chinese():
     ]
 
 
+def test_face_lock_rejects_structured_but_generic_aesthetic_value():
+    card = _character_card()
+    card["face_lock"] = [{"feature": "eyes", "value": "very pretty"}]
+    card["provenance"]["explicit_evidence"].remove("deep brown almond eyes")
+    card["provenance"]["explicit_evidence"].append("very pretty")
+
+    with pytest.raises(ContractError, match="specific visual"):
+        validate_asset_card(card)
+
+
 def test_environment_anchors_require_unique_structured_stable_facts():
     card = _environment_card()
     card["environment_anchors"] = [
@@ -225,12 +235,38 @@ def test_environment_anchors_require_unique_structured_stable_facts():
         validate_asset_card(card)
 
 
+def test_environment_anchors_reject_generic_feature_and_value():
+    for anchor in (
+        {"feature": "a", "value": "weathered stone arch"},
+        {"feature": "entrance", "value": "thing-1"},
+    ):
+        card = _environment_card()
+        card["environment_anchors"][0] = anchor
+        card["provenance"]["explicit_evidence"].remove(
+            "weathered stone arch at the entrance"
+        )
+        card["provenance"]["explicit_evidence"].append(anchor["value"])
+
+        with pytest.raises(ContractError, match="environment_anchors"):
+            validate_asset_card(card)
+
+
 def test_explicit_and_prohibited_evidence_cannot_overlap():
     card = _character_card()
     fact = card["visual_fingerprint"][1]["value"]
     card["provenance"]["prohibited_expansion"] = [fact]
 
     with pytest.raises(ContractError, match="prohibited"):
+        validate_asset_card(card)
+
+
+def test_prohibited_fingerprint_fact_hits_downstream_prohibition_branch():
+    card = _character_card()
+    fact = card["visual_fingerprint"][0]["value"]
+    card["provenance"]["explicit_evidence"].remove(fact)
+    card["provenance"]["prohibited_expansion"] = [fact]
+
+    with pytest.raises(ContractError, match="cannot become a downstream fact"):
         validate_asset_card(card)
 
 
