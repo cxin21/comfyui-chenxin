@@ -355,6 +355,37 @@ def test_stage_approval_is_bound_to_exact_displayed_draft_and_consumption_root(t
         stage_execution.approve_stage_execution_draft(draft, bad, tmp_path)
 
 
+def test_terminal_record_can_validate_expired_approval_after_enqueue(tmp_path, monkeypatch):
+    graph = _video_graph()
+    plan = _video_plan(graph)
+    report = _capability_report()
+    plan["capability_report_hash"] = content_hash(report)
+    plan["plan_hash"] = content_hash({key: value for key, value in plan.items() if key != "plan_hash"})
+    image_ref = {
+        "artifact_type": "ShotImage",
+        "accepted": True,
+        "content_hash": plan["source_shot_hash"],
+        "imageFile": "shots/shot.png",
+        "imageB64": "/api/view?filename=shot.png",
+    }
+    draft = stage_execution.build_stage_execution_draft(
+        plan, graph, _yusu_profile(), report, image_ref=image_ref
+    )
+    approved = stage_execution.approve_stage_execution_draft(
+        draft, _event(draft, tmp_path), tmp_path
+    )
+    monkeypatch.setattr(
+        stage_execution,
+        "_utc_now",
+        lambda: NOW + timedelta(minutes=10),
+    )
+    with pytest.raises(stage_execution.StageExecutionError, match="expired"):
+        stage_execution._validate_approved_stage(approved)
+    assert stage_execution._validate_approved_stage(
+        approved, allow_expired=True
+    )["plan_state"] == "approved"
+
+
 def test_stage_consumption_and_submission_require_canonical_evidence(tmp_path):
     report = _capability_report()
     draft = stage_execution.build_stage_execution_draft(

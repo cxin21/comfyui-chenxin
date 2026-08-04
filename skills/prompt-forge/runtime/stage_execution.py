@@ -572,7 +572,11 @@ def approve_stage_execution_draft(
     return plan
 
 
-def _validate_approved_stage(plan: object) -> dict:
+def _validate_approved_stage(
+    plan: object,
+    *,
+    allow_expired: bool = False,
+) -> dict:
     if not isinstance(plan, dict) or set(plan) != _DRAFT_KEYS.union(_APPROVAL_FIELDS):
         raise StageExecutionError("approved StageExecutionPlan schema is invalid")
     safe_draft = dict(plan)
@@ -588,7 +592,11 @@ def _validate_approved_stage(plan: object) -> dict:
         event = _validate_approval_event(
             plan.get("approval_event"),
             plan["draft_hash"],
-            trusted_now=_utc_now(),
+            # Enqueue paths retain the live expiry gate.  A terminal record is
+            # allowed to arrive later: the receipt already proves the enqueue
+            # happened inside the approval window, so expiry must not erase
+            # the evidence needed to record a successful long-running job.
+            trusted_now=None if allow_expired else _utc_now(),
             expected_consumption_root=None,
         )
     except Exception as exc:
@@ -1232,7 +1240,7 @@ def build_stage_run_record(
     a caller-authored artifact descriptor alone cannot prove that the server
     executed the exact submitted graph.
     """
-    plan = _validate_approved_stage(approved_plan)
+    plan = _validate_approved_stage(approved_plan, allow_expired=True)
     safe_submission = _validate_stage_submission(submission, plan)
     receipt = _validate_stage_receipt(safe_submission, enqueue_receipt)
     prompt_id = receipt.get("prompt_id")
