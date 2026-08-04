@@ -245,7 +245,15 @@ def test_face_lock_accepts_unlisted_feature_and_specific_value():
 
 
 @pytest.mark.parametrize(
-    "value", ["very pretty", "really pretty", "\u6f02\u4eae", "\u975e\u5e38\u597d"]
+    "value",
+    [
+        "very pretty",
+        "really pretty",
+        "nice",
+        "gorgeous",
+        "\u6f02\u4eae",
+        "\u975e\u5e38\u597d",
+    ],
 )
 def test_face_lock_rejects_generic_aesthetic_values(value):
     card = _character_card()
@@ -325,7 +333,9 @@ def test_environment_anchor_accepts_single_or_modified_specific_value(value):
     }
 
 
-@pytest.mark.parametrize("value", ["nice roof", "some place", "thing-1"])
+@pytest.mark.parametrize(
+    "value", ["nice roof", "really nice", "some place", "thing-1", "\u4e00\u822c"]
+)
 def test_environment_anchor_rejects_generic_value(value):
     card = _environment_card()
     card["environment_anchors"][0] = {"feature": "roof", "value": value}

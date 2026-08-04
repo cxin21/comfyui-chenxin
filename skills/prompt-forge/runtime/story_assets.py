@@ -9,6 +9,7 @@ ambiguous best-effort interpretation.
 """
 
 import copy
+import re
 
 from .contracts import (
     ContractError,
@@ -52,6 +53,14 @@ _GENERIC_ENVIRONMENT_FEATURES = {
 _GENERIC_ENVIRONMENT_VALUES = {
     "a", "thing", "thing-1", "object", "item", "place", "some place", "nice roof", "stuff", "something",
     "\u4e1c\u897f", "\u7269\u4ef6", "\u5730\u65b9", "\u67d0\u7269",
+}
+_GENERIC_ASCII_TOKENS = {
+    "thing", "object", "item", "place", "some", "nice", "pretty",
+    "gorgeous", "beautiful", "handsome", "attractive", "good", "stuff", "something",
+}
+_GENERIC_CJK_PHRASES = {
+    "\u597d\u770b", "\u6f02\u4eae", "\u5f88\u6f02\u4eae", "\u975e\u5e38\u597d", "\u7f8e\u4e3d",
+    "\u5e05", "\u5e05\u6c14", "\u4e00\u822c", "\u4e1c\u897f", "\u7269\u4ef6", "\u5730\u65b9", "\u67d0\u7269",
 }
 def _require_object(value: object, label: str) -> dict:
     if not isinstance(value, dict):
@@ -106,9 +115,20 @@ def _normalized(value: str) -> str:
     return value.strip().casefold()
 
 
+def _is_generic_phrase(value: str) -> bool:
+    normalized = _normalized(value)
+    if (
+        normalized in _GENERIC_AESTHETIC_VALUES
+        or normalized in _GENERIC_ENVIRONMENT_VALUES
+    ):
+        return True
+    if set(re.findall(r"[a-z0-9]+", normalized)) & _GENERIC_ASCII_TOKENS:
+        return True
+    return any(phrase in normalized for phrase in _GENERIC_CJK_PHRASES)
+
+
 def _require_specific_face_value(feature: str, value: str) -> None:
-    normalized_value = _normalized(value)
-    if normalized_value in _GENERIC_AESTHETIC_VALUES:
+    if _is_generic_phrase(value):
         raise ContractError("character face_lock must contain specific visual information")
 
 
@@ -126,7 +146,7 @@ def _require_stable_environment_anchor(feature: str, value: str) -> None:
     normalized_value = _normalized(value)
     if (
         not _is_non_generic_environment_feature(normalized_feature)
-        or normalized_value in _GENERIC_ENVIRONMENT_VALUES
+        or _is_generic_phrase(normalized_value)
     ):
         raise ContractError("environment_anchors must contain specific stable facts")
 
