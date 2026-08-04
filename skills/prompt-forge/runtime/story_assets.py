@@ -1,9 +1,11 @@
 """Fail-closed contracts for story evidence and visual assets.
 
 Asset-card schema ``1.0`` uses ``feature-value-v1`` structured facts for
-visual fingerprints, face locks, and environment anchors. Legacy string facts
-are intentionally rejected: producers must migrate them to ``{"feature": ...,
-"value": ...}`` rather than receiving ambiguous best-effort interpretation.
+visual fingerprints, face locks, and environment anchors. Their values use an
+open vocabulary guarded by a generic denylist; evidence, not a closed cue list,
+is authoritative. Legacy string facts are intentionally rejected: producers
+must migrate them to ``{"feature": ..., "value": ...}`` rather than receiving
+ambiguous best-effort interpretation.
 """
 
 import copy
@@ -26,28 +28,13 @@ ASSET_CARD_SCHEMA_VERSION = "1.0"
 STRUCTURED_FACT_SCHEMA_VERSION = "feature-value-v1"
 STRUCTURED_FACT_MIGRATION = "legacy-string-facts-rejected"
 
-_FACE_VALUE_CUES = {
-    "face_shape": ("heart", "oval", "round", "square", "long", "angular", "\u5fc3\u5f62", "\u692d\u5706", "\u5706\u5f62", "\u65b9\u5f62", "\u957f\u8138", "\u68f1\u89d2"),
-    "eyes": ("almond", "round", "narrow", "hooded", "monolid", "double eyelid", "brown", "blue", "green", "black", "hazel", "gray", "\u674f\u773c", "\u5706\u773c", "\u72ed\u957f", "\u5355\u773c\u76ae", "\u53cc\u773c\u76ae", "\u68d5", "\u84dd", "\u7eff", "\u9ed1", "\u7070"),
-    "eyebrows": ("arched", "straight", "thick", "thin", "dark", "\u62f1", "\u5e73\u76f4", "\u6d53", "\u7ec6", "\u6df1\u8272"),
-    "nose": ("straight", "button", "aquiline", "broad", "narrow", "\u76f4", "\u5c0f\u5de7", "\u9e70\u94a9", "\u5bbd", "\u7a84"),
-    "mouth": ("full", "thin", "bow", "wide", "narrow", "\u9971\u6ee1", "\u8584", "\u5507\u5f62", "\u5bbd", "\u7a84"),
-    "skin": ("fair", "warm", "olive", "freckle", "porcelain", "\u767d\u7699", "\u6696", "\u6a44\u6984", "\u96c0\u6591", "\u74f7"),
-    "hairline": ("widow", "straight", "high", "low", "\u7f8e\u4eba\u5c16", "\u5e73\u76f4", "\u9ad8", "\u4f4e"),
-    "facial_mark": ("mole", "scar", "dimple", "birthmark", "\u75e3", "\u75a4", "\u9152\u7a9d", "\u80ce\u8bb0"),
+STRUCTURED_FACT_VOCABULARY = "open-with-generic-denylist-v1"
+_FACE_FEATURES = {
+    "face_shape", "eyes", "eyebrows", "nose", "mouth", "skin", "hairline",
+    "facial_mark", "cheeks", "jaw", "ears", "\u8138\u578b", "\u773c\u775b",
+    "\u7709\u6bdb", "\u9f3b\u5b50", "\u5634\u5507", "\u80a4\u8272", "\u53d1\u9645\u7ebf",
+    "\u9762\u90e8\u7279\u5f81", "\u8138\u988a", "\u4e0b\u988c", "\u8033\u6735",
 }
-_FACE_VALUE_CUES.update(
-    {
-        "\u8138\u578b": _FACE_VALUE_CUES["face_shape"],
-        "\u773c\u775b": _FACE_VALUE_CUES["eyes"],
-        "\u7709\u6bdb": _FACE_VALUE_CUES["eyebrows"],
-        "\u9f3b\u5b50": _FACE_VALUE_CUES["nose"],
-        "\u5634\u5507": _FACE_VALUE_CUES["mouth"],
-        "\u80a4\u8272": _FACE_VALUE_CUES["skin"],
-        "\u53d1\u9645\u7ebf": _FACE_VALUE_CUES["hairline"],
-        "\u9762\u90e8\u7279\u5f81": _FACE_VALUE_CUES["facial_mark"],
-    }
-)
 _GENERIC_AESTHETIC_VALUES = {
     "beautiful",
     "pretty",
@@ -62,43 +49,16 @@ _GENERIC_AESTHETIC_VALUES = {
     "\u5e05",
     "\u5e05\u6c14",
 }
-_ENVIRONMENT_FEATURES = {
-    "entrance",
-    "doorway",
-    "arch",
-    "window",
-    "counter",
-    "wall",
-    "floor",
-    "ceiling",
-    "emblem",
-    "sign",
-    "landmark",
-    "layout",
-    "\u5165\u53e3",
-    "\u95e8\u53e3",
-    "\u62f1\u95e8",
-    "\u7a97\u6237",
-    "\u67dc\u53f0",
-    "\u5899\u9762",
-    "\u5730\u9762",
-    "\u5929\u82b1\u677f",
-    "\u6807\u5fd7",
-    "\u62db\u724c",
-    "\u5730\u6807",
-    "\u5e03\u5c40",
+_GENERIC_ENVIRONMENT_FEATURES = {
+    "a", "thing", "object", "item", "place", "some place", "stuff", "something",
+    "\u4e1c\u897f", "\u7269\u4ef6", "\u5730\u65b9", "\u67d0\u5904",
 }
-_ENVIRONMENT_VALUE_CUES = (
-    "stone", "wood", "cedar", "brick", "metal", "glass", "plaster", "lacquer",
-    "painted", "carved", "weathered", "narrow", "wide", "red", "blue", "arch",
-    "counter", "seal", "wall", "floor", "ceiling", "window", "door",
-    "\u77f3", "\u6728", "\u6749", "\u7816", "\u91d1\u5c5e", "\u73bb\u7483", "\u6f06",
-    "\u96d5", "\u98ce\u5316", "\u72ed", "\u5bbd", "\u7ea2", "\u84dd", "\u62f1", "\u67dc\u53f0",
-    "\u5370", "\u5899", "\u5730\u9762", "\u5929\u82b1\u677f", "\u7a97", "\u95e8",
-)
 _GENERIC_ENVIRONMENT_VALUES = {
-    "thing", "thing-1", "object", "item", "place", "stuff", "something",
+    "a", "thing", "thing-1", "object", "item", "place", "some place", "stuff", "something",
     "\u4e1c\u897f", "\u7269\u4ef6", "\u5730\u65b9", "\u67d0\u7269",
+}
+_GENERIC_ENVIRONMENT_TOKENS = {
+    "a", "thing", "object", "item", "place", "some", "stuff", "something",
 }
 
 
@@ -156,25 +116,41 @@ def _normalized(value: str) -> str:
 
 
 def _require_specific_face_value(feature: str, value: str) -> None:
-    cues = _FACE_VALUE_CUES.get(_normalized(feature))
     normalized_value = _normalized(value)
     if (
-        cues is None
+        _normalized(feature) not in _FACE_FEATURES
         or normalized_value in _GENERIC_AESTHETIC_VALUES
-        or not any(cue in normalized_value for cue in cues)
     ):
         raise ContractError("character face_lock must contain specific visual information")
+
+
+def _is_minimally_specific_phrase(value: str) -> bool:
+    if sum("\u4e00" <= char <= "\u9fff" for char in value) >= 2:
+        return True
+    tokens = [part for part in value.replace("-", " ").split() if part]
+    return len(tokens) >= 2 and any(
+        token not in _GENERIC_ENVIRONMENT_TOKENS for token in tokens
+    )
+
+
+def _is_non_generic_environment_feature(value: str) -> bool:
+    normalized = _normalized(value)
+    if normalized in _GENERIC_ENVIRONMENT_FEATURES:
+        return False
+    if any("\u4e00" <= char <= "\u9fff" for char in normalized):
+        return True
+    return len(normalized) >= 2
 
 
 def _require_stable_environment_anchor(feature: str, value: str) -> None:
     normalized_feature = _normalized(feature)
     normalized_value = _normalized(value)
     if (
-        normalized_feature not in _ENVIRONMENT_FEATURES
+        not _is_non_generic_environment_feature(normalized_feature)
         or normalized_value in _GENERIC_ENVIRONMENT_VALUES
-        or not any(cue in normalized_value for cue in _ENVIRONMENT_VALUE_CUES)
+        or not _is_minimally_specific_phrase(normalized_value)
     ):
-        raise ContractError("environment_anchors must contain controlled stable facts")
+        raise ContractError("environment_anchors must contain specific stable facts")
 
 
 def _require_visual_fingerprint(value: object) -> None:

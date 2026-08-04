@@ -223,6 +223,18 @@ def test_face_lock_rejects_structured_but_generic_aesthetic_value():
         validate_asset_card(card)
 
 
+def test_face_lock_accepts_open_vocabulary_specific_evidence():
+    card = _character_card()
+    card["face_lock"] = [
+        {"feature": "eyes", "value": "amber"},
+        {"feature": "cheeks", "value": "high cheekbones"},
+    ]
+    card["provenance"]["explicit_evidence"].remove("deep brown almond eyes")
+    card["provenance"]["explicit_evidence"].extend(["amber", "high cheekbones"])
+
+    assert validate_asset_card(card)["face_lock"] == card["face_lock"]
+
+
 def test_environment_anchors_require_unique_structured_stable_facts():
     card = _environment_card()
     card["environment_anchors"] = [
@@ -249,6 +261,31 @@ def test_environment_anchors_reject_generic_feature_and_value():
 
         with pytest.raises(ContractError, match="environment_anchors"):
             validate_asset_card(card)
+
+
+def test_environment_anchors_accept_open_vocabulary_specific_evidence():
+    card = _environment_card()
+    card["environment_anchors"][0] = {"feature": "roof", "value": "slate roof"}
+    card["provenance"]["explicit_evidence"].remove(
+        "weathered stone arch at the entrance"
+    )
+    card["provenance"]["explicit_evidence"].append("slate roof")
+
+    assert validate_asset_card(card)["environment_anchors"][0] == {
+        "feature": "roof",
+        "value": "slate roof",
+    }
+
+    chinese = _environment_card()
+    chinese["environment_anchors"][0] = {"feature": "屋顶", "value": "石板屋顶"}
+    chinese["provenance"]["explicit_evidence"].remove(
+        "weathered stone arch at the entrance"
+    )
+    chinese["provenance"]["explicit_evidence"].append("石板屋顶")
+    assert validate_asset_card(chinese)["environment_anchors"][0] == {
+        "feature": "屋顶",
+        "value": "石板屋顶",
+    }
 
 
 def test_explicit_and_prohibited_evidence_cannot_overlap():
