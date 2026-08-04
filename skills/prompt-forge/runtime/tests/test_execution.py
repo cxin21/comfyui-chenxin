@@ -1,4 +1,6 @@
 import copy
+import base64
+import hashlib
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -95,6 +97,20 @@ def capability_report(**overrides):
         "comfyui": {"url": "http://127.0.0.1:8188", "reachable": True},
         "adapter": {"runtime_classification": "local", "tools": []},
         "queue": {"running": 0, "pending": 0},
+        "workflow_candidates": [
+            {
+                "profile_id": "camera-anima-v1",
+                "production": True,
+                "status": "needs-normalization",
+                "production_ready": False,
+            },
+            {
+                "profile_id": "flux2-klein-multiview-flat-v2",
+                "production": True,
+                "status": "ready",
+                "production_ready": True,
+            },
+        ],
         "generated_at": NOW.isoformat().replace("+00:00", "Z"),
         "valid_until": (NOW + timedelta(minutes=10)).isoformat().replace("+00:00", "Z"),
     }
@@ -184,6 +200,13 @@ def build_valid_plan(build=None, patches=None, **kwargs):
         event,
         consumption_root=event["consumption_root"],
     )
+
+
+def test_character_base_draft_rejects_unavailable_workflow_candidate():
+    report = capability_report()
+    report["workflow_candidates"][0]["status"] = "unavailable"
+    with pytest.raises(ExecutionError, match="workflow candidate"):
+        build_valid_draft(capability_report=report)
 
 
 def task_context():
@@ -575,6 +598,14 @@ def test_character_base_run_record_can_bind_submission_receipt_and_raw_history(t
             "prompt_forge_enqueue_request_id": submission["enqueue_request_id"],
         }
     }
+    output_root = tmp_path / "output"
+    output_dir = output_root / "run-123"
+    output_dir.mkdir(parents=True)
+    output_bytes = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    )
+    (output_dir / "character.png").write_bytes(output_bytes)
+    output_digest = hashlib.sha256(output_bytes).hexdigest()
     record = build_run_record(
         task_context(),
         ready_build(),
@@ -583,8 +614,15 @@ def test_character_base_run_record_can_bind_submission_receipt_and_raw_history(t
         "base-record-prompt",
         "succeeded",
         {},
-        {"character.png": "a" * 64},
+        {"character.png": output_digest},
         history=history,
+        artifact_descriptor={
+            "node_id": "900",
+            "filename": "character.png",
+            "subfolder": "run-123",
+            "type": "output",
+        },
+        artifact_root=output_root,
         submission=submission,
         enqueue_receipt=receipt_result["enqueue_receipt"],
         enqueue_receipt_path=receipt_result["enqueue_receipt_path"],
@@ -595,6 +633,103 @@ def test_character_base_run_record_can_bind_submission_receipt_and_raw_history(t
     assert record["submission_hash"] == submission["submission_hash"]
     assert record["enqueue_receipt_hash"] == receipt_result["enqueue_receipt"]["receipt_hash"]
     assert record["raw_history_hash"] == content_hash(history)
+
+
+def test_history_graph_accepts_comfyui_integral_float_roundtrip():
+    graph = executable_graph()
+
+    def integral_floats(value):
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return float(value)
+        if isinstance(value, list):
+            return [integral_floats(item) for item in value]
+        if isinstance(value, dict):
+            return {key: integral_floats(item) for key, item in value.items()}
+        return value
+
+    history = history_response(graph=integral_floats(graph))
+    status, outputs = execution_module._parse_history(
+        history, "prompt-123", "succeeded", graph
+    )
+
+    assert status == {"status_str": "success", "completed": True}
+    assert outputs == [
+        {"node_id": "900", "filename": "character.png", "subfolder": "run-123", "type": "output"}
+    ]
+
+
+def test_character_base_run_record_verifies_png_bytes_inside_declared_output_root(tmp_path):
+    output_root = tmp_path / "comfy-output"
+    artifact_dir = output_root / "run-123"
+    artifact_dir.mkdir(parents=True)
+    artifact_path = artifact_dir / "character.png"
+    png_bytes = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    )
+    artifact_path.write_bytes(png_bytes)
+    descriptor = {
+        "node_id": "900",
+        "filename": "character.png",
+        "subfolder": "run-123",
+        "type": "output",
+    }
+
+    draft = build_valid_draft()
+    plan = approve_execution_draft(
+        draft,
+        approval_event(draft, consumption_root=str(tmp_path.resolve())),
+        consumption_root=tmp_path,
+    )
+    consumption = build_approval_consumption(plan, "record-artifact")
+    consumption_path = tmp_path / f'{consumption["approval_id"]}.consumed.json'
+    consumption_path.write_text(json.dumps(consumption, sort_keys=True), encoding="utf-8")
+    submission = build_character_base_submission(
+        approved_plan=plan,
+        prompt_build=ready_build(),
+        source_api_graph=api_graph(),
+        approval_consumption=consumption,
+        consumption_path=consumption_path,
+    )
+    receipt_result = submit_character_base(
+        approved_plan=plan,
+        prompt_build=ready_build(),
+        source_api_graph=api_graph(),
+        approval_consumption=consumption,
+        consumption_path=consumption_path,
+        enqueue_workflow=lambda request: {"prompt_id": "prompt-123", "node_errors": {}},
+        receipt_root=tmp_path,
+    )
+    history = history_response(prompt_id="prompt-123")
+    history["prompt-123"]["prompt"][3] = {
+        "extra_data": {
+            "prompt_forge_enqueue_request_id": submission["enqueue_request_id"],
+        }
+    }
+
+    record = build_run_record(
+        task_context(),
+        ready_build(),
+        api_graph(),
+        plan,
+        "prompt-123",
+        "succeeded",
+        {},
+        {"character.png": hashlib.sha256(png_bytes).hexdigest()},
+        history=history,
+        artifact_descriptor=descriptor,
+        artifact_root=output_root,
+        submission=submission,
+        enqueue_receipt=receipt_result["enqueue_receipt"],
+        enqueue_receipt_path=receipt_result["enqueue_receipt_path"],
+        approval_consumption=consumption,
+        consumption_path=consumption_path,
+    )
+
+    assert record["artifact_hashes_verified"] is True
+    assert record["artifact_root"] == str(output_root.resolve())
+    assert record["artifact_path"] == str(artifact_path.resolve())
 
 
 def test_run_record_requires_valid_task_context_before_lineage_checks():

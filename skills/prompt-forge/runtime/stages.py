@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import re
 
 from .contracts import content_hash
 from .prompt_quality import validate_anima_prompt_build, validate_ltx_prompt_build
@@ -178,6 +179,13 @@ def build_shot_plan(
         "patches": patches,
         "expected_outputs": ["image/png"],
     }
+    if selected.get("lineage_id") is not None:
+        lineage_id = selected.get("lineage_id")
+        if not isinstance(lineage_id, str) or not re.fullmatch(
+            r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", lineage_id
+        ):
+            raise StageError("Stage 3 reference lineage_id is invalid")
+        plan["lineage_id"] = lineage_id
     if shot_prompt_build is not None:
         plan["prompt_build"] = copy.deepcopy(shot_prompt_build)
     plan["plan_hash"] = content_hash(plan)
@@ -264,5 +272,12 @@ def build_video_plan(*args, **kwargs):
         ],
         "expected_outputs": ["video"],
     }
+    if shot.get("lineage_id") is not None:
+        lineage_id = shot.get("lineage_id")
+        if not isinstance(lineage_id, str) or not re.fullmatch(
+            r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", lineage_id
+        ):
+            raise StageError("Stage 4 ShotImage lineage_id is invalid")
+        plan["lineage_id"] = lineage_id
     plan["plan_hash"] = content_hash(plan)
     return plan

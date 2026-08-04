@@ -262,7 +262,16 @@ def _capability_report():
         "runtime_classification": "local",
         "tools": ["history-read", "enqueue", "job-monitor", "artifact-read"],
     }
-    return build_capability_report(ComfyApi(BASE_URL), adapter, datetime.now(timezone.utc))
+    report = build_capability_report(ComfyApi(BASE_URL), adapter, datetime.now(timezone.utc))
+    report["workflow_candidates"] = [
+        {
+            "profile_id": "camera-anima-v1",
+            "production": True,
+            "status": "needs-normalization",
+            "production_ready": False,
+        }
+    ]
+    return report
 
 
 def _draft(build, profile, ui_workflow, graph, report):
@@ -870,6 +879,14 @@ def _pending_bundle_fixture(now):
         "comfyui": {"url": BASE_URL, "reachable": True},
         "adapter": {"runtime_classification": "local", "tools": ["enqueue"]},
         "queue": {"running": 0, "pending": 0},
+        "workflow_candidates": [
+            {
+                "profile_id": "camera-anima-v1",
+                "production": True,
+                "status": "needs-normalization",
+                "production_ready": False,
+            }
+        ],
         "generated_at": now.isoformat().replace("+00:00", "Z"),
         "valid_until": (now + timedelta(minutes=10)).isoformat().replace("+00:00", "Z"),
     }

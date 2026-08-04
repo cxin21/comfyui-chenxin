@@ -53,6 +53,22 @@ decode on the `8n+1` lattice to 25 output frames. The complete profile digest is
 pinned in the Stage 4 execution boundary, so a caller cannot remove a contract
 and replace it with a self-authored profile hash.
 
+The camera adapter patches the profiled `CameraAngleNode` from the Stage 3
+plan instead of relying on the saved UI's default framing. Direction
+(`front`, `right_45`, `right`, `rear_45`, `rear`, `left_45`, `left`), elevation,
+and distance map to normalized `pos_x/pos_y/pos_z` values and are included in
+the allowlisted graph identity check. The G1 proof must still traverse
+`27 -> 75 -> 59` after this mutation.
+
+On 2026-08-04 the full local lineage was executed successfully: Stage 1, 2,
+and 3 RunRecords were followed by Stage 4 prompt
+`003890a3-6307-4cd9-8665-90c1d522eab0` and RunRecord
+`1f3911e835174738170762cba0827d3aa40a8ba890b40540de1870e29eb034c1`. The
+video passed byte/hash, raw-history, lineage, ffprobe (1024x704, 24 fps, 25
+frames), and visual spot checks. These are evidence of a completed local
+experiment, not permission to skip the approval/consumption boundary on a
+future run.
+
 Prompt Forge 把用户意图编译为模型方言，并把本地 ComfyUI 执行绑定到可审计证据。默认只编译；生成是独立阶段。编译器始终保持 `execution.performed=false`。
 
 ## 不可突破的边界

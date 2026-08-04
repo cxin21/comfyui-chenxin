@@ -46,6 +46,26 @@ def _capability_report():
         "comfyui": {"url": "http://127.0.0.1:8188", "reachable": True},
         "adapter": {"runtime_classification": "local", "tools": []},
         "queue": {"running": 0, "pending": 0},
+        "workflow_candidates": [
+            {
+                "profile_id": "camera-anima-v1",
+                "production": True,
+                "status": "needs-normalization",
+                "production_ready": False,
+            },
+            {
+                "profile_id": "flux2-klein-multiview-flat-v2",
+                "production": True,
+                "status": "ready",
+                "production_ready": True,
+            },
+            {
+                "profile_id": "ltx-yusu-director-v1",
+                "production": True,
+                "status": "ready",
+                "production_ready": True,
+            },
+        ],
         "generated_at": NOW.isoformat().replace("+00:00", "Z"),
         "valid_until": (NOW + timedelta(minutes=10)).isoformat().replace("+00:00", "Z"),
     }
@@ -76,6 +96,7 @@ def _shot_plan(report):
             "view_label": "left_45",
             "accepted": True,
             "content_hash": "a" * 64,
+            "lineage_id": "lineage-1",
         },
         "left_45",
         True,
@@ -98,6 +119,7 @@ def _accepted_reference():
             "artifact_type": "CharacterAngleView",
             "view_label": "left_45",
             "accepted": False,
+            "lineage_id": "lineage-1",
             "reference_eligible": True,
             "semantic_conflict": False,
             "hash_verified": True,
@@ -159,6 +181,23 @@ def _event(draft, root):
 @pytest.fixture(autouse=True)
 def trusted_clock(monkeypatch):
     monkeypatch.setattr(stage_execution, "_utc_now", lambda: NOW)
+
+
+def test_stage_execution_rejects_unavailable_workflow_candidate():
+    report = _capability_report()
+    report["workflow_candidates"][0]["status"] = "unavailable"
+    report["workflow_candidates"][0]["production_ready"] = False
+    source_graph = _shot_graph()
+    with pytest.raises(stage_execution.StageExecutionError, match="workflow candidate"):
+        stage_execution.build_stage_execution_draft(
+            _shot_plan(report),
+            source_graph,
+            _camera_profile(),
+            report,
+            ui_workflow=_shot_ui(),
+            image_name="ref.png",
+            reference_artifact=_accepted_reference(),
+        )
 
 
 def test_shot_execution_draft_rebinds_graph_and_g1_without_mutating_sources():
@@ -590,7 +629,9 @@ def test_stage_run_record_binds_receipt_history_and_png_bytes(tmp_path):
         lambda request: {"prompt_id": "prompt-3", "node_errors": {}},
         receipt_path=tmp_path / f"{consumption['consumption_id']}.stage-enqueue-receipt.json",
     )
-    image_path = tmp_path / "shot.png"
+    output_root = tmp_path / "output"
+    output_root.mkdir()
+    image_path = output_root / "shot.png"
     image_path.write_bytes(_valid_png_bytes())
     image_hash = hashlib.sha256(image_path.read_bytes()).hexdigest()
     history = {
@@ -599,9 +640,23 @@ def test_stage_run_record_binds_receipt_history_and_png_bytes(tmp_path):
                 "queue",
                 "prompt-3",
                 submission["api_graph"],
-                {"extra_data": {"prompt_forge_enqueue_request_id": submission["enqueue_request_id"]}},
+                {
+                    "prompt_forge_enqueue_request_id": submission["enqueue_request_id"],
+                    "extra_pnginfo": {"workflow": _shot_ui()},
+                },
             ],
-            "status": {"status_str": "success", "completed": True},
+            "status": {
+                "status_str": "success",
+                "completed": True,
+                "messages": [["execution_cached", {"nodes": []}]],
+            },
+            "outputs": {
+                "35": {
+                    "images": [
+                        {"filename": image_path.name, "subfolder": "", "type": "output"}
+                    ]
+                }
+            },
         }
     }
     record = stage_execution.build_stage_run_record(
@@ -611,9 +666,18 @@ def test_stage_run_record_binds_receipt_history_and_png_bytes(tmp_path):
             "accepted": True,
             "content_hash": image_hash,
             "artifact_path": str(image_path.resolve()),
+                "artifact_root": str(output_root.resolve()),
+                "lineage_id": "lineage-1",
+                "history_descriptor": {
+                "node_id": "35",
+                "filename": image_path.name,
+                "subfolder": "",
+                "type": "output",
+            },
             "source_reference_hash": "a" * 64,
         },
         history=history,
+        artifact_root=output_root,
     )
     assert record["terminal_status"] == "succeeded"
     assert record["artifact"]["content_hash"] == image_hash
@@ -622,11 +686,43 @@ def test_stage_run_record_binds_receipt_history_and_png_bytes(tmp_path):
     assert record["execution_plan"] == approved
     assert record["stage_plan"] == approved["stage_plan"]
     assert record["lineage"]["reference_hash"] == approved["stage_plan"]["reference_hash"]
+    history_with_integral_floats = copy.deepcopy(history)
+
+    def _integral_floats(value):
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return float(value)
+        if isinstance(value, list):
+            return [_integral_floats(item) for item in value]
+        if isinstance(value, dict):
+            return {key: _integral_floats(item) for key, item in value.items()}
+        return value
+
+    history_with_integral_floats["prompt-3"]["prompt"][2] = _integral_floats(
+        history_with_integral_floats["prompt-3"]["prompt"][2]
+    )
+    float_record = stage_execution.build_stage_run_record(
+        approved,
+        submission,
+        receipt,
+        record["artifact"],
+        history=history_with_integral_floats,
+        artifact_root=output_root,
+    )
+    assert float_record["record_hash"]
+    bad_descriptor = copy.deepcopy(record["artifact"])
+    bad_descriptor["history_descriptor"]["node_id"] = "490"
+    with pytest.raises(stage_execution.StageExecutionError, match="history descriptor"):
+        stage_execution.build_stage_run_record(
+            approved, submission, receipt, bad_descriptor,
+            history=history, artifact_root=output_root,
+        )
     image_path.write_bytes(b"tampered")
     with pytest.raises(stage_execution.StageExecutionError, match="bytes"):
         stage_execution.build_stage_run_record(
             approved, submission, receipt,
-            record["artifact"], history=history,
+            record["artifact"], history=history, artifact_root=output_root,
         )
 
 

@@ -131,7 +131,7 @@ def test_pinned_ltx_profile_contains_live_workflow_identity():
     profile = json.loads(PROFILE_FILE.read_text(encoding="utf-8"))
     assert profile["profile_id"] == "ltx-yusu-director-v1"
     assert profile["workflow_name"] == "LTX全新导演台工作流.json"
-    assert profile["workflow_fingerprint"] == "cc9f26b0855e74202619d639afe0b4c9b1831a3c227e1ec6d1029d5b309c0c5a"
+    assert profile["workflow_fingerprint"] == "8f777f6315bab2c14fb4d99d83a44d73cf8dfd7362011fc3a931fffa9a081074"
     assert profile["director_node_id"] == 174
     assert profile["negative_node_id"] == 195
     assert profile["expected_outputs"] == ["video"]

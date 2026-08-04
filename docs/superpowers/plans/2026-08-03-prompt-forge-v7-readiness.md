@@ -20,14 +20,14 @@ hash-verified. A later stage must never regenerate identity from an unbound
 prompt; it inherits the accepted upstream hash and carries a new stage-specific
 PromptBuild only where the visual intent changes.
 
-## Evidence matrix (2026-08-03)
+## Evidence matrix (2026-08-04)
 
 | Stage | Contract | Current evidence | Remaining gate |
 |---|---|---|---|
-| 1. Base | Prompt Forge image PromptBuild; camera text-to-image; front-facing acceptance; PNG + RunRecord | Camera UI fingerprint `7fa7a85e...e20a`; accepted front base generated in the local ComfyUI run and reused by hash; `submit-character-base` now has the same consumed intent/receipt boundary as later stages | A new approved live run still must be recorded with the receipt-bound `record` path and front-facing acceptance |
-| 2. Multiview | Reuse one accepted Stage 1 PNG in Flux nodes `111` and `667`; no injected Flux negative; normalize outputs | Promoted flat workflow `PromptForge-Flux2-Klein-multiview-flat-v2.json`, fingerprint `9dc2b01e...c29e4da`; prompt `3d8627ab-ec60-46b2-b648-77d8662412ed` completed with character-sheet and angle outputs | Individual-angle acceptance remains a human gate; legacy `Flux2-Klein人物一键多视图工作流.json` is audit-only because conversion has unresolved buses/dangling refs |
-| 3. Shot | New shot PromptBuild preserving identity facts; accepted individual angle; camera G1 path `27 -> 75 -> 59`; PNG + ShotImage | Prompt `fe64ee38-a437-44de-9c15-1de7d9bc1f75` succeeded through the pinned normalized graph; output `2026-08-03-231455_anima-aesthetic-v1.1_2026080304.png` is a valid 1216x832 PNG; `submit-stage` and mandatory raw-history record validation are implemented | The local exploratory run proves the queue and bytes; a new approved live run still must persist a receipt-bound RunRecord |
-| 4. Video | Accepted ShotImage; video PromptBuild with subject/action/motion/camera; atomic Yusu timeline patch; preserve node `195`; 24 logical frames/24 fps | Prompt `dd6f2956-1041-461c-a000-a766fb0c125f` succeeded; `屿僳_00004_.mp4` is H.264, 1024x704, 24 fps, 25 decoded frames; profile filename is pinned to exact UTF-8 `LTX全新导演台工作流.json` | Formal RunRecord persistence remains the production handoff; dimension and `8n+1` checks are now hard gates |
+| 1. Base | Prompt Forge image PromptBuild; camera text-to-image; front-facing acceptance; PNG + RunRecord | Formal RunRecord: prompt `225eb85b-64c7-493c-b990-99dcfe960b77`, record `6dbec47bd60c5b5584788f356455b1c949bfc5cf0178f595a5bfd580c9ccfb82`, PNG hash `f2ce2f1a3f8bf9c26bc205b7af48f239ffd163bf5702c5cda7f895abd171a738` | Human front-facing acceptance remains required for every new lineage |
+| 2. Multiview | Reuse one accepted Stage 1 PNG in the promoted flat Flux graph; normalize outputs and preserve per-view hashes | Formal RunRecord: record `fe02700c7452c4f9d5428b427ec55a889f05e2d76efbc80cdcadb7f19ebedd31`, 28 normalized artifacts; accepted `front_closeup` hash `66a484a543796ddca0cd8494f20d0244186fa3845d7b6f29f8e2c3038dd56968`; flat profile fingerprint `9dc2b01e...c29e4da` | Individual-angle acceptance remains a human gate; the legacy saved workflow remains audit-only |
+| 3. Shot | New shot PromptBuild; accepted individual angle; camera G1 path `27 -> 75 -> 59`; camera direction/distance patch; PNG + ShotImage | Formal RunRecord: prompt `c9a8b32a-087a-42b2-bb03-d276e5388048`, record `e005420a0c1a1159b614b7a3f5f4c01b6b71277dd0dc478e093b9bd667bd734e`, output hash `4dde2c460cc08a451a0dcadfb7eaa99696d0c26acca4a149521bb7ad08bc15a9`; G1 reference hash `66a484a...d56968` | Camera mappings are allowlisted; new directions still require visual acceptance |
+| 4. Video | Accepted ShotImage; video PromptBuild; atomic Yusu timeline patch; preserve node `195`; 24 logical frames/24 fps | Formal RunRecord: prompt `003890a3-6307-4cd9-8665-90c1d522eab0`, record `1f3911e835174738170762cba0827d3aa40a8ba890b40540de1870e29eb034c1`, output `屿僳_00006_.mp4`, hash `c158dcaad050ff9fdc8089e8af21037d126d20a38d365764950b4e55a895125b`; ffprobe: H.264, 1024x704, 24 fps, 25 frames; current LTX UI fingerprint `8f777f...081074` | Motion/identity remains an explicit visual-quality gate in addition to structural verification |
 
 ## Implementation status after the first-principles review
 
@@ -77,9 +77,30 @@ cannot weaken the contract by supplying a self-authored profile.
    mistaken for the effective output size. Verify the resulting `1024x704`
    canvas from the encoded video, not from node settings alone.
 
+## Formal live closure (2026-08-04)
+
+The four stages were executed sequentially against the local ComfyUI instance
+with one shared lineage `live-lineage-20260804-fda22387d6b4`. Each stage has a
+fresh PromptBuild, an approved exact draft, an exclusive consumption record, a
+real ComfyUI receipt, raw history, an output-root-bound artifact, and a
+content-hashed RunRecord. Stage 3 also proves the G1 image path and camera
+angle mutation. Stage 4 was re-pinned to the actually saved LTX Director
+workflow after fingerprint drift was detected; no stale profile was allowed to
+execute. The generated video was visually spot-checked at frames 0, 12, and
+24 and retained the black-haired, blue-eyed armored subject while applying a
+subtle push-in/breathing motion.
+
+The formal evidence roots are intentionally outside the repository:
+
+- Stage 1: `C:\Users\11245\AppData\Local\Temp\prompt-forge-formal-stage1-jei_phhl`
+- Stage 2: `C:\Users\11245\AppData\Local\Temp\prompt-forge-formal-stage2-pcsvf_8v`
+- Stage 3: `C:\Users\11245\AppData\Local\Temp\prompt-forge-formal-stage3-wu7y_y6m`
+- Stage 4: `C:\Users\11245\AppData\Local\Temp\prompt-forge-formal-stage4-gn2329n1`
+
 ## Completion rule
 
-The product is production-ready only after Experiments D and E produce new,
-traceable artifacts under explicit approval. A clean deterministic suite or a
-zero-warning workflow conversion alone proves implementation readiness, not a
-successful end-to-end render.
+The product is production-ready only after the deterministic suite passes and
+all four formal records above remain independently verifiable. Structural
+proof is necessary but not sufficient: front-facing acceptance, angle
+suitability, shot composition, and motion/identity continuity remain explicit
+human quality gates.

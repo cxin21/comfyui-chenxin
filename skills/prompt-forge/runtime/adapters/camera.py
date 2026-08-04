@@ -48,6 +48,28 @@ _POSTPROCESS_LINKS = (
     (111, "image", 96, 0),
 )
 
+# CameraAngleNode expresses azimuth as a normalized half-turn.  Keep this
+# mapping explicit so a Stage 3 plan cannot silently degrade into the UI's
+# default front/cowboy framing.
+_CAMERA_DIRECTION_POS_X = {
+    "front": 0.0,
+    "right_45": 0.25,
+    "right": 0.5,
+    "rear_45": 0.75,
+    "rear": 1.0,
+    "left": -0.5,
+    "left_45": -0.25,
+}
+_CAMERA_ELEVATION_POS_Y = {"high": 0.5, "eye-level": 0.0, "low": -0.5}
+_CAMERA_DISTANCE_POS_Z = {
+    "extreme_close_up": 0.9,
+    "close_up": 0.5,
+    "medium": 0.1,
+    "cowboy_shot": -0.2,
+    "full_body": -0.5,
+    "wide": -0.9,
+}
+
 
 class CameraAdapterError(ValueError):
     """Raised when a camera UI/API graph cannot be patched safely."""
@@ -282,13 +304,60 @@ def _node_for_slot(graph: dict, slot_name: str, node_id: object) -> dict:
     return node
 
 
-def _without_allowlisted_values(graph: dict, slots: dict[str, int]) -> dict:
+def _without_allowlisted_values(
+    graph: dict,
+    slots: dict[str, int],
+    camera_node_id: int | None = None,
+) -> dict:
     normalized = copy.deepcopy(graph)
     for slot_name in _SLOTS:
         node = normalized[str(slots[slot_name])]
         for input_name in _INPUTS:
             node["inputs"][input_name] = _REMOVED
+    if camera_node_id is not None:
+        camera = normalized.get(str(camera_node_id))
+        if isinstance(camera, dict) and isinstance(camera.get("inputs"), dict):
+            for input_name in ("pos_x", "pos_y", "pos_z"):
+                if input_name in camera["inputs"]:
+                    camera["inputs"][input_name] = _REMOVED
     return normalized
+
+
+def _patch_camera_angle(graph: dict, camera: object, profile: dict) -> tuple[dict, int | None]:
+    """Apply the declared Stage 3 framing to the profiled camera node."""
+    if not isinstance(camera, dict):
+        return copy.deepcopy(graph), None
+    slots = profile.get("slots") if isinstance(profile, dict) else None
+    selector = slots.get("camera_angle") if isinstance(slots, dict) else None
+    if not isinstance(selector, dict):
+        # Compact test profiles and non-camera graphs have no camera slot.
+        return copy.deepcopy(graph), None
+    node_id = selector.get("id")
+    if not isinstance(node_id, int) or isinstance(node_id, bool) or node_id < 0:
+        raise CameraAdapterError("camera profile camera_angle slot is invalid")
+    node = graph.get(str(node_id))
+    if not isinstance(node, dict) or node.get("class_type") != selector.get("type"):
+        raise CameraAdapterError("camera angle node does not match the profile")
+    inputs = node.get("inputs")
+    if not isinstance(inputs, dict):
+        raise CameraAdapterError("camera angle node inputs are invalid")
+    patched = copy.deepcopy(graph)
+    target = patched[str(node_id)]["inputs"]
+    for field, mapping in (
+        ("direction", _CAMERA_DIRECTION_POS_X),
+        ("elevation", _CAMERA_ELEVATION_POS_Y),
+        ("distance", _CAMERA_DISTANCE_POS_Z),
+    ):
+        value = camera.get(field)
+        if value is None:
+            continue
+        if not isinstance(value, str) or value not in mapping:
+            raise CameraAdapterError(f"camera {field} is unsupported: {value!r}")
+        input_name = {"direction": "pos_x", "elevation": "pos_y", "distance": "pos_z"}[field]
+        if input_name not in target:
+            raise CameraAdapterError(f"camera angle node is missing {input_name}")
+        target[input_name] = mapping[value]
+    return patched, node_id
 
 
 def patch_character_base(graph: dict, prompt_build: dict, slots: dict[str, int]) -> dict:
@@ -585,6 +654,8 @@ def patch_img2img_graph(
     image_name: str,
     profile: dict,
     slots: dict[str, int] | None = None,
+    *,
+    camera: dict | None = None,
 ) -> dict:
     """Patch the approved camera img2img graph without changing its topology.
 
@@ -606,6 +677,7 @@ def patch_img2img_graph(
         raise CameraAdapterError("img2img profile requires load_image_node_id")
     source = copy.deepcopy(graph)
     patched = patch_character_base(source, prompt_build, slots)
+    patched, camera_node_id = _patch_camera_angle(patched, camera, profile)
     load_node = _api_node(patched, load_id)
     if load_node.get("class_type") != "LoadImage":
         raise CameraAdapterError("img2img load image node has an unexpected class_type")
@@ -616,8 +688,8 @@ def patch_img2img_graph(
     verify_img2img_path(patched, profile)
 
     try:
-        source_identity_graph = _without_allowlisted_values(source, slots)
-        patched_identity_graph = _without_allowlisted_values(patched, slots)
+        source_identity_graph = _without_allowlisted_values(source, slots, camera_node_id)
+        patched_identity_graph = _without_allowlisted_values(patched, slots, camera_node_id)
         _api_node(source_identity_graph, load_id)["inputs"]["image"] = _REMOVED
         _api_node(patched_identity_graph, load_id)["inputs"]["image"] = _REMOVED
         source_identity = canonical_json(source_identity_graph)

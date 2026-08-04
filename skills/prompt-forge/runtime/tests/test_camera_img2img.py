@@ -142,6 +142,28 @@ def test_img2img_patch_binds_prompt_and_g1_image_without_topology_mutation():
     assert patched["27"] == original["27"]
 
 
+def test_img2img_patch_binds_declared_camera_direction_and_framing():
+    graph = json.loads((FIXTURES / "camera-img2img-api-minimal.json").read_text(encoding="utf-8"))
+    graph["583"] = {
+        "class_type": "CameraAngleNode",
+        "inputs": {"pos_x": 0.0, "pos_y": 0.0, "pos_z": 0.0, "roll": 0.0},
+    }
+    profile = {
+        "img2img": {"vae_encode_node_id": 59, "sampler_node_id": 27, "load_image_node_id": 21},
+        "slots": {"camera_angle": {"id": 583, "type": "CameraAngleNode"}},
+    }
+    patched = patch_img2img_graph(
+        graph,
+        _prompt_build(),
+        "runs/lineage/shot.png",
+        profile,
+        camera={"direction": "left_45", "distance": "full_body", "elevation": "eye-level"},
+    )
+    assert patched["583"]["inputs"]["pos_x"] == -0.25
+    assert patched["583"]["inputs"]["pos_y"] == 0.0
+    assert patched["583"]["inputs"]["pos_z"] == -0.5
+
+
 def test_img2img_patch_rejects_path_traversal_and_broken_graph():
     graph = json.loads((FIXTURES / "camera-img2img-api-minimal.json").read_text(encoding="utf-8"))
     with pytest.raises(CameraAdapterError, match="relative Comfy input"):

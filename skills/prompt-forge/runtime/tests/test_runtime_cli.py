@@ -99,6 +99,14 @@ def _capability_report():
         "comfyui": {"url": "http://127.0.0.1:8188", "reachable": True},
         "adapter": {"runtime_classification": "local", "tools": []},
         "queue": {"running": 0, "pending": 0},
+        "workflow_candidates": [
+            {
+                "profile_id": "camera-anima-v1",
+                "production": True,
+                "status": "needs-normalization",
+                "production_ready": False,
+            }
+        ],
         "generated_at": (now - timedelta(seconds=1)).isoformat().replace("+00:00", "Z"),
         "valid_until": (now + timedelta(minutes=9)).isoformat().replace("+00:00", "Z"),
     }

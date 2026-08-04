@@ -89,6 +89,12 @@ _STAGE1_RUN_RECORD_EVIDENCE_KEYS = _STAGE1_RUN_RECORD_KEYS.union(
         "raw_history_hash",
     }
 )
+_STAGE1_RUN_RECORD_ARTIFACT_KEYS = _STAGE1_RUN_RECORD_KEYS.union(
+    {"artifact_root", "artifact_path"}
+)
+_STAGE1_RUN_RECORD_EVIDENCE_ARTIFACT_KEYS = _STAGE1_RUN_RECORD_EVIDENCE_KEYS.union(
+    {"artifact_root", "artifact_path"}
+)
 _STAGE1_DRAFT_KEYS = frozenset(
     (
         "schema_version",
@@ -309,6 +315,33 @@ def _require_idle_local_capability(report: object, now: datetime) -> None:
         raise ExecutionError("one ComfyUI job at a time is allowed")
 
 
+def _require_workflow_candidate(report: object, profile_id: str) -> None:
+    candidates = report.get("workflow_candidates") if isinstance(report, dict) else None
+    if not isinstance(candidates, list):
+        raise ExecutionError("CapabilityReport workflow candidates are required")
+    matches = [
+        candidate
+        for candidate in candidates
+        if isinstance(candidate, dict) and candidate.get("profile_id") == profile_id
+    ]
+    if len(matches) != 1:
+        raise ExecutionError(
+            f"CapabilityReport workflow candidate is missing or ambiguous for {profile_id}"
+        )
+    candidate = matches[0]
+    if candidate.get("production") is not True:
+        raise ExecutionError(f"workflow candidate {profile_id} is not production")
+    allowed = {"ready"}
+    if profile_id == _CHARACTER_BASE_PROFILE_ID:
+        allowed.add("needs-normalization")
+    if candidate.get("status") not in allowed:
+        raise ExecutionError(
+            f"workflow candidate {profile_id} is not executable: {candidate.get('status')!r}"
+        )
+    if candidate.get("status") == "ready" and candidate.get("production_ready") is not True:
+        raise ExecutionError(f"workflow candidate {profile_id} is not production-ready")
+
+
 def _derived_preflight(
     workflow_fingerprint: str,
     source_api_graph_hash: str,
@@ -363,6 +396,7 @@ def build_execution_draft(
 
     _validate_character_base_profile(profile, workflow_profile_id)
     _require_idle_local_capability(capability_report, _utc_now())
+    _require_workflow_candidate(capability_report, workflow_profile_id)
     if not isinstance(api_graph, dict):
         raise ExecutionError("actual API graph must be an object")
 
@@ -511,7 +545,13 @@ def _validated_stage1_source(
     if not isinstance(stage1_record, dict) or stage1_record.get("schema_version") != "1.0":
         raise ExecutionError("an accepted Stage 1 RunRecord is required")
     record_keys = set(stage1_record)
-    if record_keys not in {_STAGE1_RUN_RECORD_KEYS, _STAGE1_RUN_RECORD_EVIDENCE_KEYS}:
+    valid_record_keys = {
+        _STAGE1_RUN_RECORD_KEYS,
+        _STAGE1_RUN_RECORD_EVIDENCE_KEYS,
+        _STAGE1_RUN_RECORD_ARTIFACT_KEYS,
+        _STAGE1_RUN_RECORD_EVIDENCE_ARTIFACT_KEYS,
+    }
+    if record_keys not in valid_record_keys:
         raise ExecutionError("a complete Stage 1 RunRecord is required")
     record_hash = stage1_record.get("record_hash")
     unsigned_record = dict(stage1_record)
@@ -520,15 +560,36 @@ def _validated_stage1_source(
         raise ExecutionError("Stage 1 RunRecord record_hash must be a lowercase SHA-256 digest")
     if record_hash != content_hash(unsigned_record):
         raise ExecutionError("Stage 1 RunRecord record_hash is not self-consistent")
-    if record_keys == _STAGE1_RUN_RECORD_EVIDENCE_KEYS:
+    if record_keys in {
+        _STAGE1_RUN_RECORD_EVIDENCE_KEYS,
+        _STAGE1_RUN_RECORD_EVIDENCE_ARTIFACT_KEYS,
+    }:
         raw_history = stage1_record.get("raw_history")
         if not isinstance(raw_history, dict) or stage1_record.get("raw_history_hash") != content_hash(raw_history):
             raise ExecutionError("Stage 1 RunRecord raw history evidence is invalid")
         if canonical_json(raw_history) != canonical_json(stage1_history):
             raise ExecutionError("Stage 1 RunRecord raw history does not match supplied history")
-        if stage1_record.get("submission_hash") != content_hash(stage1_record.get("submission")):
+        submission = stage1_record.get("submission")
+        if not isinstance(submission, dict):
             raise ExecutionError("Stage 1 RunRecord submission evidence is invalid")
-        if stage1_record.get("enqueue_receipt_hash") != content_hash(stage1_record.get("enqueue_receipt")):
+        unsigned_submission = dict(submission)
+        claimed_submission_hash = unsigned_submission.pop("submission_hash", None)
+        if (
+            stage1_record.get("submission_hash") != claimed_submission_hash
+            or not isinstance(claimed_submission_hash, str)
+            or claimed_submission_hash != content_hash(unsigned_submission)
+        ):
+            raise ExecutionError("Stage 1 RunRecord submission evidence is invalid")
+        enqueue_receipt = stage1_record.get("enqueue_receipt")
+        if not isinstance(enqueue_receipt, dict):
+            raise ExecutionError("Stage 1 RunRecord receipt evidence is invalid")
+        unsigned_receipt = dict(enqueue_receipt)
+        claimed_receipt_hash = unsigned_receipt.pop("receipt_hash", None)
+        if (
+            stage1_record.get("enqueue_receipt_hash") != claimed_receipt_hash
+            or not isinstance(claimed_receipt_hash, str)
+            or claimed_receipt_hash != content_hash(unsigned_receipt)
+        ):
             raise ExecutionError("Stage 1 RunRecord receipt evidence is invalid")
     if stage1_record.get("terminal_status") != "succeeded" or stage1_record.get("history_verified") is not True:
         raise ExecutionError("Stage 1 RunRecord must be a verified successful run")
@@ -611,7 +672,31 @@ def _validated_stage1_source(
         raise ExecutionError("Stage 1 executable API graph hash is invalid")
     if not isinstance(stage1_record.get("task_context_hash"), str) or not _SHA256_RE.fullmatch(stage1_record["task_context_hash"]):
         raise ExecutionError("Stage 1 task_context_hash is invalid")
-    if stage1_record.get("artifact_hashes_verified") is not False:
+    artifact_evidence = record_keys in {
+        _STAGE1_RUN_RECORD_ARTIFACT_KEYS,
+        _STAGE1_RUN_RECORD_EVIDENCE_ARTIFACT_KEYS,
+    }
+    if artifact_evidence:
+        root_text = stage1_record.get("artifact_root")
+        path_text = stage1_record.get("artifact_path")
+        if not isinstance(root_text, str) or not isinstance(path_text, str):
+            raise ExecutionError("Stage 1 artifact path/root evidence is incomplete")
+        try:
+            record_root = Path(root_text).resolve(strict=True)
+            record_path = Path(path_text).resolve(strict=True)
+        except (OSError, RuntimeError) as exc:
+            raise ExecutionError("Stage 1 artifact path/root evidence is missing") from exc
+        if (
+            str(Path(root_text)) != str(record_root)
+            or str(Path(path_text)) != str(record_path)
+            or not record_root.is_dir()
+            or not record_path.is_file()
+            or not record_path.is_relative_to(record_root)
+        ):
+            raise ExecutionError("Stage 1 artifact path/root evidence is not canonical")
+        if stage1_record.get("artifact_hashes_verified") is not True:
+            raise ExecutionError("Stage 1 artifact verification flag is invalid")
+    elif stage1_record.get("artifact_hashes_verified") is not False:
         raise ExecutionError("Stage 1 artifact verification flag must remain false until bytes are checked")
     _validated_hashes(stage1_record.get("input_hashes"), "Stage 1 input")
     safe_record_outputs = _validated_hashes(stage1_record.get("output_hashes"), "Stage 1 output")
@@ -627,7 +712,9 @@ def _validated_stage1_source(
         stage1_record.get("terminal_status"),
         patch_character_base(stage1_api_graph, prompt_build, _CHARACTER_BASE_SLOTS),
     )
-    if stage1_record.get("history_status") != history_status or stage1_record.get("history_outputs") != history_outputs:
+    if stage1_record.get("history_status") != history_status or not _history_outputs_equal(
+        stage1_record.get("history_outputs"), history_outputs
+    ):
         raise ExecutionError("Stage 1 raw history does not match RunRecord")
     if set(safe_record_outputs) != {item["filename"] for item in history_outputs}:
         raise ExecutionError("Stage 1 output hashes do not match raw history")
@@ -650,6 +737,11 @@ def _validated_stage1_source(
         or resolved_descriptor_path != resolved_path
     ):
         raise ExecutionError("Stage 1 artifact history descriptor does not match accepted artifact path")
+    if artifact_evidence and (
+        stage1_record.get("artifact_root") != str(resolved_root)
+        or stage1_record.get("artifact_path") != str(resolved_path)
+    ):
+        raise ExecutionError("Stage 1 artifact path/root evidence does not match accepted artifact")
     _validate_approval_consumption_evidence(
         source_plan,
         stage1_approval_consumption,
@@ -897,6 +989,7 @@ def build_multiview_draft_with_mcp(
     if workflow_id != profile.get("workflow_id"):
         raise ExecutionError("production multiview workflow_id does not match the v2 profile")
     _require_idle_local_capability(capability_report, _utc_now())
+    _require_workflow_candidate(capability_report, workflow_profile_id)
     load_arguments = {"filename": profile["workflow_name"], "format": "ui"}
     convert_arguments = {"filename": profile["workflow_name"], "format": "api"}
     strip_arguments = {"filename": profile["workflow_name"], "format": "api"}
@@ -2116,6 +2209,75 @@ def _validated_hashes(value: object, label: str) -> dict[str, str]:
     return result
 
 
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+    except OSError as exc:
+        raise ExecutionError("artifact bytes cannot be read") from exc
+    return digest.hexdigest()
+
+
+def _validate_character_base_artifact_bytes(
+    history_outputs: list[dict],
+    output_hashes: dict[str, str],
+    selected_descriptor: dict,
+    output_root: str | Path,
+) -> tuple[str, str]:
+    """Verify every Stage 1 PNG and return the selected output path/root."""
+    if not isinstance(output_root, (str, Path)):
+        raise ExecutionError("Stage 1 artifact output root must be an absolute canonical directory")
+    root = Path(output_root)
+    if not root.is_absolute():
+        raise ExecutionError("Stage 1 artifact output root must be an absolute canonical directory")
+    try:
+        resolved_root = root.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise ExecutionError("Stage 1 artifact output root must be an existing canonical directory") from exc
+    if str(root) != str(resolved_root) or not resolved_root.is_dir():
+        raise ExecutionError("Stage 1 artifact output root must be an existing canonical directory")
+
+    selected_path: Path | None = None
+    for descriptor in history_outputs:
+        output_type = descriptor["type"]
+        if output_type == "output":
+            descriptor_root = resolved_root
+        elif output_type == "temp":
+            descriptor_root = resolved_root.parent / "temp"
+            try:
+                descriptor_root = descriptor_root.resolve(strict=True)
+            except (OSError, RuntimeError) as exc:
+                raise ExecutionError("Stage 1 temporary artifact root is missing") from exc
+            if not descriptor_root.is_dir():
+                raise ExecutionError("Stage 1 temporary artifact root is invalid")
+        else:
+            raise ExecutionError("Stage 1 history contains an unsupported image type")
+        raw_path = descriptor_root / descriptor["subfolder"] / descriptor["filename"]
+        try:
+            resolved_path = raw_path.resolve(strict=True)
+        except (OSError, RuntimeError) as exc:
+            raise ExecutionError("Stage 1 artifact path does not exist") from exc
+        if (
+            not resolved_path.is_file()
+            or not resolved_path.is_relative_to(descriptor_root)
+            or str(raw_path) != str(resolved_path)
+        ):
+            raise ExecutionError("Stage 1 artifact path must remain inside its output root")
+        try:
+            _evidence_validate_png_file(resolved_path)
+        except (MultiviewEvidenceError, OSError) as exc:
+            raise ExecutionError("Stage 1 artifact bytes are not a structurally valid PNG") from exc
+        if _file_sha256(resolved_path) != output_hashes[descriptor["filename"]]:
+            raise ExecutionError("Stage 1 artifact bytes do not match output_hashes")
+        if descriptor == selected_descriptor:
+            selected_path = resolved_path
+    if selected_path is None:
+        raise ExecutionError("Stage 1 selected artifact path is missing")
+    return str(resolved_root), str(selected_path)
+
+
 def _validate_plan_lineage(plan: object, prompt_build: dict, api_graph: dict) -> None:
     plan = _validate_approved_plan(plan, trusted_now=None)
     if plan["prompt_build_id"] != content_hash(prompt_build):
@@ -2165,6 +2327,28 @@ def _history_outputs(outputs: object) -> list[dict]:
     return descriptors
 
 
+def _normalize_history_graph_numbers(value: object) -> object:
+    """Normalize ComfyUI's JSON numeric round-trips without changing semantics.
+
+    The server may deserialize an integer widget value and serialize it back as
+    ``1.0``.  Those values are equal in Python but differ in canonical JSON,
+    so a byte-level comparison would reject the exact graph that was executed.
+    Only integral floats are folded to integers; non-integral values, strings,
+    booleans, and graph topology remain untouched.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, list):
+        return [_normalize_history_graph_numbers(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: _normalize_history_graph_numbers(item) for key, item in value.items()
+        }
+    return value
+
+
 def _parse_history(
     history: object,
     prompt_id: str,
@@ -2178,7 +2362,9 @@ def _parse_history(
     if not isinstance(prompt, list) or len(prompt) < 3 or prompt[1] != prompt_id:
         raise ExecutionError("raw ComfyUI history prompt tuple is invalid")
     try:
-        graph_matches = canonical_json(prompt[2]) == canonical_json(executable_api_graph)
+        graph_matches = canonical_json(
+            _normalize_history_graph_numbers(prompt[2])
+        ) == canonical_json(_normalize_history_graph_numbers(executable_api_graph))
     except (TypeError, ValueError) as exc:
         raise ExecutionError(f"raw ComfyUI history prompt graph is invalid: {exc}") from exc
     if not graph_matches:
@@ -2200,6 +2386,18 @@ def _parse_history(
     if terminal_status == "succeeded" and not descriptors:
         raise ExecutionError("successful raw ComfyUI history requires image outputs")
     return {"status_str": status_str, "completed": completed}, descriptors
+
+
+def _history_outputs_equal(left: object, right: object) -> bool:
+    """Compare output descriptors as a set; ComfyUI node order is incidental."""
+    if not isinstance(left, list) or not isinstance(right, list):
+        return False
+    try:
+        return sorted(canonical_json(item) for item in left) == sorted(
+            canonical_json(item) for item in right
+        )
+    except (TypeError, ValueError):
+        return False
 
 
 def _history_enqueue_request_id(history: object, prompt_id: str) -> str:
@@ -2380,6 +2578,7 @@ def build_run_record(
     enqueue_receipt_path: str | Path | None = None,
     approval_consumption: dict | None = None,
     consumption_path: str | Path | None = None,
+    artifact_root: str | Path | None = None,
 ) -> dict:
     """Record terminal history with an explicit accepted-output selector.
 
@@ -2441,6 +2640,11 @@ def build_run_record(
             enqueue_receipt_path,
         )
 
+    if artifact_root is not None and bound_submission is None:
+        raise ExecutionError(
+            "Stage 1 artifact output evidence requires receipt-bound submission evidence"
+        )
+
     if not isinstance(prompt_id, str) or not prompt_id:
         raise ExecutionError("prompt_id is required for a terminal RunRecord")
     if terminal_status not in _TERMINAL_STATUSES:
@@ -2483,6 +2687,20 @@ def build_run_record(
                 "artifact_descriptor must select one retained output descriptor from history"
             )
 
+    verified_artifact_root = None
+    verified_artifact_path = None
+    artifact_hashes_verified = False
+    if artifact_root is not None:
+        if terminal_status != "succeeded" or selected_descriptor is None:
+            raise ExecutionError("Stage 1 artifact root requires a succeeded selected output")
+        verified_artifact_root, verified_artifact_path = _validate_character_base_artifact_bytes(
+            history_outputs,
+            safe_outputs,
+            selected_descriptor,
+            artifact_root,
+        )
+        artifact_hashes_verified = True
+
     record = {
         "schema_version": "1.0",
         "task_context_hash": content_hash(safe_context),
@@ -2498,11 +2716,22 @@ def build_run_record(
         "history_outputs": history_outputs,
         "artifact_descriptor": selected_descriptor,
         "history_verified": True,
-        "artifact_hashes_verified": False,
+        "artifact_hashes_verified": artifact_hashes_verified,
         "input_hashes": safe_inputs,
         "output_hashes": safe_outputs,
     }
+    if verified_artifact_root is not None:
+        record.update(
+            {
+                "artifact_root": verified_artifact_root,
+                "artifact_path": verified_artifact_path,
+            }
+        )
     if bound_submission is not None:
+        if artifact_root is None:
+            raise ExecutionError(
+                "Stage 1 receipt-bound RunRecord requires an explicit artifact output root"
+            )
         if bound_receipt["prompt_id"] != prompt_id:
             raise ExecutionError("Stage 1 receipt prompt_id does not match raw history")
         if _history_enqueue_request_id(history, prompt_id) != bound_submission["enqueue_request_id"]:
@@ -2644,15 +2873,25 @@ def build_multiview_run_record(
         raise ExecutionError("Stage 2 output root must be an existing canonical directory")
     safe_outputs: dict[str, str] = {}
     for descriptor in history_outputs:
-        if descriptor["type"] != "output":
-            raise ExecutionError("Stage 2 history artifacts must be output files")
-        candidate = resolved_root / descriptor["subfolder"] / descriptor["filename"]
+        if descriptor["type"] == "output":
+            descriptor_root = resolved_root
+        elif descriptor["type"] == "temp":
+            descriptor_root = resolved_root.parent / "temp"
+            try:
+                descriptor_root = descriptor_root.resolve(strict=True)
+            except (OSError, RuntimeError) as exc:
+                raise ExecutionError("Stage 2 temporary artifact root is missing") from exc
+            if not descriptor_root.is_dir():
+                raise ExecutionError("Stage 2 temporary artifact root is invalid")
+        else:
+            raise ExecutionError("Stage 2 history artifacts must be output or temp PNG files")
+        candidate = descriptor_root / descriptor["subfolder"] / descriptor["filename"]
         try:
             physical_path = candidate.resolve(strict=True)
         except (OSError, RuntimeError) as exc:
             raise ExecutionError("Stage 2 history artifact file is missing") from exc
-        if not physical_path.is_file() or not physical_path.is_relative_to(resolved_root):
-            raise ExecutionError("Stage 2 history artifact escapes the canonical output root")
+        if not physical_path.is_file() or not physical_path.is_relative_to(descriptor_root):
+            raise ExecutionError("Stage 2 history artifact escapes its canonical output root")
         _validate_png_file(physical_path)
         safe_outputs[descriptor["filename"]] = _file_sha256(physical_path)
 

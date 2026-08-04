@@ -7,6 +7,10 @@
     "class_type": "ImpactWildcardProcessor",
     "inputs": {"wildcard_text": "old negative", "populated_text": "old negative"}
   },
+  "583": {
+    "class_type": "CameraAngleNode",
+    "inputs": {"pos_x": 0.0, "pos_y": 0.0, "pos_z": 0.0, "roll": 0.0}
+  },
   "26": {
     "class_type": "Lora Loader (LoraManager)",
     "inputs": {"model": ["22", 0], "clip": ["40", 0], "text": "<lora:anima:1.0>"}

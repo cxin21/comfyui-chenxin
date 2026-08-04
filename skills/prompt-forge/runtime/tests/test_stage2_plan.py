@@ -131,6 +131,20 @@ def _capability_report():
             "tools": ["get_workflow", "strip_workflow", "validate_workflow"],
         },
         "queue": {"running": 0, "pending": 0},
+        "workflow_candidates": [
+            {
+                "profile_id": "camera-anima-v1",
+                "production": True,
+                "status": "needs-normalization",
+                "production_ready": False,
+            },
+            {
+                "profile_id": "flux2-klein-multiview-flat-v2",
+                "production": True,
+                "status": "ready",
+                "production_ready": True,
+            },
+        ],
         "generated_at": (now - timedelta(seconds=1)).isoformat().replace("+00:00", "Z"),
         "valid_until": (now + timedelta(minutes=9)).isoformat().replace("+00:00", "Z"),
     }
@@ -717,6 +731,15 @@ def _upload_receipt(tmp_path, artifact):
     }
 
 
+def test_stage1_source_treats_history_output_order_as_nonsemantic(tmp_path):
+    descriptors = [
+        {"node_id": "35", "filename": "base.png", "subfolder": "", "type": "output"},
+        {"node_id": "490", "filename": "preview.png", "subfolder": "", "type": "temp"},
+    ]
+
+    assert execution_module._history_outputs_equal(descriptors, list(reversed(descriptors)))
+
+
 @pytest.mark.parametrize(
     "descriptor",
     [
@@ -1129,13 +1152,19 @@ def test_multiview_run_record_binds_raw_executable_history_and_artifacts(tmp_pat
     output_root = tmp_path / "comfy-output"
     output_root.mkdir()
     (output_root / "front.png").write_bytes(_png_bytes())
+    temp_root = output_root.parent / "temp"
+    temp_root.mkdir()
+    (temp_root / "preview.png").write_bytes(_png_bytes())
     history = {
         prompt_id: {
                 "prompt": [1, prompt_id, executable, {"extra_data": {
                     "prompt_forge_enqueue_request_id": consumption["enqueue_request_id"]
                 }}],
                 "status": {"status_str": "success", "completed": True},
-            "outputs": {"524": {"images": [{"filename": "front.png", "subfolder": "", "type": "output"}]}},
+            "outputs": {
+                "524": {"images": [{"filename": "front.png", "subfolder": "", "type": "output"}]},
+                "680": {"images": [{"filename": "preview.png", "subfolder": "", "type": "temp"}]},
+            },
         }
     }
     result = build_multiview_run_record(
@@ -1162,6 +1191,7 @@ def test_multiview_run_record_binds_raw_executable_history_and_artifacts(tmp_pat
     assert result["artifacts"][0]["content_hash"] == hashlib.sha256(_png_bytes()).hexdigest()
     assert result["artifacts"][0]["lineage_id"] == artifact["lineage_id"]
     assert result["artifacts"][0]["hash_verified"] is True
+    assert result["output_hashes"]["preview.png"] == hashlib.sha256(_png_bytes()).hexdigest()
     assert result["approval_consumption_id"] == consumption["consumption_id"]
     assert result["enqueue_request_id"] == consumption["enqueue_request_id"]
     assert result["record_hash"] == content_hash({k: v for k, v in result.items() if k != "record_hash"})

@@ -30,6 +30,7 @@ from .capabilities import report_is_fresh
 from .contracts import canonical_json, content_hash
 from .execution import (
     _canonical_consumption_root,
+    _normalize_history_graph_numbers,
     _utc_now,
     _validate_approval_event,
 )
@@ -47,7 +48,7 @@ _PROMPT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _STAGES = frozenset(("shot-image", "video"))
 _LTX_PROFILE_ID = "ltx-yusu-director-v1"
 _LTX_WORKFLOW_NAME = "LTX全新导演台工作流.json"
-_LTX_PROFILE_HASH = "6a5789c245525a1d04607f06f8e029b6ffef398fa49c625832cfd80411a22df9"
+_LTX_PROFILE_HASH = "8b960efb362ac1fbfe2840baf1321ef6a6397efde535b43b36e21fd0f04162c1"
 
 _DRAFT_KEYS = frozenset(
     {
@@ -152,6 +153,14 @@ def _text(value: object, label: str) -> str:
     return value.strip()
 
 
+def _lineage_id(value: object, label: str) -> str:
+    if not isinstance(value, str) or not re.fullmatch(
+        r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", value
+    ):
+        raise StageExecutionError(f"{label} is invalid")
+    return value
+
+
 def _stage_plan(plan: object, expected_stage: str | None = None) -> dict:
     if not isinstance(plan, dict):
         raise StageExecutionError("stage plan must be an object")
@@ -183,11 +192,15 @@ def _stage_plan(plan: object, expected_stage: str | None = None) -> dict:
         if plan.get("workflow_profile_id") != "camera-anima-v1":
             raise StageExecutionError("Stage 3 requires camera-anima-v1")
         _sha(plan.get("reference_hash"), "stage plan reference_hash")
+        if plan.get("lineage_id") is not None:
+            _lineage_id(plan.get("lineage_id"), "stage plan lineage_id")
     else:
         if plan.get("workflow_profile_id") != "ltx-yusu-director-v1":
             raise StageExecutionError("Stage 4 requires ltx-yusu-director-v1")
         _sha(plan.get("workflow_hash"), "stage plan workflow_hash")
         _sha(plan.get("source_shot_hash"), "stage plan source_shot_hash")
+        if plan.get("lineage_id") is not None:
+            _lineage_id(plan.get("lineage_id"), "stage plan lineage_id")
         parameters = plan.get("parameters")
         if (
             not isinstance(parameters, dict)
@@ -203,7 +216,7 @@ def _stage_plan(plan: object, expected_stage: str | None = None) -> dict:
     return copy.deepcopy(plan)
 
 
-def _require_capability(report: object) -> dict:
+def _require_capability(report: object, *, profile_id: str | None = None) -> dict:
     now = _utc_now()
     if not isinstance(report, dict) or report.get("schema_version") != "1.0":
         raise StageExecutionError("a current CapabilityReport is required")
@@ -222,6 +235,35 @@ def _require_capability(report: object) -> dict:
         raise StageExecutionError("CapabilityReport queue counts must be non-negative integers")
     if running or pending:
         raise StageExecutionError("one ComfyUI job at a time is allowed")
+    if profile_id is not None:
+        candidates = report.get("workflow_candidates")
+        if not isinstance(candidates, list):
+            raise StageExecutionError("CapabilityReport workflow candidates are required")
+        matches = [
+            candidate
+            for candidate in candidates
+            if isinstance(candidate, dict) and candidate.get("profile_id") == profile_id
+        ]
+        if len(matches) != 1:
+            raise StageExecutionError(
+                f"CapabilityReport workflow candidate is missing or ambiguous for {profile_id}"
+            )
+        candidate = matches[0]
+        if candidate.get("production") is not True:
+            raise StageExecutionError(f"workflow candidate {profile_id} is not production")
+        allowed_statuses = {"ready"}
+        if profile_id == "camera-anima-v1":
+            # The camera profile owns a pinned normalization bridge.  The raw
+            # saved workflow may therefore be reported as needs-normalization;
+            # the graph gate below still requires that bridge to run before
+            # submission.
+            allowed_statuses.add("needs-normalization")
+        if candidate.get("status") not in allowed_statuses:
+            raise StageExecutionError(
+                f"workflow candidate {profile_id} is not executable: {candidate.get('status')!r}"
+            )
+        if candidate.get("status") == "ready" and candidate.get("production_ready") is not True:
+            raise StageExecutionError(f"workflow candidate {profile_id} is not production-ready")
     return copy.deepcopy(report)
 
 
@@ -241,7 +283,9 @@ def _draft_hash(draft: dict) -> str:
     return content_hash(unsigned)
 
 
-def _validate_image_ref(image_ref: object, expected_hash: str) -> dict:
+def _validate_image_ref(
+    image_ref: object, expected_hash: str, expected_lineage_id: str | None = None
+) -> dict:
     if not isinstance(image_ref, dict):
         raise StageExecutionError("accepted shot image reference is required")
     if image_ref.get("artifact_type") != "ShotImage" or image_ref.get("accepted") is not True:
@@ -251,6 +295,10 @@ def _validate_image_ref(image_ref: object, expected_hash: str) -> dict:
         raise StageExecutionError("shot image reference does not match the approved lineage")
     for key in ("imageFile", "imageB64"):
         _text(image_ref.get(key), f"shot image {key}")
+    if image_ref.get("lineage_id") is not None:
+        _lineage_id(image_ref.get("lineage_id"), "shot image lineage_id")
+    if expected_lineage_id is not None and image_ref.get("lineage_id") != expected_lineage_id:
+        raise StageExecutionError("shot image lineage_id does not match the stage plan")
     return copy.deepcopy(image_ref)
 
 
@@ -309,7 +357,9 @@ def build_stage_execution_draft(
     plan = _stage_plan(stage_plan)
     if not isinstance(source_api_graph, dict):
         raise StageExecutionError("source API graph must be an object")
-    report = _require_capability(capability_report)
+    report = _require_capability(
+        capability_report, profile_id=plan.get("workflow_profile_id")
+    )
     profile_digest = _profile_hash(profile, plan.get("profile_hash"))
     source_hash = content_hash(source_api_graph)
     declared_capability_hash = _sha(
@@ -360,6 +410,7 @@ def build_stage_execution_draft(
                 plan.get("prompt_build"),
                 image_name,
                 profile,
+                camera=plan.get("camera"),
             )
             path_proof = verify_img2img_path(executable, profile)
         except (CameraAdapterError, TypeError, KeyError) as exc:
@@ -371,6 +422,12 @@ def build_stage_execution_draft(
         if reference_artifact is None:
             raise StageExecutionError("Stage 3 requires explicit reference acceptance evidence")
         accepted_reference = _validate_reference_acceptance(reference_artifact, plan.get("reference_hash"))
+        if accepted_reference.get("lineage_id") is not None:
+            reference_lineage = _lineage_id(
+                accepted_reference["lineage_id"], "reference artifact lineage_id"
+            )
+            if plan.get("lineage_id") != reference_lineage:
+                raise StageExecutionError("reference artifact lineage_id does not match the stage plan")
         reference_acceptance_id = accepted_reference["acceptance_id"]
         expected_outputs = ["image/png"]
         immutable_inputs = {"graph_topology": "source_api_graph_hash"}
@@ -401,7 +458,9 @@ def build_stage_execution_draft(
             or workflow_fingerprint != profile_fingerprint
         ):
             raise StageExecutionError("Stage 4 workflow fingerprint does not match the LTX profile")
-        _validate_image_ref(image_ref, plan.get("source_shot_hash"))
+        _validate_image_ref(
+            image_ref, plan.get("source_shot_hash"), plan.get("lineage_id")
+        )
         try:
             if plan.get("workflow_hash") is not None and plan["workflow_hash"] != source_hash:
                 raise StageExecutionError("LTX API graph does not match the stage plan workflow hash")
@@ -643,7 +702,9 @@ def build_stage_submission(
     """Build the exact graph/request authorized by one consumed plan."""
     plan = _validate_approved_stage(approved_plan)
     _validate_consumption(plan, consumption, consumption_path)
-    _require_capability(capability_report)
+    _require_capability(
+        capability_report, profile_id=plan.get("workflow_profile_id")
+    )
     if content_hash(capability_report) != plan["capability_report_hash"]:
         raise StageExecutionError("current CapabilityReport does not match the approved plan")
     _profile_hash(profile, plan["profile_hash"])
@@ -668,6 +729,12 @@ def build_stage_submission(
         if reference_image_name is None:
             raise StageExecutionError("Stage 3 submission requires a reference image name")
         accepted_reference = _validate_reference_acceptance(reference_artifact, stage_plan.get("reference_hash"))
+        if accepted_reference.get("lineage_id") is not None:
+            reference_lineage = _lineage_id(
+                accepted_reference["lineage_id"], "reference artifact lineage_id"
+            )
+            if stage_plan.get("lineage_id") != reference_lineage:
+                raise StageExecutionError("reference artifact lineage_id does not match the stage plan")
         if accepted_reference["acceptance_id"] != plan["reference_acceptance_id"]:
             raise StageExecutionError("Stage 3 submission reference acceptance does not match the approved draft")
         try:
@@ -676,6 +743,7 @@ def build_stage_submission(
                 stage_plan.get("prompt_build"),
                 reference_image_name,
                 profile,
+                camera=stage_plan.get("camera"),
             )
             proof = verify_img2img_path(executable, profile)
         except (CameraAdapterError, TypeError, KeyError) as exc:
@@ -683,7 +751,9 @@ def build_stage_submission(
         if proof != plan["g1_path_proof"]:
             raise StageExecutionError("Stage 3 submission G1 proof does not match the approved plan")
     else:
-        image = _validate_image_ref(image_ref, stage_plan["source_shot_hash"])
+        image = _validate_image_ref(
+            image_ref, stage_plan["source_shot_hash"], stage_plan.get("lineage_id")
+        )
         try:
             executable = patch_yusu_timeline(
                 source_api_graph,
@@ -1087,6 +1157,66 @@ def _validate_artifact_bytes(
     return normalized
 
 
+def _history_output_descriptors(outputs: object) -> list[dict]:
+    if not isinstance(outputs, dict):
+        raise StageExecutionError("raw ComfyUI history outputs are required")
+    descriptors: list[dict] = []
+    for node_id, node_outputs in outputs.items():
+        if not isinstance(node_id, str) or not isinstance(node_outputs, dict):
+            raise StageExecutionError("raw ComfyUI history output entries are invalid")
+        for values in node_outputs.values():
+            if not isinstance(values, list):
+                continue
+            for value in values:
+                if not isinstance(value, dict) or "filename" not in value:
+                    continue
+                filename = value.get("filename")
+                subfolder = value.get("subfolder")
+                output_type = value.get("type")
+                if (
+                    not isinstance(filename, str)
+                    or not filename
+                    or not isinstance(subfolder, str)
+                    or not isinstance(output_type, str)
+                ):
+                    raise StageExecutionError("raw ComfyUI history output descriptor is invalid")
+                descriptors.append(
+                    {
+                        "node_id": node_id,
+                        "filename": filename,
+                        "subfolder": subfolder,
+                        "type": output_type,
+                    }
+                )
+    return descriptors
+
+
+def _bind_artifact_to_history(artifact: dict, history_entry: dict, output_root: str | Path) -> dict:
+    descriptor = artifact.get("history_descriptor")
+    if not isinstance(descriptor, dict) or set(descriptor) != {
+        "node_id", "filename", "subfolder", "type"
+    }:
+        raise StageExecutionError("stage artifact history descriptor is required")
+    if descriptor.get("type") != "output":
+        raise StageExecutionError("stage artifact history descriptor must be an output")
+    if descriptor not in _history_output_descriptors(history_entry.get("outputs")):
+        raise StageExecutionError("stage artifact does not match a raw history descriptor")
+    root = Path(output_root)
+    try:
+        resolved_root = root.resolve(strict=True)
+        expected = (resolved_root / descriptor["subfolder"] / descriptor["filename"]).resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise StageExecutionError("stage artifact history descriptor path is missing") from exc
+    if (
+        not resolved_root.is_dir()
+        or not expected.is_file()
+        or not expected.is_relative_to(resolved_root)
+        or str(expected) != artifact.get("artifact_path")
+    ):
+        raise StageExecutionError("stage artifact path does not match the history descriptor")
+    return copy.deepcopy(descriptor)
+
+
 def build_stage_run_record(
     approved_plan: dict,
     submission: dict,
@@ -1105,7 +1235,6 @@ def build_stage_run_record(
     plan = _validate_approved_stage(approved_plan)
     safe_submission = _validate_stage_submission(submission, plan)
     receipt = _validate_stage_receipt(safe_submission, enqueue_receipt)
-    safe_artifact = _validate_artifact_bytes(artifact, plan["stage_plan"], artifact_root)
     prompt_id = receipt.get("prompt_id")
     if not isinstance(history, dict) or not isinstance(history.get(prompt_id), dict):
         raise StageExecutionError("raw ComfyUI history is missing the stage prompt_id")
@@ -1114,20 +1243,54 @@ def build_stage_run_record(
     status = entry.get("status")
     if not isinstance(prompt, list) or len(prompt) < 3 or prompt[1] != prompt_id:
         raise StageExecutionError("raw ComfyUI history prompt tuple is invalid")
-    if canonical_json(prompt[2]) != canonical_json(safe_submission["api_graph"]):
+    # ComfyUI serializes integral numeric widget values as JSON floats in
+    # history (for example ``4`` becomes ``4.0``).  Treat only those values as
+    # equivalent so history can prove the submitted graph without weakening
+    # topology or non-integral numeric comparisons.
+    if canonical_json(_normalize_history_graph_numbers(prompt[2])) != canonical_json(
+        _normalize_history_graph_numbers(safe_submission["api_graph"])
+    ):
         raise StageExecutionError("raw ComfyUI history graph does not match submission")
     if len(prompt) < 4 or not isinstance(prompt[3], dict):
         raise StageExecutionError("raw ComfyUI history enqueue metadata is missing")
-    history_extra = prompt[3].get("extra_data")
-    if not isinstance(history_extra, dict):
+    history_metadata = prompt[3]
+    nested_extra = history_metadata.get("extra_data")
+    if nested_extra is not None and not isinstance(nested_extra, dict):
         raise StageExecutionError("raw ComfyUI history enqueue metadata is invalid")
-    if history_extra.get("prompt_forge_enqueue_request_id") != safe_submission["enqueue_request_id"]:
+    direct_request_id = history_metadata.get("prompt_forge_enqueue_request_id")
+    nested_request_id = (
+        nested_extra.get("prompt_forge_enqueue_request_id")
+        if isinstance(nested_extra, dict)
+        else None
+    )
+    if (
+        direct_request_id is not None
+        and nested_request_id is not None
+        and direct_request_id != nested_request_id
+    ):
+        raise StageExecutionError("raw ComfyUI history enqueue metadata conflicts")
+    history_request_id = direct_request_id or nested_request_id
+    if history_request_id != safe_submission["enqueue_request_id"]:
         raise StageExecutionError("raw ComfyUI history enqueue request identity does not match submission")
-    if status != {"status_str": "success", "completed": True}:
+    if (
+        not isinstance(status, dict)
+        or status.get("status_str") != "success"
+        or status.get("completed") is not True
+    ):
         raise StageExecutionError("raw ComfyUI history status is not succeeded")
+    if artifact_root is None:
+        raise StageExecutionError("stage RunRecord requires an explicit artifact output root")
+    safe_artifact = _validate_artifact_bytes(artifact, plan["stage_plan"], artifact_root)
+    safe_artifact["history_descriptor"] = _bind_artifact_to_history(
+        safe_artifact, entry, artifact_root
+    )
     history_verified = True
     stage_plan = plan["stage_plan"]
+    lineage_id = _lineage_id(stage_plan.get("lineage_id"), "stage plan lineage_id")
+    if safe_artifact.get("lineage_id") != lineage_id:
+        raise StageExecutionError("stage artifact lineage_id does not match the stage plan")
     lineage = {
+        "lineage_id": lineage_id,
         "reference_hash": stage_plan.get("reference_hash") if plan["stage"] == "shot-image" else None,
         "source_shot_hash": stage_plan.get("source_shot_hash") if plan["stage"] == "video" else None,
         "artifact_hash": safe_artifact["content_hash"],
