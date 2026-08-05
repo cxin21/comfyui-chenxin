@@ -1,93 +1,53 @@
-# Prompt Forge v6.1 Specification
+# Prompt Forge specification
 
-## Purpose
+## Objective
 
-Prompt Forge is a semantic compiler for image and video generation prompts. It
-turns source-language intent into a model-specific dialect while preserving
-explicit facts, model constraints and execution authority.
+Prompt Forge is a pure prompt authoring and quality-audit skill. Claude or Codex is the authoring caller. Python performs deterministic validation after the caller supplies the final draft. No additional model provider is part of this contract.
 
-```text
-source request
-  -> PromptIntent 6.1
-  -> recipe + optional scene enrichment
-  -> target-dialect draft
-  -> deterministic compiler/auditor
-  -> PromptBuild 1.0
-  -> optional, explicitly authorized execution
-```
+## Inputs
 
-## Invariants
+The caller supplies:
 
-1. `explicit_evidence > recipe-controlled reasonable_inference > model
-   invention`; explicit facts and accepted asset locks are locked. Inference
-   never silently becomes identity truth.
-2. PromptIntent and PromptBuild are separate contracts.
-3. Compilation is side-effect free. Generation is never implied by prompt work.
-4. Open vocabulary belongs to the LLM; Python owns deterministic validation.
-5. Semantic tags require exact/alias validation. Recipe control tokens are a
-   separate channel.
-6. Model modality, dialect and negative policy come from the matched recipe.
-7. Video requires temporal semantics: action, motion, camera and continuity.
-8. Unknown Chinese is preserved as evidence, never guessed character by character.
-9. `prohibited_expansion` is a hard negative and is hash-bound to downstream
-   builds.
-10. LTX uses one selected global prompt and the workflow-owned negative system;
-    video `negative_prompt` is always the empty string.
+- a CreativeEvidence ledger with four-quadrant provenance;
+- an exact image or video dialect ID;
+- an optional explicit visual-language style;
+- a final caller-authored draft.
 
-## Contracts
+The evidence ledger preserves shared_known, user_known_agent_unknown, assistant_known_user_unknown, joint_unknown, locked_facts, continuity_locks, style_evidence, asset_refs, and uncertainty. Every supplied dimension keeps origin and source_text when available.
 
-PromptIntent 6.1 requires target, mode, generation mode, model/dialect, negative
-and output constraints, references, locked facts, and all fourteen dimensions.
-It may carry the compatible evidence extension: story/art-bible hashes, typed
-asset references, three evidence tiers, continuity locks, and uncertainty.
-See `references/prompt-contracts.md` for the canonical shape.
+## Authoring sequence
 
-PromptBuild 1.0 contains the final prompt, model policy decisions, validated and
-rejected tags, provenance, warnings/errors, readiness and a non-mutating execution
-request. Its image and LTX evidence fields are compatible extensions: legacy
-callers retain `prompt` and `negative_prompt`, while evidence-bound builds add
-typed locks, source hashes, bilingual positives, timeline/dialogue metadata, and
-split decisions. `ready_to_execute=false` is a hard stop.
+1. Confirm the goal, background, delivery standard, and boundary.
+2. Separate known facts, reasonable inferences, user-unknown information, and testable joint unknowns.
+3. Resolve the exact dialect and keep style advice advisory.
+4. Have Claude or Codex write the final prompt fields.
+5. Run adversarial review for facts, style, action, camera, timeline, dialogue, and dialect.
+6. Run deterministic lint and emit PromptPackage.
 
-## Deterministic components
+If the draft is missing, production validation fails. The compiler never synthesizes prose as a fallback.
 
-- `recipe_lookup.py`: canonical model recipe and alias resolution.
-- `intent_normalize.py`: schema validation, provenance merge, bilingual concept
-  cross-check and lookup channel derivation.
-- `runtime/prompt_quality.py`: non-mutating image-lock and bilingual LTX quality
-  gates, strict second-based timeline parsing, global-prompt selection, and
-  complexity split decisions. It never submits a render.
-- `scene_match.py`: specificity-weighted scene recipe suggestions; misses return
-  explicit choices rather than selecting a default.
-- `tag_lookup.py`: exact/alias canonical tag validation.
-- `prompt_compile.py`: model/dialect resolution, final rendering audit and
-  PromptBuild emission. It never invokes an MCP or generator.
-- `evaluate.py`: offline PromptBuild regression corpus.
+## PromptPackage
 
-## Quality gates
+The package may contain authored image fields (`positive`, `negative`) or authored video fields (`positive_zh`, `positive_en`, `global_prompt`, `timeline_segments`, `dialogue_attribution`, `continuity_locks`). Unused modality fields are omitted. Quality flags include facts_preserved, no_unsupported_invention, style_coherent, dialect_valid, temporal_logic_valid, and ready_for_review.
 
-- All explicit facts represented in the final dialect.
-- No recipe modality mismatch or unsupported negative field.
-- No rejected semantic tags or internal placeholders.
-- Video contract complete for the requested generation mode.
-- English LTX text preserves declared Chinese dialogue code points exactly while
-  translating the surrounding scene, action, and camera text.
-- LTX intervals use only positive-duration `〖start-end s〗` markers, start at
-  zero, and form one monotonic gap-free execution timeline. Adjacent floating
-  boundaries use a small numeric tolerance; hidden or placeholder timelines
-  fail closed.
-- Dialogue is established by `dialogue_attribution` or an explicit dialogue
-  marker, not by quotation marks alone. Attributed speaker names and exact text
-  occur in both language prompts; quoted signage, titles, and UI labels remain
-  legal non-dialogue text.
-- At least 0.90 deterministic corpus pass rate, with image, editing and video
-  model coverage.
-- Trigger corpus contains balanced positive and negative boundary cases.
-- Full unit suite, syntax compilation, recipe schema check and Skill validator pass.
+Forbidden fields include ready_to_execute, execution, workflow, workflow_hash, profile_hash, node, node_id, slot_id, gpu, transport, and runtime state. The boundary rejects these keys recursively, including camelCase variants.
 
-## Known evaluation boundary
+## Image rules
 
-The deterministic corpus verifies contracts and representative golden drafts. It
-does not replace a real-model visual preference benchmark. Promotion claims about
-aesthetic superiority require rendered outputs, blinded human comparison and
-model/version-specific baselines.
+The dialect registry defines ordering, negative policy, reference language, required dimensions, and forbidden patterns. Exact tags and approved aliases are validated separately from recipe control tokens. Unknown tags are rejected and never guessed into canonical tags.
+
+## Video rules
+
+Video drafts include a global prompt, bilingual positive fields, contiguous non-negative time ranges beginning at zero, explicit Chinese and English timeline text, attributed dialogue ranges, and continuity locks. The validator checks these structures without deciding whether any model or workflow is installed.
+
+## Model and style separation
+
+Model dialects describe prompt language only. Styles describe visual language only. Style rendering cannot add identity, plot, prop, dialogue, or continuity facts. Two style variants built from the same evidence must preserve protected facts byte-for-byte in the evidence ledger.
+
+## Boundary
+
+Prompt Forge does not inspect ComfyUI, MCP, workflows, nodes, models, hardware, hashes, or execution state. The external character-video-pipeline consumes the package and owns production submission, approvals, artifacts, and run records.
+
+## Offline acceptance
+
+Acceptance is based on deterministic tests for exact lookup, evidence provenance, tag validation, PromptPackage structure, style invariance, and boundary imports. Runtime generation tests belong to the external production pipeline.

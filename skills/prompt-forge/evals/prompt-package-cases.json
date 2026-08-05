@@ -1,0 +1,62 @@
+[
+  {
+    "case_id": "image-flux-reviewable",
+    "dialect_id": "flux",
+    "evidence": {
+      "shared_known": [{"value": "a female mage in a neon night street", "origin": "explicit"}],
+      "locked_facts": ["a female mage in a neon night street"],
+      "model_id": "flux-dev"
+    },
+    "draft": {
+      "positive": "A female mage in a neon night street, cinematic reflections and controlled lighting."
+    },
+    "expect": {
+      "ready_for_review": true,
+      "dialect": "flux",
+      "contains": ["female mage", "neon night street"]
+    }
+  },
+  {
+    "case_id": "video-ltx-reviewable",
+    "dialect_id": "ltx_2_3",
+    "evidence": {
+      "shared_known": [{"value": "a swordsman in a red robe", "origin": "explicit"}],
+      "locked_facts": ["a swordsman in a red robe"]
+    },
+    "draft": {
+      "positive_zh": "红衣剑客在雨夜巷道拔剑。",
+      "positive_en": "A swordsman in a red robe draws his sword in a rainy alley.",
+      "global_prompt": "A swordsman in a red robe; restrained cinematic motion.",
+      "timeline_segments": [
+        {"start": 0.0, "end": 2.0, "zh": "剑客转身。", "en": "The swordsman turns."},
+        {"start": 2.0, "end": 4.0, "zh": "剑客拔剑。", "en": "The swordsman draws his sword."}
+      ],
+      "dialogue_attribution": [
+        {"speaker": "swordsman", "text": "Stop", "start": 2.5, "end": 3.0}
+      ],
+      "continuity_locks": ["red robe", "same sword", "rain continues"]
+    },
+    "expect": {
+      "ready_for_review": true,
+      "dialect": "ltx_2_3",
+      "contains": ["swordsman in a red robe", "draws his sword"]
+    }
+  },
+  {
+    "case_id": "image-placeholder-and-fact-gap",
+    "dialect_id": "flux",
+    "evidence": {
+      "shared_known": [{"value": "a swordsman in a red robe", "origin": "explicit"}],
+      "locked_facts": ["a swordsman in a red robe"]
+    },
+    "draft": {
+      "positive": "A lone traveler waits beside [TODO]."
+    },
+    "expect": {
+      "ready_for_review": false,
+      "dialect": "flux",
+      "contains": ["lone traveler"],
+      "error_contains": ["placeholder"]
+    }
+  }
+]

@@ -1,40 +1,22 @@
-# Image dialects
+# Image prompt dialects
 
-## Tag dialect
+Image prompts express the same evidence through different linguistic forms. Dialect changes wording, not facts.
 
-Use for recipes whose dialect explicitly requires Danbooru or comma-separated
-tags.
+## Tag form
 
-1. Preserve the recipe's required quality/control tokens verbatim and mark them
-   as recipe-origin quality values.
-2. Order semantic tags by subject, defining traits, action, scene,
-   composition/camera, lighting/color, style/medium, mood.
-3. Give each semantic concept its own candidate. Never concatenate multiple
-   concepts into a fabricated compound.
-4. Validate candidates with `tag_lookup.py --queries ... --exact` or let
-   `prompt_compile.py` perform the same check.
-5. If an explicit fact has no validated representation, find a real semantic
-   equivalent or stop for clarification. Do not silently drop it.
+- Use exact validated semantic tags and approved aliases only.
+- Keep recipe control tokens separate from semantic tags.
+- Order concepts coherently: subject, defining traits, action, setting, composition, lighting, medium, and mood.
+- If an explicit fact lacks a validated tag, retain the unresolved fact for clarification; do not invent a near match.
 
-## Natural-language dialect
+## Natural-language form
 
-Use for Flux, Qwen, GPT Image and other prose-first recipes.
+- State the subject, defining identity cues, and visible action in clear sentences.
+- Describe setting and composition from evidence before optional visual language.
+- Use concrete medium, palette, lighting, and texture terms supported by `style_evidence`.
+- Quote visible text exactly when it is evidence.
+- Express exclusions only in the dialect-supported field.
 
-- Lead with subject and concrete action, then scene and composition.
-- Add camera/lens, lighting/color and style only when supported by intent or
-  recipe. Prefer concrete visible properties over praise such as "stunning".
-- One coherent style is better than a list of unrelated style names.
-- Quote literal on-image text exactly and preserve case/punctuation when the
-  model recipe supports text rendering.
-- Phrase exclusions positively when negative prompts are unsupported, for
-  example "an uncluttered background" rather than a hidden negative field.
+## Reference-led edits
 
-## Editing and references
-
-- Separate what must change from what must remain invariant.
-- Bind each reference to one purpose. Identity, style and composition references
-  are not interchangeable.
-- For image editing, use an imperative edit instruction and state invariants:
-  identity, pose, framing, background geometry, colors, or text as applicable.
-- Do not re-describe reference facts as new guesses when the source image is the
-  authority.
+State the requested change and the invariants separately. Bind each reference to a declared role such as identity, composition, palette, or edit source. Identity, pose, framing, scene geometry, props, and visible text remain unchanged unless the request explicitly changes them.

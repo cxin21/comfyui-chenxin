@@ -1,0 +1,287 @@
+{
+  "dialects": [
+    {
+      "id": "anima",
+      "aliases": [
+        "anima_base",
+        "miaomiao_harem"
+      ]
+    },
+    {
+      "id": "flux",
+      "aliases": [
+        "flux_kontext"
+      ]
+    },
+    {
+      "id": "qwen_image",
+      "aliases": [
+        "qwen"
+      ]
+    },
+    {
+      "id": "sdxl",
+      "aliases": [
+        "stable_diffusion_xl"
+      ]
+    },
+    {
+      "id": "sd_1_5",
+      "aliases": [
+        "sd15"
+      ]
+    },
+    {
+      "id": "gpt_image",
+      "aliases": [
+        "gpt_image_1",
+        "gpt_image_2"
+      ]
+    },
+    {
+      "id": "seedream",
+      "aliases": [
+        "seedream_4",
+        "seedream_5_lite"
+      ]
+    },
+    {
+      "id": "ideogram",
+      "aliases": [
+        "ideogram_2",
+        "ideogram_3"
+      ]
+    },
+    {
+      "id": "z_image_turbo",
+      "aliases": []
+    },
+    {
+      "id": "stable_diffusion_3_5_large",
+      "aliases": []
+    },
+    {
+      "id": "hidream_i1",
+      "aliases": []
+    },
+    {
+      "id": "bria_3_x",
+      "aliases": []
+    },
+    {
+      "id": "omnigen_unified_gen_edit",
+      "aliases": []
+    },
+    {
+      "id": "chroma",
+      "aliases": []
+    },
+    {
+      "id": "krea_2",
+      "aliases": []
+    },
+    {
+      "id": "ernie_image",
+      "aliases": []
+    },
+    {
+      "id": "recraft",
+      "aliases": []
+    },
+    {
+      "id": "nano_banana",
+      "aliases": [
+        "nano_banana_2",
+        "nano_banana_2_lite",
+        "nano_banana_pro"
+      ]
+    },
+    {
+      "id": "grok_image",
+      "aliases": []
+    },
+    {
+      "id": "reve",
+      "aliases": []
+    },
+    {
+      "id": "kandinsky",
+      "aliases": []
+    },
+    {
+      "id": "flux_1",
+      "aliases": [
+        "flux1"
+      ]
+    },
+    {
+      "id": "flux_2",
+      "aliases": [
+        "flux2"
+      ]
+    },
+    {
+      "id": "flux_1_kontext",
+      "aliases": []
+    },
+    {
+      "id": "qwen_image_edit",
+      "aliases": []
+    },
+    {
+      "id": "stable_diffusion_1_5",
+      "aliases": []
+    },
+    {
+      "id": "boogu_image_0_1",
+      "aliases": []
+    },
+    {
+      "id": "krea_1",
+      "aliases": []
+    },
+    {
+      "id": "firered_image_edit",
+      "aliases": []
+    },
+    {
+      "id": "longcat_image_longcat_image_edit",
+      "aliases": []
+    },
+    {
+      "id": "chronoedit",
+      "aliases": []
+    },
+    {
+      "id": "joyai_image_edit",
+      "aliases": []
+    },
+    {
+      "id": "ltx_2_3",
+      "aliases": [
+        "ltx",
+        "ltx_2",
+        "ltx_video"
+      ]
+    },
+    {
+      "id": "wan_2_7",
+      "aliases": [
+        "wan",
+        "wan_2",
+        "wan_2_5",
+        "wan_2_6"
+      ]
+    },
+    {
+      "id": "kling_kuaishou",
+      "aliases": [
+        "kling",
+        "kling_ai"
+      ]
+    },
+    {
+      "id": "sora_2_sora_2_pro",
+      "aliases": [
+        "sora",
+        "sora_2",
+        "sora_2_pro"
+      ]
+    },
+    {
+      "id": "veo",
+      "aliases": [
+        "veo_2",
+        "veo_3"
+      ]
+    },
+    {
+      "id": "seedance",
+      "aliases": [
+        "seedance_1",
+        "seedance_2"
+      ]
+    },
+    {
+      "id": "hunyuan_video",
+      "aliases": [
+        "hunyuan",
+        "hunyuan_video_1_5"
+      ]
+    },
+    {
+      "id": "minimax_hailuo",
+      "aliases": [
+        "hailuo",
+        "minimax"
+      ]
+    },
+    {
+      "id": "runway",
+      "aliases": [
+        "gen_3",
+        "gen_4"
+      ]
+    },
+    {
+      "id": "luma_dream_machine",
+      "aliases": [
+        "luma",
+        "ray_2"
+      ]
+    },
+    {
+      "id": "svd",
+      "aliases": []
+    },
+    {
+      "id": "wan_2_1_2_2",
+      "aliases": [
+        "wan_2_1",
+        "wan_2_2"
+      ]
+    },
+    {
+      "id": "wan_2_5_2_6",
+      "aliases": []
+    },
+    {
+      "id": "ltx_2_pro",
+      "aliases": []
+    },
+    {
+      "id": "veo_3_3_1",
+      "aliases": [
+        "veo_3_1"
+      ]
+    },
+    {
+      "id": "gemini_omni_flash",
+      "aliases": []
+    },
+    {
+      "id": "seedance_1_0_and_2_0",
+      "aliases": []
+    },
+    {
+      "id": "luma_ray_2_ray_3",
+      "aliases": []
+    },
+    {
+      "id": "runway_gen_4_gen_4_5",
+      "aliases": []
+    },
+    {
+      "id": "pixverse",
+      "aliases": []
+    },
+    {
+      "id": "vidu",
+      "aliases": []
+    },
+    {
+      "id": "pika_2_2_2_5",
+      "aliases": []
+    }
+  ]
+}

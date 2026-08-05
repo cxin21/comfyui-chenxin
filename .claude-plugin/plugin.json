@@ -1,19 +1,17 @@
 {
   "name": "comfyui-chenxin",
   "version": "0.0.0",
-  "description": "Local-first ComfyUI skills with a host-neutral Prompt Forge runtime; Claude Code is one supported MCP host.",
+  "description": "Local-first ComfyUI plugin with a pure Prompt Forge compiler and an approval-gated character-to-video pipeline; MCP host-neutral.",
   "author": {
     "name": "cxin21",
     "url": "https://github.com/cxin21/comfyui-chenxin"
   },
   "keywords": [
     "comfyui",
-    "anima",
-    "wan",
+    "prompt-engineering",
+    "character-consistency",
+    "flux",
     "ltx",
-    "hunyuan",
-    "stable-diffusion",
-    "manga",
     "video",
     "ai-image"
   ],
