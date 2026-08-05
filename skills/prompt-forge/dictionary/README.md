@@ -1,18 +1,14 @@
-# dictionary/ — in-skill tag dictionary
+# dictionary/ — runtime tag index
 
-Sources:
+Prompt Forge retains only the checked-in 	ag-index.json runtime index.
+It is read by exact canonical/approved-alias validation; no source CSV or rebuild script is part of this skill.
 
-- `danbooru.csv` — 140,782 rows from [Danbooru](https://danbooru.donmai.us/wiki_pages/help:tags) (jsDelivr CDN mirror).
-- `wd14-tags.csv` — 10,862 rows from [SmilingWolf/wd-v1-4-tags](https://huggingface.co/SmilingWolf/wd-v1-4-tags) (hf-mirror).
-- `tag-index.json` — precomputed index (built by `python internals/build_tag_index.py`).
+## Runtime contract
 
-## Update flow
+- 	ag-index.json is read-only prompt-language data.
+- Unknown tags are rejected and never guessed into canonical tags.
+- Recipe control tokens remain separate from semantic tags.
 
-```bash
-python internals/build_tag_index.py        # rebuild index from CSV
-python internals/build_tag_index.py --check   # CI: exit 1 if CSV newer
-```
+## Provenance
 
-## License
-
-Danbooru tags are released under the [Danbooru Terms of Service](https://danbooru.donmai.us/wiki_pages/help:tags) for non-commercial use with attribution. WD14 tags are released by SmilingWolf under the [CreativeML Open RAIL-M license](https://huggingface.co/SmilingWolf/wd-v1-4-tags). See `../LICENSE` for this skill's MIT terms.
+The compact index is the retained runtime artifact. Source datasets and generation tooling are intentionally outside this skill boundary.

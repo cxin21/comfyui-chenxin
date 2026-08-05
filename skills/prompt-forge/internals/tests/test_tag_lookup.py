@@ -1,7 +1,7 @@
 # skills/prompt-forge/internals/tests/test_tag_lookup.py
 import json
 from pathlib import Path
-from internals.tag_lookup import load_index, lookup
+from internals.tag_lookup import load_index, lookup, lookup_many
 
 
 WORKSPACE = Path(__file__).resolve().parents[4]
@@ -61,6 +61,14 @@ def test_lookup_respects_limit():
     assert len(results) <= 3
 
 
+def test_lookup_many_keeps_candidates_independent():
+    idx = load_index(INDEX)
+    results = lookup_many(idx, ["blonde_hair", "elf"], exact=True)
+    assert [item["query"] for item in results] == ["blonde_hair", "elf"]
+    assert results[0]["results"][0]["canonical"] == "blonde_hair"
+    assert results[1]["results"][0]["canonical"] == "elf"
+
+
 def test_cli_query_long_hair():
     import subprocess
 
@@ -74,3 +82,19 @@ def test_cli_query_long_hair():
     assert r.returncode == 0
     data = json.loads(r.stdout)
     assert any(t["canonical"] == "long_hair" for t in data)
+
+
+def test_cli_queries_returns_per_candidate_results():
+    import subprocess
+
+    script = WORKSPACE / "skills/prompt-forge/internals/tag_lookup.py"
+    r = subprocess.run(
+        ["python", str(script), "--queries", "blonde_hair", "elf", "--exact"],
+        capture_output=True,
+        text=True,
+        cwd=str(WORKSPACE),
+    )
+    assert r.returncode == 0
+    data = json.loads(r.stdout)
+    assert [item["query"] for item in data] == ["blonde_hair", "elf"]
+    assert all(item["results"] for item in data)

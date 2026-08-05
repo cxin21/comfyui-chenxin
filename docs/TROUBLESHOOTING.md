@@ -1,31 +1,35 @@
-# Troubleshooting
+# 故障排查
 
-Common failure modes and their fixes, indexed by symptom.
+## ComfyUI 无法连接
 
-## Symptom: `bash scripts/validate-plugin-schema.sh` errors with `plugin.json: missing commands/agents/hooks/mcp paths`
+确认 ComfyUI 正在监听 `http://127.0.0.1:8188/`：
 
-You removed or renamed one of the plugin directories. Either restore the directory or update `plugin.json` to point at the new path.
+```powershell
+Invoke-WebRequest http://127.0.0.1:8188/system_stats
+```
 
-## Symptom: smoke test for obsidian-sync finds an `unknown` file even though I passed an event
+Prompt Forge 不会安装模型、节点或工作流；连接和资源问题由 `character-video-pipeline` 处理。
 
-That's by design: `EVENT_RAW` is sanitized through `tr -cd 'A-Za-z0-9._-'`. If your event name contains only illegal characters, the script falls back to `unknown` and writes `decision-YYYY-MM-DD-unknown.md`.
+## 提示词校验失败
 
-## Symptom: `python3 scripts/check_updates.py --apply` writes 0 changes despite upstream drift
+确认调用方已经提供最终 PromptPackage 草稿，并检查目标、CreativeEvidence、连续性锁、方言和风格字段。缺失草稿、占位符、未声明事实或未知 tag 会 fail closed；Prompt Forge 不会用猜测补写 prose。
 
-Confirm `git remote -v` lists a remote. The daemon compares local `recipes/MODELS.md` to upstream `SlavaSexton/ComfyUI-Agent-Kit` via `curl`, but `git fetch` failures cause the daemon to fall back to a no-diff report.
+## 方言或风格不匹配
 
-## Symptom: `bash tests/test_obsidian_sync.sh` fails because /tmp missing
+方言必须使用 canonical ID 或批准的 alias。模糊查询只能得到建议，不能成为最终方言。风格只改变 medium、palette、lighting、composition、material、texture、depth 和 motion language，不得改变人物、剧情、道具或 continuity locks。
 
-On Windows Git Bash, `/tmp` resolves to the user temp dir. If that's read-only (corporate lockdown), set `TMPDIR=$HOME/tmp` before running.
+## MCP 工具不可用
 
-## Symptom: `bash scripts/obsidian-sync.sh` exits 0 but writes nothing
+确认宿主提供 `host_call_tool(tool_name, arguments)`，并且 `mcp/mcp_servers.json` 中的工具名已登记。缺少 workflow discovery、validation 或 runtime capability 证据时，生产 pipeline 必须停止，不得伪造 receipt。
 
-Either the vault doesn't exist (idempotent non-fatal skip) or `EVENT` was empty after sanitization (defaults to `unknown`). Check by setting `OBSIDIAN_VAULT_PATH=` to point at a writable location.
+## 阶段资产不可用
 
-## Symptom: ComfyUI workflow fails with "VRAM exceeded"
+只有经过 raw history、PNG/hash、lineage、orientation 和 acceptance 校验的阶段资产才能进入下一阶段。Stage 2 的 accepted multiview 才能进入 Stage 3；Stage 3 的 accepted shot image 才能进入 Stage 4。
 
-The inline hardware probe in `scripts/bootstrap.sh` (formerly `mcp/extensions/vram_decide.py`, inlined 2026-08) reads `skills/prompt-forge/hardware/<vram_gb>.json` (or `<vram_gb>gb.json` — both conventions are honored). If neither file exists for your VRAM, the probe returns `sampler_defaults` from the conservative SDXL-style defaults rather than refuse. Update the `hardware/XX.json` profile (or copy `8gb.json` to your actual VRAM tier) to gate correctly.
+## 队列或提交不确定
 
-## Symptom: recipe_yaml.py modified a recipe's body, not just added YAML frontmatter
+保留 request ID、consumption receipt 和 raw history，先查询 terminal history 再决定。不要盲目重试、删除 sentinel 或把“请求已发送”当成成功。
 
-The script is conservative — body content should be unchanged. If you see body change, open an issue with a diff. Likely cause: a recipe line began with `### Foo` inside its body (header collision).
+## 视频验证失败
+
+Stage 4 必须同时验证 raw history、视频 hash、ffprobe 的 FPS/帧数/时长以及 profile 合同。任何一项失败都不能写入 RunRecord。

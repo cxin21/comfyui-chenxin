@@ -1,0 +1,80 @@
+{
+  "schema_version": "2.0",
+  "profile_id": "flux2-klein-multiview-flat-v2",
+  "workflow_id": "prompt-forge-flat-v2",
+  "workflow_name": "PromptForge-Flux2-Klein-multiview-flat-v2.json",
+  "workflow_fingerprint": "9dc2b01e2aea0b051113b187b134d007f452df6c83cfcbbd8d325eaa4c29e4da",
+  "source_api_graph_hash": "450e6e6570a7c21aee6bc2bd32d19ac579e3460de9ccc1eca456b0dd960eec36",
+  "promotion_receipt_hash": "f6bb0a07c6d0f25723a2c139d76cb2c710a04b77ebeb2a08672ec41009564ba0",
+  "generation_modes": [
+    "image-to-image"
+  ],
+  "runtime_classification": "local",
+  "slots": {
+    "base_image_primary": {
+      "id": 111,
+      "type": "LoadImage"
+    },
+    "base_image_secondary": {
+      "id": 667,
+      "type": "LoadImage"
+    }
+  },
+  "allowed_mutations": [
+    "base_image_primary.image",
+    "base_image_secondary.image"
+  ],
+  "immutable_roles": {
+    "pose_references": [
+      368,
+      151,
+      152,
+      154,
+      360,
+      364,
+      148,
+      149,
+      147,
+      373,
+      150,
+      367
+    ]
+  },
+  "output_nodes": {
+    "524": {
+      "artifact_type": "CharacterAngleView",
+      "view_label": "front_closeup"
+    },
+    "663": {
+      "artifact_type": "CharacterAngleView",
+      "view_label": "front"
+    },
+    "761": {
+      "artifact_type": "CharacterAngleView",
+      "view_label": "rear_45"
+    },
+    "565": {
+      "artifact_type": "CharacterAngleView",
+      "view_label": "side_unknown"
+    },
+    "609": {
+      "artifact_type": "CharacterAngleView",
+      "view_label": "rear"
+    },
+    "224": {
+      "artifact_type": "CharacterSheet",
+      "view_label": "sheet"
+    },
+    "338": {
+      "artifact_type": "CharacterSheet",
+      "view_label": "sheet"
+    },
+    "201": {
+      "artifact_type": "CharacterSheet",
+      "view_label": "sheet"
+    }
+  },
+  "expected_outputs": [
+    "image/png"
+  ]
+}

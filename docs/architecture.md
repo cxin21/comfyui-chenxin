@@ -1,57 +1,32 @@
-# comfyui-chenxin Architecture (Quick Ref)
+# Architecture and first principles
 
-> TL;DR for engineers. Full spec → [superpowers/specs/2026-07-30-comfyui-chenxin-design.md](superpowers/specs/2026-07-30-comfyui-chenxin-design.md).
+## Two bounded skills
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ L8  Distribution (npm + Claude Code plugin marketplace)     │
-├─────────────────────────────────────────────────────────────┤
-│ L7  ~~Cross-CLI adapters~~  → not built (Claude Code only) │
-├─────────────────────────────────────────────────────────────┤
-│ L6  Telemetry / Health / SLO                               │
-├─────────────────────────────────────────────────────────────┤
-│ L5  Application Layer (manga-orchestrator + 6 sibling apps)│
-├─────────────────────────────────────────────────────────────┤
-│ L4  Skill Orchestrator (prompt-forge — mega-skill)         │
-├─────────────────────────────────────────────────────────────┤
-│ L3  Knowledge Substrate (74 recipes + 578 templates + hw)  │
-├─────────────────────────────────────────────────────────────┤
-│ L2  MCP Driver (comfyui-mcp 108 tools)                      │
-├─────────────────────────────────────────────────────────────┤
-│ L1  ComfyUI Core (your local GPU + custom_nodes)           │
-└─────────────────────────────────────────────────────────────┘
-```
-
-## Layer contracts
-
-| Layer | Owner | Interface | Tests |
-|-------|-------|-----------|-------|
-| L1 | user's local install | HTTP at `127.0.0.1:8188` | health_check |
-| L2 | this repo (mcp/) | MCP tools | integration |
-| L3 | this repo (recipes/) | YAML + JSON files | unit |
-| L4 | this repo (skills/prompt-forge/) | SKILL.md | e2e |
-| L5 | this repo (skills/manga-*/) | SKILL.md | e2e |
-| L6 | this repo (agents/chenxin-doctor.md) | slash + agent | unit |
-| L8 | this repo (.claude-plugin/) | plugin.json | schema |
+Prompt Forge is pure authoring and audit. `character-video-pipeline` is the production consumer and execution owner.
 
 ## Data flow
 
-```
-user message
-    ↓ L7/L4 route by keyword
-L4 pick L3 dialect
-    ↓
-L3 ask L2 which template + which model
-    ↓
-L2 bootstrap.sh inline probe (L3 hardware matrix)
-    ↓
-L2 enqueue workflow (comfyui-mcp)
-    ↓
-L1 ComfyUI run
-    ↓ output to output/
-L2 gui_save graph to user/default/workflows/<ts>_<name>.json
-    ↓
-L4 optional aesthetic-judge
-    ↓
-result returned to user
-```
+`brief + evidence -> Claude/Codex draft -> deterministic PromptPackage -> external pipeline`
+
+The external pipeline adds profiles, approval, ComfyUI/MCP submission, artifacts, and history.
+
+## Ownership table
+
+- Prompt Forge: evidence normalization, dialect and style language, tag checks, package validation.
+- Character video pipeline: model/workflow discovery, MCP, approvals, submission, artifacts, and RunRecords.
+
+## Boundary invariants
+
+- Prompt Forge never imports runtime code, reads workflow profiles, checks model installation, or emits execution state.
+- The pipeline never asks Prompt Forge to execute or silently rewrite a prompt.
+
+## Four-stage handoff
+
+1. Prompt Forge writes the base-image prompt.
+2. The pipeline consumes it for the base image.
+3. Prompt Forge writes multiview, shot, and video prompts while preserving locked evidence.
+4. The pipeline consumes external assets; Prompt Forge remains side-effect free.
+
+## Verification
+
+Prompt Forge is verified offline with deterministic tests. Runtime integration and live workflow checks belong to the production consumer.

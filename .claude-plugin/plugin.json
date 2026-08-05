@@ -1,27 +1,22 @@
 {
   "name": "comfyui-chenxin",
   "version": "0.0.0",
-  "description": "Local-first ComfyUI mega-skill: 80 model prompt recipes, hardware-aware model selection via VRAM decision matrix, prompt orchestration, and the manga end-to-end pipeline. For Claude Code only.",
+  "description": "Local-first ComfyUI plugin with a pure Prompt Forge compiler and an approval-gated character-to-video pipeline; MCP host-neutral.",
   "author": {
     "name": "cxin21",
     "url": "https://github.com/cxin21/comfyui-chenxin"
   },
   "keywords": [
     "comfyui",
-    "anima",
-    "wan",
+    "prompt-engineering",
+    "character-consistency",
+    "flux",
     "ltx",
-    "hunyuan",
-    "stable-diffusion",
-    "manga",
     "video",
     "ai-image"
   ],
   "license": "MIT",
   "homepage": "https://github.com/cxin21/comfyui-chenxin",
   "repository": "https://github.com/cxin21/comfyui-chenxin",
-  "engines": {
-    "claude-code": ">=1.0.0"
-  },
   "mcpServers": "./mcp/mcp_servers.json"
 }

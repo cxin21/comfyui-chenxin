@@ -1,0 +1,32 @@
+{
+  "174": {
+    "class_type": "YusuLTXDirector",
+    "inputs": {
+      "timeline_data": "{\"global_prompt\":\"continuity\",\"segments\":[{\"id\":\"old\",\"imageFile\":\"old.png\",\"imageB64\":\"/api/view?filename=old.png\",\"prompt\":\"old prompt\",\"start\":0,\"length\":12,\"type\":\"image\",\"isEndFrame\":false}],\"editor\":{\"zoom\":1}}",
+      "local_prompts": "old prompt",
+      "segment_lengths": "12",
+      "guide_strength": "1",
+      "transition_smoothness": "0",
+      "start_second": 0.0,
+      "end_second": 0.5,
+      "duration_seconds": 0.5,
+      "start_frame": 0,
+      "end_frame": 11,
+      "duration_frames": 12,
+      "frame_rate": 24,
+      "model": [160, 0]
+    }
+  },
+  "195": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {"text": "workflow-owned negative", "clip": [84, 0]}
+  },
+  "160": {
+    "class_type": "LTXVModelLoader",
+    "inputs": {"model": "ltx-model.gguf", "loras": ["fixed-lora"]}
+  },
+  "84": {
+    "class_type": "CLIPLoader",
+    "inputs": {"name": "text-encoder"}
+  }
+}

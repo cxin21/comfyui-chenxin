@@ -11,9 +11,9 @@
         "source": "github",
         "repo": "cxin21/comfyui-chenxin"
       },
-      "description": "Local-first ComfyUI mega-skill for Claude Code. 80 model prompt recipes (YAML frontmatter), 1 hardware VRAM decision matrix, hardware-aware model selection, self-updating knowledge substrate, manga end-to-end pipeline.",
+      "description": "Local-first ComfyUI plugin with a pure Prompt Forge compiler and an approval-gated character-to-video pipeline with host-neutral MCP bridging.",
       "version": "0.0.0",
-      "keywords": ["comfyui", "anima", "wan", "ltx", "hunyuan", "manga", "video", "ai-image"]
+      "keywords": ["comfyui", "prompt-engineering", "character-consistency", "flux", "ltx", "video", "ai-image"]
     }
   ]
 }

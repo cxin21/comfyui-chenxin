@@ -1,39 +1,19 @@
----
-okm: timeless
-status: active
-kind: knowledge
-type: presets
-updated: 2026-07-29
----
+# Style directions
 
-# 风格预设
+A style direction is a bundle of visible attributes, not a source of story facts. Select one only from an explicit request or supported `style_evidence`. If several directions fit, show their visible tradeoffs and ask for a choice.
 
-> 7 个开箱即用的风格配方。用户未指定风格方向时，AskUserQuestion 给出 3 个预设供选择。
+| Direction | Medium | Palette | Lighting | Texture |
+|---|---|---|---|---|
+| restrained ink | ink wash on textured paper | charcoal, warm gray, one vermilion accent | diffuse mist | dry-brush edges, paper fibers |
+| cinematic noir | cinematic photography | cool cyan, deep neutral, controlled red | hard rim and practical light | fine grain, wet reflections |
+| luminous naturalism | documentary photography | balanced skin tones, foliage greens | soft daylight | realistic fabric and skin detail |
+| graphic minimalism | flat editorial illustration | two or three flat colors | shape-defined light | clean edges, broad quiet areas |
+| painterly epic | oil painting on canvas | warm-cool contrast | directional dramatic light | layered brushwork, atmospheric depth |
 
-| 预设 | 光影 | 色彩 | 氛围 |
-|------|------|------|------|
-| 史诗 | [[lighting-rim-dramatic]] | [[color-warm-cool-contrast]] | grand, cinematic, heroic |
-| 暗黑 | [[lighting-neon-noir]] | [[color-desaturated]] | gritty, noir, oppressive |
-| 赛博朋克 | [[lighting-neon-noir]] | [[color-teal-orange]] | neon-drenched, cybernetic, dystopian, high-tech low-life |
-| 华丽 | [[lighting-golden-hour]] | [[color-warm-palette]] | luxurious, ornate, rich |
-| 清新 | [[lighting-natural-soft]] | [[color-earth-green]] | fresh, airy, natural |
-| 复古 | [[lighting-window-soft]] | [[color-neutral-warm]] | nostalgic, vintage, warm |
-| 极简 | [[lighting-diffused-mist]] | [[color-desaturated]] | sparse, zen, negative space |
+## Invariance rule
 
-## 选择逻辑
+Changing direction may alter only visual-language fields such as medium, palette, lighting, texture, camera feel, and motion quality. Repeat identity cues, plot actions, named props, spatial facts, dialogue, and continuity locks without reinterpretation.
 
-1. 若用户已指定风格方向（如"要史诗感"），直接匹配对应预设，不弹选择
-2. 若用户未指定，从 7 个预设中随机抽 3 个，通过 AskUserQuestion 让用户选
-3. 选中后 Read 对应的光影 + 色彩 wikilink 文件，注入 prompt 生成流程
-4. 如果用户同时命中了 [[scene-recipes]] 中的场景，**场景配方优先于风格预设**（场景决定光影/构图，预设只补色彩/氛围）
+## Selection record
 
-## 预设适用场景建议
-
-| 预设 | 适合场景 |
-|------|---------|
-| 史诗 | combat, scifi |
-| 暗黑 | night, weather |
-| 华丽 | portrait, xianxia |
-| 清新 | nature, casual |
-| 复古 | indoor, portrait |
-| 极简 | portrait, indoor |
+For each chosen phrase, record `source_id`, `source_section`, and the supported evidence field. Suggestions that lack support remain options rather than prompt content.

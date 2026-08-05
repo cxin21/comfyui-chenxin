@@ -21,6 +21,7 @@ venv/
 output/
 input/*.tmp
 !input/.gitkeep
+.live-artifacts/
 
 # Editor
 .vscode/

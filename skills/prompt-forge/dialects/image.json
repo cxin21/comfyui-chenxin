@@ -1,0 +1,944 @@
+{
+    "dialects":  [
+                     {
+                         "id":  "anima",
+                         "modality":  "image",
+                         "prompt_form":  "tag_then_natural_language",
+                         "ordering":  [
+                                          "score_prefix",
+                                          "subject",
+                                          "appearance",
+                                          "clothing",
+                                          "action",
+                                          "scene",
+                                          "lighting",
+                                          "style"
+                                      ],
+                         "negative_policy":  "Use a separate concise quality and artifact exclusion list.",
+                         "reference_rules":  {
+                                                 "identity":  "Keep character names and defining traits consistent across references.",
+                                                 "style":  "Place style tags after scene and lighting tags."
+                                             },
+                         "required_dimensions":  [
+                                                     "subject",
+                                                     "action_or_pose",
+                                                     "scene",
+                                                     "lighting",
+                                                     "style"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "unstructured long prose",
+                                                    "missing score prefix",
+                                                    "overlong tag dumps"
+                                                ],
+                         "source_notes":  [
+                                              "Anima recipe: Danbooru-style comma-separated tags with score prefixes."
+                                          ]
+                     },
+                     {
+                         "id":  "flux",
+                         "modality":  "image",
+                         "prompt_form":  "natural_language_paragraph",
+                         "ordering":  [
+                                          "main_subject",
+                                          "action",
+                                          "critical_style",
+                                          "context",
+                                          "secondary_details"
+                                      ],
+                         "negative_policy":  "Phrase desired outcomes positively instead of supplying negative prompts.",
+                         "reference_rules":  {
+                                                 "identity":  "Name the role of each reference and the traits to preserve.",
+                                                 "editing":  "Describe one focused change and explicitly state what remains unchanged."
+                                             },
+                         "required_dimensions":  [
+                                                     "subject",
+                                                     "action",
+                                                     "environment",
+                                                     "style_or_medium",
+                                                     "lighting"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "comma-tag soup",
+                                                    "negative prompt syntax",
+                                                    "named font dependency"
+                                                ],
+                         "source_notes":  [
+                                              "FLUX prompting guides: natural sentences, important concepts first, literal text in quotes."
+                                          ]
+                     },
+                     {
+                         "id":  "qwen_image",
+                         "modality":  "image",
+                         "prompt_form":  "structured_natural_language",
+                         "ordering":  [
+                                          "task",
+                                          "subject",
+                                          "layout",
+                                          "style",
+                                          "text",
+                                          "constraints"
+                                      ],
+                         "negative_policy":  "Prefer positive constraints; use exclusions only where the model variant supports them.",
+                         "reference_rules":  {
+                                                 "editing":  "State the requested edit, target region, and preserved content.",
+                                                 "text":  "Quote literal text and identify its placement."
+                                             },
+                         "required_dimensions":  [
+                                                     "task",
+                                                     "subject",
+                                                     "composition",
+                                                     "style"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "conflicting styles",
+                                                    "ambiguous edit targets"
+                                                ],
+                         "source_notes":  [
+                                              "Qwen Image recipes: structured natural language and one coherent style direction."
+                                          ]
+                     },
+                     {
+                         "id":  "sdxl",
+                         "modality":  "image",
+                         "prompt_form":  "hybrid_natural_language_and_tags",
+                         "ordering":  [
+                                          "subject",
+                                          "action",
+                                          "environment",
+                                          "composition",
+                                          "lighting",
+                                          "quality"
+                                      ],
+                         "negative_policy":  "A separate negative prompt is supported and useful for artifacts and unwanted traits.",
+                         "reference_rules":  {
+                                                 "style":  "Use a compact, coherent style vocabulary.",
+                                                 "composition":  "State shot scale and viewpoint explicitly."
+                                             },
+                         "required_dimensions":  [
+                                                     "subject",
+                                                     "environment",
+                                                     "composition",
+                                                     "lighting"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "contradictory weighted tokens",
+                                                    "multiple competing media"
+                                                ],
+                         "source_notes":  [
+                                              "SDXL recipes: natural language with optional conventional tags and weighting."
+                                          ]
+                     },
+                     {
+                         "id":  "sd_1_5",
+                         "modality":  "image",
+                         "prompt_form":  "weighted_comma_tags",
+                         "ordering":  [
+                                          "subject",
+                                          "appearance",
+                                          "action",
+                                          "scene",
+                                          "style",
+                                          "quality"
+                                      ],
+                         "negative_policy":  "Use a separate negative tag list for anatomy, quality, and unwanted content.",
+                         "reference_rules":  {
+                                                 "style":  "Prefer model-familiar tags and stable token weighting.",
+                                                 "identity":  "Repeat concise identity tokens consistently."
+                                             },
+                         "required_dimensions":  [
+                                                     "subject",
+                                                     "scene",
+                                                     "style"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "paragraph-length prose",
+                                                    "excessive token weighting"
+                                                ],
+                         "source_notes":  [
+                                              "SD 1.5 recipes: comma tags and parenthesized token weights."
+                                          ]
+                     },
+                     {
+                         "id":  "gpt_image",
+                         "modality":  "image",
+                         "prompt_form":  "structured_creative_brief",
+                         "ordering":  [
+                                          "goal",
+                                          "subject",
+                                          "setting",
+                                          "composition",
+                                          "look",
+                                          "constraints"
+                                      ],
+                         "negative_policy":  "Express exclusions as a final constraint section rather than a separate negative field.",
+                         "reference_rules":  {
+                                                 "identity":  "Specify which identity, pose, palette, or layout each reference contributes.",
+                                                 "text":  "Quote exact copy and describe hierarchy and placement."
+                                             },
+                         "required_dimensions":  [
+                                                     "goal",
+                                                     "subject",
+                                                     "composition",
+                                                     "visual_style",
+                                                     "constraints"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "vague aesthetic adjectives without visual evidence",
+                                                    "conflicting constraints"
+                                                ],
+                         "source_notes":  [
+                                              "GPT Image recipes: explicit production brief with intent, layout, look, and exclusions."
+                                          ]
+                     },
+                     {
+                         "id":  "seedream",
+                         "modality":  "image",
+                         "prompt_form":  "identity_locked_visual_spec",
+                         "ordering":  [
+                                          "subject_identity",
+                                          "action",
+                                          "scene",
+                                          "composition",
+                                          "lighting",
+                                          "finish"
+                                      ],
+                         "negative_policy":  "Describe the desired result positively and keep exclusions concise.",
+                         "reference_rules":  {
+                                                 "identity":  "Separate immutable identity traits from changeable pose, wardrobe, and scene.",
+                                                 "style":  "Describe transferable visual traits rather than only naming a style."
+                                             },
+                         "required_dimensions":  [
+                                                     "identity",
+                                                     "action",
+                                                     "scene",
+                                                     "composition",
+                                                     "lighting"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "unbounded booster phrases",
+                                                    "identity-changing edit language"
+                                                ],
+                         "source_notes":  [
+                                              "Seedream recipes: structured specification with explicit identity preservation."
+                                          ]
+                     },
+                     {
+                         "id":  "ideogram",
+                         "modality":  "image",
+                         "prompt_form":  "natural_language_with_typography",
+                         "ordering":  [
+                                          "subject",
+                                          "composition",
+                                          "literal_text",
+                                          "typography",
+                                          "style",
+                                          "color"
+                                      ],
+                         "negative_policy":  "Use a short negative prompt for unwanted objects or visual defects where supported.",
+                         "reference_rules":  {
+                                                 "text":  "Quote exact text, then describe font character, hierarchy, and placement.",
+                                                 "layout":  "State foreground, background, alignment, and whitespace relationships."
+                                             },
+                         "required_dimensions":  [
+                                                     "subject",
+                                                     "layout",
+                                                     "style",
+                                                     "literal_text"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "unquoted display text",
+                                                    "competing text strings without hierarchy"
+                                                ],
+                         "source_notes":  [
+                                              "Ideogram recipes: natural language with explicit quoted typography and layout."
+                                          ]
+                     },
+                     {
+                         "id":  "z_image_turbo",
+                         "modality":  "image",
+                         "prompt_form":  "subject_first_natural_language",
+                         "ordering":  [
+                                          "subject",
+                                          "action",
+                                          "scene",
+                                          "style",
+                                          "lighting"
+                                      ],
+                         "negative_policy":  "Phrase the desired result positively; a separate negative prompt is not used.",
+                         "reference_rules":  {
+                                                 "guidance":  "Keep the subject and intent explicit before secondary detail."
+                                             },
+                         "required_dimensions":  [
+                                                     "subject",
+                                                     "scene",
+                                                     "style"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "negative prompt syntax",
+                                                    "high-booster tag strings"
+                                                ],
+                         "source_notes":  [
+                                              "Z-Image Turbo recipe: concise subject-first natural language."
+                                          ]
+                     },
+                     {
+                         "id":  "stable_diffusion_3_5_large",
+                         "modality":  "image",
+                         "prompt_form":  "natural_language_description",
+                         "ordering":  [
+                                          "subject",
+                                          "action",
+                                          "environment",
+                                          "composition",
+                                          "lighting",
+                                          "style"
+                                      ],
+                         "negative_policy":  "A separate concise negative prompt is supported.",
+                         "reference_rules":  {
+                                                 "guidance":  "Describe reference traits explicitly without token-weight syntax."
+                                             },
+                         "required_dimensions":  [
+                                                     "subject",
+                                                     "composition",
+                                                     "lighting",
+                                                     "style"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "token weighting syntax",
+                                                    "contradictory media"
+                                                ],
+                         "source_notes":  [
+                                              "Stable Diffusion 3.5 Large recipe: descriptive prose without weighting syntax."
+                                          ]
+                     },
+                     {
+                         "id":  "hidream_i1",
+                         "modality":  "image",
+                         "prompt_form":  "natural_language_description",
+                         "ordering":  [
+                                          "subject",
+                                          "action",
+                                          "environment",
+                                          "style",
+                                          "detail"
+                                      ],
+                         "negative_policy":  "Negative prompting depends on the variant; prefer positive constraints.",
+                         "reference_rules":  {
+                                                 "guidance":  "State identity and composition traits to preserve."
+                                             },
+                         "required_dimensions":  [
+                                                     "subject",
+                                                     "environment",
+                                                     "style"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "dense tag soup",
+                                                    "conflicting style labels"
+                                                ],
+                         "source_notes":  [
+                                              "HiDream-I1 recipe: direct natural-language visual description."
+                                          ]
+                     },
+                     {
+                         "id":  "bria_3_x",
+                         "modality":  "image",
+                         "prompt_form":  "concise_natural_language",
+                         "ordering":  [
+                                          "subject",
+                                          "action",
+                                          "setting",
+                                          "look",
+                                          "text"
+                                      ],
+                         "negative_policy":  "Use a separate negative prompt only when the selected variant supports guidance.",
+                         "reference_rules":  {
+                                                 "guidance":  "Quote literal text and specify its placement."
+                                             },
+                         "required_dimensions":  [
+                                                     "subject",
+                                                     "setting",
+                                                     "look"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "overlong prose",
+                                                    "ambiguous literal text"
+                                                ],
+                         "source_notes":  [
+                                              "BRIA 3.x recipe: short production-oriented natural language."
+                                          ]
+                     },
+                     {
+                         "id":  "omnigen_unified_gen_edit",
+                         "modality":  "image",
+                         "prompt_form":  "instruction_with_inline_references",
+                         "ordering":  [
+                                          "task",
+                                          "reference_roles",
+                                          "requested_change",
+                                          "preserved_content",
+                                          "finish"
+                                      ],
+                         "negative_policy":  "Use concise exclusions after the positive edit instruction.",
+                         "reference_rules":  {
+                                                 "guidance":  "Identify each inline reference and its intended contribution."
+                                             },
+                         "required_dimensions":  [
+                                                     "task",
+                                                     "reference_roles",
+                                                     "change",
+                                                     "preservation"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "unnamed references",
+                                                    "conflicting edit commands"
+                                                ],
+                         "source_notes":  [
+                                              "OmniGen recipe: unified generation or edit instruction with explicit reference roles."
+                                          ]
+                     },
+                     {
+                         "id":  "chroma",
+                         "modality":  "image",
+                         "prompt_form":  "natural_language_description",
+                         "ordering":  [
+                                          "subject",
+                                          "action",
+                                          "environment",
+                                          "composition",
+                                          "style"
+                                      ],
+                         "negative_policy":  "A separate concise negative prompt is supported.",
+                         "reference_rules":  {
+                                                 "guidance":  "Describe reference style through visible traits."
+                                             },
+                         "required_dimensions":  [
+                                                     "subject",
+                                                     "environment",
+                                                     "composition"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "comma-tag soup",
+                                                    "contradictory composition"
+                                                ],
+                         "source_notes":  [
+                                              "Chroma recipe: coherent natural-language scene description."
+                                          ]
+                     },
+                     {
+                         "id":  "krea_2",
+                         "modality":  "image",
+                         "prompt_form":  "natural_language_with_quoted_text",
+                         "ordering":  [
+                                          "subject",
+                                          "composition",
+                                          "style",
+                                          "literal_text",
+                                          "color"
+                                      ],
+                         "negative_policy":  "RAW variants may accept exclusions; Turbo variants should use positive phrasing.",
+                         "reference_rules":  {
+                                                 "guidance":  "Quote text exactly and separate identity traits from style traits."
+                                             },
+                         "required_dimensions":  [
+                                                     "subject",
+                                                     "composition",
+                                                     "style"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "weight syntax",
+                                                    "unquoted display text"
+                                                ],
+                         "source_notes":  [
+                                              "Krea 2 recipe: visual prose with literal text in quotes."
+                                          ]
+                     },
+                     {
+                         "id":  "ernie_image",
+                         "modality":  "image",
+                         "prompt_form":  "instruction_and_visual_spec",
+                         "ordering":  [
+                                          "task",
+                                          "subject",
+                                          "scene",
+                                          "composition",
+                                          "style",
+                                          "constraints"
+                                      ],
+                         "negative_policy":  "State unwanted content as positive constraints when possible.",
+                         "reference_rules":  {
+                                                 "guidance":  "Clarify the role of every reference in the instruction."
+                                             },
+                         "required_dimensions":  [
+                                                     "task",
+                                                     "subject",
+                                                     "composition",
+                                                     "style"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "ambiguous task verbs",
+                                                    "competing styles"
+                                                ],
+                         "source_notes":  [
+                                              "ERNIE Image recipe: instruction followed by a structured visual specification."
+                                          ]
+                     },
+                     {
+                         "id":  "recraft",
+                         "modality":  "image",
+                         "prompt_form":  "design_brief",
+                         "ordering":  [
+                                          "asset_type",
+                                          "subject",
+                                          "layout",
+                                          "style",
+                                          "palette",
+                                          "text"
+                                      ],
+                         "negative_policy":  "Phrase exclusions as design constraints rather than a separate negative prompt.",
+                         "reference_rules":  {
+                                                 "guidance":  "Describe layout and brand traits to preserve."
+                                             },
+                         "required_dimensions":  [
+                                                     "asset_type",
+                                                     "layout",
+                                                     "style",
+                                                     "palette"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "vague design request",
+                                                    "conflicting palettes"
+                                                ],
+                         "source_notes":  [
+                                              "Recraft recipe: concise design brief with layout and palette."
+                                          ]
+                     },
+                     {
+                         "id":  "nano_banana",
+                         "modality":  "image",
+                         "prompt_form":  "rich_descriptive_prose",
+                         "ordering":  [
+                                          "goal",
+                                          "subject",
+                                          "setting",
+                                          "composition",
+                                          "lighting",
+                                          "finish"
+                                      ],
+                         "negative_policy":  "Use positive phrasing; a separate negative prompt is not used.",
+                         "reference_rules":  {
+                                                 "guidance":  "Name identity, pose, style, or layout contributions for each reference."
+                                             },
+                         "required_dimensions":  [
+                                                     "goal",
+                                                     "subject",
+                                                     "composition",
+                                                     "lighting"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "negative prompt syntax",
+                                                    "unscoped edit requests"
+                                                ],
+                         "source_notes":  [
+                                              "Nano Banana family recipe: rich descriptive prose with explicit preservation intent."
+                                          ]
+                     },
+                     {
+                         "id":  "grok_image",
+                         "modality":  "image",
+                         "prompt_form":  "five_part_visual_brief",
+                         "ordering":  [
+                                          "intent",
+                                          "subject",
+                                          "scene",
+                                          "composition",
+                                          "look"
+                                      ],
+                         "negative_policy":  "Place exclusions in the final constraints clause.",
+                         "reference_rules":  {
+                                                 "guidance":  "Describe the visual evidence to preserve from references."
+                                             },
+                         "required_dimensions":  [
+                                                     "intent",
+                                                     "subject",
+                                                     "composition",
+                                                     "look"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "vague aesthetic boosters",
+                                                    "conflicting constraints"
+                                                ],
+                         "source_notes":  [
+                                              "Grok Image recipe: structured visual brief with a final constraints clause."
+                                          ]
+                     },
+                     {
+                         "id":  "reve",
+                         "modality":  "image",
+                         "prompt_form":  "natural_language_description",
+                         "ordering":  [
+                                          "subject",
+                                          "action",
+                                          "scene",
+                                          "composition",
+                                          "style"
+                                      ],
+                         "negative_policy":  "Phrase desired content positively; a separate negative prompt is not used.",
+                         "reference_rules":  {
+                                                 "guidance":  "Specify stable identity and layout traits."
+                                             },
+                         "required_dimensions":  [
+                                                     "subject",
+                                                     "scene",
+                                                     "composition"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "negative prompt syntax",
+                                                    "tag dump"
+                                                ],
+                         "source_notes":  [
+                                              "Reve recipe: direct natural-language visual description."
+                                          ]
+                     },
+                     {
+                         "id":  "kandinsky",
+                         "modality":  "image",
+                         "prompt_form":  "natural_language_description",
+                         "ordering":  [
+                                          "subject",
+                                          "action",
+                                          "environment",
+                                          "style",
+                                          "lighting"
+                                      ],
+                         "negative_policy":  "A separate negative prompt is supported.",
+                         "reference_rules":  {
+                                                 "guidance":  "Describe reference content and style separately."
+                                             },
+                         "required_dimensions":  [
+                                                     "subject",
+                                                     "environment",
+                                                     "style"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "conflicting styles",
+                                                    "ambiguous subject"
+                                                ],
+                         "source_notes":  [
+                                              "Kandinsky recipe: natural-language image description with optional exclusions."
+                                          ]
+                     },
+                     {
+                         "id":  "flux_1",
+                         "modality":  "image",
+                         "prompt_form":  "natural_language_paragraph",
+                         "ordering":  [
+                                          "subject",
+                                          "action",
+                                          "style",
+                                          "context",
+                                          "details"
+                                      ],
+                         "negative_policy":  "Phrase desired outcomes positively; a separate negative prompt is not used.",
+                         "reference_rules":  {
+                                                 "guidance":  "Put reference roles and preserved traits in plain language."
+                                             },
+                         "required_dimensions":  [
+                                                     "subject",
+                                                     "action",
+                                                     "context",
+                                                     "style"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "comma-tag soup",
+                                                    "negative prompt syntax"
+                                                ],
+                         "source_notes":  [
+                                              "FLUX.1 recipe: important concepts first in natural-language sentences."
+                                          ]
+                     },
+                     {
+                         "id":  "flux_2",
+                         "modality":  "image",
+                         "prompt_form":  "natural_language_or_structured_spec",
+                         "ordering":  [
+                                          "subject",
+                                          "action",
+                                          "style",
+                                          "context",
+                                          "details"
+                                      ],
+                         "negative_policy":  "Phrase desired outcomes positively; a separate negative prompt is not used.",
+                         "reference_rules":  {
+                                                 "guidance":  "Assign identity, style, pose, or layout roles to each reference."
+                                             },
+                         "required_dimensions":  [
+                                                     "subject",
+                                                     "action",
+                                                     "context",
+                                                     "style"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "untyped references",
+                                                    "negative prompt syntax"
+                                                ],
+                         "source_notes":  [
+                                              "FLUX.2 recipe: natural language or a structured visual specification."
+                                          ]
+                     },
+                     {
+                         "id":  "flux_1_kontext",
+                         "modality":  "image",
+                         "prompt_form":  "focused_edit_instruction",
+                         "ordering":  [
+                                          "change",
+                                          "target",
+                                          "result",
+                                          "preservation"
+                                      ],
+                         "negative_policy":  "Use positive preservation language instead of negative commands.",
+                         "reference_rules":  {
+                                                 "guidance":  "Make one focused edit and state what remains unchanged."
+                                             },
+                         "required_dimensions":  [
+                                                     "change",
+                                                     "target",
+                                                     "preservation"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "multiple unrelated edits",
+                                                    "full-image re-description"
+                                                ],
+                         "source_notes":  [
+                                              "FLUX Kontext recipe: focused edit instruction with preservation language."
+                                          ]
+                     },
+                     {
+                         "id":  "qwen_image_edit",
+                         "modality":  "image",
+                         "prompt_form":  "structured_edit_instruction",
+                         "ordering":  [
+                                          "task",
+                                          "target",
+                                          "change",
+                                          "placement",
+                                          "preservation"
+                                      ],
+                         "negative_policy":  "Prefer positive constraints and concise exclusions.",
+                         "reference_rules":  {
+                                                 "guidance":  "State the target region and preserved content explicitly."
+                                             },
+                         "required_dimensions":  [
+                                                     "task",
+                                                     "target",
+                                                     "change",
+                                                     "preservation"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "ambiguous edit target",
+                                                    "competing styles"
+                                                ],
+                         "source_notes":  [
+                                              "Qwen Image Edit recipe: structured natural-language edit instruction."
+                                          ]
+                     },
+                     {
+                         "id":  "stable_diffusion_1_5",
+                         "modality":  "image",
+                         "prompt_form":  "weighted_comma_tags",
+                         "ordering":  [
+                                          "subject",
+                                          "appearance",
+                                          "action",
+                                          "scene",
+                                          "style",
+                                          "quality"
+                                      ],
+                         "negative_policy":  "Use a separate negative tag list for anatomy, quality, and unwanted content.",
+                         "reference_rules":  {
+                                                 "guidance":  "Repeat concise identity tokens consistently."
+                                             },
+                         "required_dimensions":  [
+                                                     "subject",
+                                                     "scene",
+                                                     "style"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "paragraph prose",
+                                                    "excessive weighting"
+                                                ],
+                         "source_notes":  [
+                                              "Stable Diffusion 1.5 recipe: comma tags with restrained token weighting."
+                                          ]
+                     },
+                     {
+                         "id":  "boogu_image_0_1",
+                         "modality":  "image",
+                         "prompt_form":  "natural_language_description",
+                         "ordering":  [
+                                          "subject",
+                                          "action",
+                                          "environment",
+                                          "composition",
+                                          "finish"
+                                      ],
+                         "negative_policy":  "Keep exclusions concise and subordinate to the positive prompt.",
+                         "reference_rules":  {
+                                                 "guidance":  "Describe reference identity and style traits explicitly."
+                                             },
+                         "required_dimensions":  [
+                                                     "subject",
+                                                     "environment",
+                                                     "composition"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "tag dump",
+                                                    "contradictory finish"
+                                                ],
+                         "source_notes":  [
+                                              "BoGou Image recipe: direct visual prose with clear composition."
+                                          ]
+                     },
+                     {
+                         "id":  "krea_1",
+                         "modality":  "image",
+                         "prompt_form":  "natural_language_description",
+                         "ordering":  [
+                                          "subject",
+                                          "action",
+                                          "composition",
+                                          "look",
+                                          "lighting"
+                                      ],
+                         "negative_policy":  "Use positive phrasing; a separate negative prompt is not used.",
+                         "reference_rules":  {
+                                                 "guidance":  "Describe visible reference traits rather than token weights."
+                                             },
+                         "required_dimensions":  [
+                                                     "subject",
+                                                     "composition",
+                                                     "look"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "weight syntax",
+                                                    "negative prompt syntax"
+                                                ],
+                         "source_notes":  [
+                                              "Krea 1 recipe: natural language without weighting syntax."
+                                          ]
+                     },
+                     {
+                         "id":  "firered_image_edit",
+                         "modality":  "image",
+                         "prompt_form":  "focused_edit_instruction",
+                         "ordering":  [
+                                          "task",
+                                          "target",
+                                          "change",
+                                          "preservation",
+                                          "finish"
+                                      ],
+                         "negative_policy":  "Keep exclusions concise after the requested change.",
+                         "reference_rules":  {
+                                                 "guidance":  "Quote literal text and state preserved regions."
+                                             },
+                         "required_dimensions":  [
+                                                     "task",
+                                                     "target",
+                                                     "change",
+                                                     "preservation"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "ambiguous target",
+                                                    "unquoted literal text"
+                                                ],
+                         "source_notes":  [
+                                              "FireRed Image Edit recipe: focused instruction with explicit preservation."
+                                          ]
+                     },
+                     {
+                         "id":  "longcat_image_longcat_image_edit",
+                         "modality":  "image",
+                         "prompt_form":  "generation_or_edit_instruction",
+                         "ordering":  [
+                                          "task",
+                                          "subject_or_target",
+                                          "requested_result",
+                                          "preservation",
+                                          "finish"
+                                      ],
+                         "negative_policy":  "Prefer positive constraints and a concise exclusions clause.",
+                         "reference_rules":  {
+                                                 "guidance":  "Separate source-image invariants from requested changes."
+                                             },
+                         "required_dimensions":  [
+                                                     "task",
+                                                     "subject_or_target",
+                                                     "result"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "mixed generation and edit goals",
+                                                    "ambiguous references"
+                                                ],
+                         "source_notes":  [
+                                              "LongCat Image recipe: direct generation or edit instruction."
+                                          ]
+                     },
+                     {
+                         "id":  "chronoedit",
+                         "modality":  "image",
+                         "prompt_form":  "temporally_consistent_edit_instruction",
+                         "ordering":  [
+                                          "target",
+                                          "change",
+                                          "visual_continuity",
+                                          "finish"
+                                      ],
+                         "negative_policy":  "State unwanted changes as preservation requirements.",
+                         "reference_rules":  {
+                                                 "guidance":  "Keep identity, geometry, and appearance constraints explicit."
+                                             },
+                         "required_dimensions":  [
+                                                     "target",
+                                                     "change",
+                                                     "continuity"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "identity-changing language",
+                                                    "conflicting edits"
+                                                ],
+                         "source_notes":  [
+                                              "ChronoEdit recipe: edit instruction emphasizing visual continuity."
+                                          ]
+                     },
+                     {
+                         "id":  "joyai_image_edit",
+                         "modality":  "image",
+                         "prompt_form":  "focused_edit_instruction",
+                         "ordering":  [
+                                          "task",
+                                          "target",
+                                          "change",
+                                          "preservation",
+                                          "style"
+                                      ],
+                         "negative_policy":  "Use a short exclusions clause only after the positive instruction.",
+                         "reference_rules":  {
+                                                 "guidance":  "State which reference traits and regions must remain unchanged."
+                                             },
+                         "required_dimensions":  [
+                                                     "task",
+                                                     "target",
+                                                     "change",
+                                                     "preservation"
+                                                 ],
+                         "forbidden_patterns":  [
+                                                    "unscoped edit",
+                                                    "competing style requests"
+                                                ],
+                         "source_notes":  [
+                                              "JoyAI Image Edit recipe: focused change plus preservation constraints."
+                                          ]
+                     }
+                 ]
+}
