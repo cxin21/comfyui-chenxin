@@ -33,6 +33,8 @@ def make_fault(
     retry_safe: bool,
     next_action: str,
     evidence: dict,
+    *,
+    remediation: str | None = None,
 ) -> dict:
     """Create one validated fault that can be serialized as strict JSON."""
     if not isinstance(category, str) or category not in FAULT_CATEGORIES:
@@ -52,6 +54,7 @@ def make_fault(
         "message": message,
         "retry_safe": retry_safe,
         "next_action": next_action,
+        "remediation": remediation if isinstance(remediation, str) and remediation.strip() else next_action,
         "evidence": evidence,
     }
     try:

@@ -1,14 +1,9 @@
-﻿{
+{
   "mcpServers": {
     "comfyui-mcp": {
       "type": "stdio",
-      "command": "node",
-      "args": [
-        "C:/Users/11245/comfyui-mcp/dist/index.js",
-        "--full",
-        "--comfyui-url",
-        "http://127.0.0.1:8188"
-      ],
+      "command": "npx",
+      "args": ["-y", "comfyui-mcp@0.41.0", "--full", "--comfyui-url", "http://127.0.0.1:8188"],
       "env": {}
     }
   }

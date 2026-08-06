@@ -68,9 +68,17 @@ from runtime.local_orchestrator import (
     wait_for_stage_history,
 )
 from runtime.workflow_profile import ProfileError, structure_fingerprint
+from runtime.preflight import run_preflight
+from runtime.attempt_state import record_attempt, read_last_attempt, state_path as _state_path
 
 
 _PREFIX = "[character-video-pipeline-runtime]"
+try:
+    from runtime.preflight import _read_plugin_version as _rv
+    _PLUGIN_JSON = Path(__file__).resolve().parent / ".codex-plugin" / "plugin.json"
+    __version__ = _rv(_PLUGIN_JSON)
+except Exception:
+    __version__ = "unknown"
 
 
 class CliUsageError(ValueError):
@@ -97,6 +105,38 @@ def _add_json_source(parser: argparse.ArgumentParser, *, workflow: bool = False)
 def _parser() -> argparse.ArgumentParser:
     parser = JsonArgumentParser(prog="character-video-pipeline-runtime")
     commands = parser.add_subparsers(dest="command", required=True, parser_class=JsonArgumentParser)
+
+    parser.add_argument(
+        "--version", action="version",
+        version=f"character-video-pipeline-runtime {__version__}",
+    )
+
+    preflight = commands.add_parser(
+        "preflight",
+        help="run deterministic pre-flight checks (cheap, no host MCP needed)",
+    )
+    preflight.add_argument("--runtime-root", type=Path, default=Path(__file__).resolve().parent)
+    preflight.add_argument("--comfy-url", default="http://127.0.0.1:8188")
+    preflight.add_argument("--timeout", type=float, default=5.0)
+
+    run_stage = commands.add_parser(
+        "run-stage",
+        help="orchestrate one stage: preflight -> capability -> approval -> compile -> submit -> verify -> manifest",
+    )
+    run_stage.add_argument("--stage", required=True, choices=["character-base"])
+    run_stage.add_argument("--package", dest="package_path", type=Path, required=True,
+                          help="validated PromptPackage JSON file (from prompt-forge)")
+    run_stage.add_argument("--run-dir", type=Path, required=True)
+    run_stage.add_argument("--comfy-url", default="http://127.0.0.1:8188")
+
+    attempt_state = commands.add_parser(
+        "attempt-state", help="append-only cross-attempt state under .codex/state/comfyui-chenxin/",
+    )
+    attempt_state_sub = attempt_state.add_subparsers(dest="attempt_state_command", required=True)
+    attempt_state_sub.add_parser("read-last", help="print the most recent attempt record")
+    attempt_state_record = attempt_state_sub.add_parser("record", help="append one attempt record (stdin JSON)")
+    attempt_state_record.add_argument("--from-stdin", action="store_true",
+                                      help="read the record JSON from stdin")
 
     discover = commands.add_parser("discover", help="build a live CapabilityReport")
     _add_json_source(discover)
@@ -728,6 +768,30 @@ def _dispatch(command: str, payload: dict, args) -> dict | tuple[dict, int]:
         )
         path = _write_run_record(args.run_dir, record)
         return {"record": record, "record_path": str(path)}
+    if command == "preflight":
+        payload = run_preflight(
+            runtime_root=args.runtime_root,
+            comfy_url=args.comfy_url,
+            timeout=args.timeout,
+        )
+        if not payload["ok"]:
+            return payload, 1
+        return payload, 0
+    if command == "run-stage":
+        from runtime.run_stage import run_character_base
+        if args.stage != "character-base":
+            return {"accepted": False, "error": f"unsupported stage: {args.stage}"}, 2
+        return run_character_base(
+            package_path=args.package_path,
+            run_dir=args.run_dir,
+            comfy_url=args.comfy_url,
+        )
+    if command == "attempt-state":
+        if args.attempt_state_command == "read-last":
+            return read_last_attempt(), 0
+        record_input = _require_object(_read_payload(args), "record")
+        path = record_attempt(record_input)
+        return {"recorded": True, "path": str(path)}, 0
     raise CliUsageError(f"unsupported command: {command}")
 
 

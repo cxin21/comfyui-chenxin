@@ -10,6 +10,28 @@ owner: prompt-compiler
 
 Prompt Forge is an LLM-first prompt authoring skill. Claude or Codex writes the final prompt; deterministic code audits structure, facts, style, dialect, tags, and temporal logic.
 
+## Quick start (mandatory first action)
+
+Before any prompt authoring or tag validation, run the zero-dependency environment checker:
+
+    powershell -ExecutionPolicy Bypass -File skills/prompt-forge/preflight-env.ps1
+
+This checks Python availability and cache integrity. A blocker means STOP -- do not attempt workarounds.
+
+If `preflight-env.ps1` itself is missing, the plugin cache is severely stale. Re-run `scripts/install.ps1` to sync.
+
+## Environment prerequisites
+
+- **Python 3.10+** -- must be on PATH or at a common location (ComfyUI embedded Python is auto-detected by `preflight-env.ps1`)
+- **Plugin cache** -- must be in sync with the project source (verified by `preflight-env.ps1`)
+- **No ComfyUI required** -- Prompt Forge is offline and side-effect free
+
+## Degradation paths
+
+- **Python not found** -- Stop. Install Python 3.10+ or ensure ComfyUI's embedded Python is accessible. Do not rewrite tag validation tools in Node.js or any other language.
+- **Cache stale (files missing)** -- Stop. Re-run `scripts/install.ps1` to sync the plugin cache. Do not improvise with manual tag lookups.
+- **preflight-env.ps1 missing** -- Cache is severely stale. Re-run install.ps1 immediately.
+
 ## Scope
 
 The skill accepts a user brief, supplied evidence, target modality, model dialect, and optional visual-language style. It returns a PromptPackage for an external consumer. It does not discover or execute models, nodes, workflows, transports, or local services.

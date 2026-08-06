@@ -1,6 +1,6 @@
 {
   "name": "comfyui-chenxin",
-  "version": "0.0.0+codex.20260805114512",
+  "version": "0.0.0+codex.20260806131727",
   "description": "Local-first ComfyUI plugin: Prompt Forge prompt authoring plus an approval-gated character-to-video production pipeline.",
   "author": {
     "name": "cxin21",
