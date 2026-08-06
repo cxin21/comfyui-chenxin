@@ -27,6 +27,8 @@ from .adapters.camera import (
 from .adapters.yusu_timeline import YusuTimelineError, patch_yusu_timeline, validate_yusu_sync
 from .artifacts import is_ltx_input_eligible, verify_video_artifact
 from .capabilities import report_is_fresh
+from .config_surface import ConfigSurfaceError, validate_stage_config
+from .stage_config_surface import StageSurfaceError, compile_fixed_camera_api_plan, compile_fixed_video_plan
 from .contracts import canonical_json, content_hash
 from .execution import (
     ExecutionError,
@@ -37,6 +39,7 @@ from .execution import (
     validate_stage_handoff,
 )
 from .workflow_profile import structure_fingerprint
+from .workflow_assets import WorkflowAssetError, asset_for_stage, load_fixed_workflow
 from .multiview_evidence import MultiviewEvidenceError, validate_png_file
 from .stages import (
     LTX_BASELINE_OUTPUT_HEIGHT,
@@ -55,12 +58,12 @@ _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _PROMPT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _STAGES = frozenset(("shot-image", "video"))
 _LTX_PROFILE_ID = "ltx-yusu-director-v1"
-_LTX_WORKFLOW_NAME = "LTX全新导演台工作流.json"
-_LTX_PROFILE_HASH = "8b960efb362ac1fbfe2840baf1321ef6a6397efde535b43b36e21fd0f04162c1"
+_LTX_WORKFLOW_NAME = "LTX\u5168\u65b0\u5bfc\u6f14\u53f0\u5de5\u4f5c\u6d41.json"
+_LTX_PROFILE_HASH = "ac778889289567a275f28939fef7fd7fa62b438a1093f908de0292aa2ad1920c"
 _LTX_DURATION_PROFILE_IDS = frozenset(("ltx-yusu-short-v1", "ltx-yusu-long-v1"))
 _LTX_DURATION_PROFILE_HASHES = {
-    "ltx-yusu-short-v1": "a7a3613c5bba84d358b6c84043911f2c497a786380ef38caea86ddb161bf71e0",
-    "ltx-yusu-long-v1": "3fc2a3442e6188aa57a3cda16bc9cef4e8568f452c68bfcdf8f1b44047db8460",
+    "ltx-yusu-short-v1": "4edf19d9c7fbec44b187e37be022f003c46c421abd862f6ebed5beb36bb19f18",
+    "ltx-yusu-long-v1": "4abfa5d6d6649ababb447e62f0b24ee55f5317cad71c340030f5f8213e7f9feb",
 }
 
 _DRAFT_KEYS = frozenset(
@@ -86,6 +89,7 @@ _DRAFT_KEYS = frozenset(
         "draft_hash",
     }
 )
+_DRAFT_CONFIG_KEYS = frozenset({"config_hash", "lora_recommendation_hash", "lora_inventory_hash"})
 _APPROVAL_FIELDS = frozenset({"approval_event", "approval_id", "execution_plan_hash"})
 _CONSUMPTION_KEYS = frozenset(
     {
@@ -432,9 +436,21 @@ def build_stage_execution_draft(
     image_name: str | None = None,
     reference_artifact: dict | None = None,
     image_ref: dict | None = None,
+    stage_config: dict | None = None,
 ) -> dict:
     """Bind a Stage 3/4 intent plan to fresh local evidence, without enqueueing."""
     plan = _stage_plan(stage_plan)
+    fixed_asset_name = profile.get("fixed_workflow_asset")
+    if fixed_asset_name is not None:
+        try:
+            fixed_asset = asset_for_stage(plan["stage"])
+            if fixed_asset != fixed_asset_name:
+                raise StageExecutionError("stage profile fixed workflow asset does not match the stage asset registry")
+            fixed_workflow = load_fixed_workflow(fixed_asset)
+            if structure_fingerprint(fixed_workflow) != profile.get("fixed_workflow_fingerprint"):
+                raise StageExecutionError("fixed workflow asset fingerprint does not match the stage profile")
+        except WorkflowAssetError as exc:
+            raise StageExecutionError(f"fixed workflow asset validation failed: {exc}") from exc
     if not isinstance(source_api_graph, dict):
         raise StageExecutionError("source API graph must be an object")
     report = _require_capability(
@@ -447,6 +463,20 @@ def build_stage_execution_draft(
     )
     if declared_capability_hash != content_hash(report):
         raise StageExecutionError("CapabilityReport does not match the stage plan")
+
+    config_gate = None
+    if stage_config is not None:
+        try:
+            safe_config = validate_stage_config(stage_config)
+        except ConfigSurfaceError as exc:
+            raise StageExecutionError(f"stage config failed validation: {exc}") from exc
+        if safe_config["stage"] != plan["stage"]:
+            raise StageExecutionError("stage config stage does not match the stage plan")
+        config_gate = {
+            "config_hash": safe_config["config_hash"],
+            "lora_recommendation_hash": safe_config["lora_plan"]["recommendation_hash"],
+            "lora_inventory_hash": safe_config["lora_plan"]["inventory_hash"],
+        }
 
     executable: dict
     path_proof = None
@@ -493,7 +523,14 @@ def build_stage_execution_draft(
                 camera=plan.get("camera"),
             )
             path_proof = verify_img2img_path(executable, profile)
-        except (CameraAdapterError, TypeError, KeyError) as exc:
+            if stage_config is not None and structure_fingerprint(ui_workflow) == structure_fingerprint(load_fixed_workflow("camera-anima.json")):
+                compiled_camera = compile_fixed_camera_api_plan(
+                    "shot-image", source_api_graph, ui_workflow, stage_config, profile,
+                    image_name=image_name, prompt_build=plan.get("prompt_build"),
+                )
+                executable = compiled_camera["api_graph"]
+                path_proof = verify_img2img_path(executable, profile)
+        except (StageSurfaceError, CameraAdapterError, TypeError, KeyError) as exc:
             raise StageExecutionError(f"camera img2img graph failed validation: {exc}") from exc
         declared_proof = plan.get("g1_path_proof")
         if isinstance(declared_proof, dict) and declared_proof.get("traversed_node_ids"):
@@ -523,7 +560,7 @@ def build_stage_execution_draft(
         if (
             profile_id not in {_LTX_PROFILE_ID, *_LTX_DURATION_PROFILE_IDS}
             or (duration_profile_id in _LTX_DURATION_PROFILE_IDS and profile_id != duration_profile_id)
-            or profile.get("workflow_name") != _LTX_WORKFLOW_NAME
+                        or profile.get("workflow_name") != _LTX_WORKFLOW_NAME
             or profile.get("runtime_classification") != "local"
             or profile.get("generation_modes") != ["image-to-video"]
             or profile.get("output_frame_rule") != "8n+1"
@@ -561,17 +598,18 @@ def build_stage_execution_draft(
         try:
             if plan.get("workflow_hash") is not None and plan["workflow_hash"] != source_hash:
                 raise StageExecutionError("LTX API graph does not match the stage plan workflow hash")
-            executable = patch_yusu_timeline(
+            executable = compile_fixed_video_plan(
                 source_api_graph,
                 {key: image_ref[key] for key in ("imageFile", "imageB64")},
                 plan["prompt_build"]["prompt"],
+                plan["prompt_build"].get("negative_prompt", ""),
                 plan["parameters"]["frames"],
                 plan["parameters"]["fps"],
                 profile,
                 timeline_segments=plan.get("timeline_segments"),
-            )
+            )["api_graph"]
             validate_yusu_sync(executable, profile)
-        except (YusuTimelineError, TypeError, KeyError) as exc:
+        except (StageSurfaceError, YusuTimelineError, TypeError, KeyError) as exc:
             raise StageExecutionError(f"Yusu Director graph failed validation: {exc}") from exc
         expected_outputs = ["video"]
         immutable_inputs = copy.deepcopy(profile.get("immutable_inputs", {}))
@@ -598,12 +636,17 @@ def build_stage_execution_draft(
         "expected_outputs": expected_outputs,
         "immutable_inputs": immutable_inputs,
     }
+    if config_gate is not None:
+        draft.update(config_gate)
     draft["draft_hash"] = _draft_hash(draft)
     return draft
 
 
 def _validate_stage_draft(draft: object) -> dict:
-    if not isinstance(draft, dict) or set(draft) != _DRAFT_KEYS:
+    if not isinstance(draft, dict):
+        raise StageExecutionError("StageExecutionDraft schema is incomplete or contains unexpected fields")
+    keys = set(draft)
+    if keys != _DRAFT_KEYS and keys != _DRAFT_KEYS | _DRAFT_CONFIG_KEYS:
         raise StageExecutionError("StageExecutionDraft schema is incomplete or contains unexpected fields")
     if draft.get("schema_version") != "1.0" or draft.get("stage") not in _STAGES:
         raise StageExecutionError("StageExecutionDraft stage is unsupported")
@@ -629,6 +672,9 @@ def _validate_stage_draft(draft: object) -> dict:
         raise StageExecutionError("StageExecutionDraft draft_hash is not self-consistent")
     for field in ("profile_hash", "source_api_graph_hash", "executable_api_graph_hash", "capability_report_hash"):
         _sha(draft.get(field), f"StageExecutionDraft {field}")
+    if keys & _DRAFT_CONFIG_KEYS:
+        for field in sorted(_DRAFT_CONFIG_KEYS):
+            _sha(draft.get(field), f"StageExecutionDraft {field}")
     expected_outputs = ["image/png"] if draft["stage"] == "shot-image" else ["video"]
     if draft.get("expected_outputs") != expected_outputs:
         raise StageExecutionError("StageExecutionDraft expected outputs are invalid")
@@ -852,7 +898,7 @@ def build_stage_submission(
                 camera=stage_plan.get("camera"),
             )
             proof = verify_img2img_path(executable, profile)
-        except (CameraAdapterError, TypeError, KeyError) as exc:
+        except (StageSurfaceError, CameraAdapterError, TypeError, KeyError) as exc:
             raise StageExecutionError(f"Stage 3 submission graph failed validation: {exc}") from exc
         if proof != plan["g1_path_proof"]:
             raise StageExecutionError("Stage 3 submission G1 proof does not match the approved plan")
@@ -861,17 +907,18 @@ def build_stage_submission(
             image_ref, stage_plan["source_shot_hash"], stage_plan.get("lineage_id")
         )
         try:
-            executable = patch_yusu_timeline(
+            executable = compile_fixed_video_plan(
                 source_api_graph,
                 {key: image[key] for key in ("imageFile", "imageB64")},
                 stage_plan["prompt_build"]["prompt"],
+                stage_plan["prompt_build"].get("negative_prompt", ""),
                 stage_plan["parameters"]["frames"],
                 stage_plan["parameters"]["fps"],
                 profile,
                 timeline_segments=stage_plan.get("timeline_segments"),
-            )
+            )["api_graph"]
             validate_yusu_sync(executable, profile)
-        except (YusuTimelineError, TypeError, KeyError) as exc:
+        except (StageSurfaceError, YusuTimelineError, TypeError, KeyError) as exc:
             raise StageExecutionError(f"Stage 4 submission graph failed validation: {exc}") from exc
     if content_hash(executable) != plan["executable_api_graph_hash"]:
         raise StageExecutionError("executable API graph does not match the approved plan")

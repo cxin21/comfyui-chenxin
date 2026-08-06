@@ -1,6 +1,8 @@
 {
   "schema_version": "1.0",
   "profile_id": "ltx-yusu-director-v1",
+  "fixed_workflow_asset": "ltx-yusu-director.json",
+  "fixed_workflow_fingerprint": "8f777f6315bab2c14fb4d99d83a44d73cf8dfd7362011fc3a931fffa9a081074",
   "workflow_name": "LTX全新导演台工作流.json",
   "workflow_fingerprint": "8f777f6315bab2c14fb4d99d83a44d73cf8dfd7362011fc3a931fffa9a081074",
   "api_graph_hash": "c7d0c07e2e6656af9737a7d92bea62bc4b4c7c11291bfb910e13eaa8a3f1fb74",
@@ -78,7 +80,7 @@
       "class_type": "TTResolutionSelector",
       "inputs": {
         "use_custom_resolution": false,
-        "resolution": "1280x720 (16:9) (\u6a2a\u5c4f)",
+        "resolution": "1280x720 (16:9) (妯睆)",
         "custom_width": 1280,
         "custom_height": 736
       }

@@ -100,11 +100,11 @@ def test_ltx_output_frame_count_uses_the_8n_plus_1_lattice():
     assert ltx_output_frame_count(25) == 25
 
 
-def test_video_plan_rejects_second_negative_system():
+def test_video_plan_accepts_declared_negative_prompt_slot():
     build = _build()
     build["negative_prompt"] = "watermark"
-    with pytest.raises(StageError, match="workflow-owned negative"):
-        build_video_plan(_shot(), build, "wfhash", "profilehash", True)
+    plan = build_video_plan(_shot(), build, "wfhash", "profilehash", True)
+    assert plan["prompt_build"]["negative_prompt"] == "watermark"
 
 
 def test_video_plan_can_apply_full_intent_quality_gate():
@@ -120,7 +120,7 @@ def test_video_plan_can_apply_full_intent_quality_gate():
 
 def test_video_plan_rejects_over_complex_single_clip():
     build = _build()
-    build["positive_zh"] = "她移动。"
+    build["positive_zh"] = "\\u4e3b\\u4f53\\u79fb\\u52a8"
     build["positive_en"] = "She moves."
     build["prompt"] = build["positive_en"]
     build["split_recommendation"] = {"required": True, "reason": "scene change"}
@@ -172,7 +172,7 @@ def test_production_video_requires_intent_quality_contract():
     build = _build()
     build.update(
         {
-            "positive_zh": "她移动。",
+            "positive_zh": "\\u4e3b\\u4f53\\u79fb\\u52a8",
             "positive_en": "She moves.",
             "prompt": "She moves.",
             "split_recommendation": {"required": False, "reason": "single shot"},

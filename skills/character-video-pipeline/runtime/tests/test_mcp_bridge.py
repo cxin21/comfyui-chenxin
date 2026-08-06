@@ -58,6 +58,7 @@ def test_bridge_adapts_host_tool_names_and_records_workflow_receipt():
     ]
     receipt = bridge.receipt()
     assert receipt["host"] == {"id": "codex", "version": "test"}
+    assert receipt["receipt_type"] == "character-video-pipeline-mcp-bridge"
     assert len(receipt["calls"]) == 3
     assert receipt["calls"][0]["logical_tool"] == "get_workflow"
     assert receipt["calls"][0]["actual_tool"] == receipt["calls"][1]["actual_tool"]

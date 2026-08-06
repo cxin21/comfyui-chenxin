@@ -17,9 +17,6 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-PROMPT_FORGE_ROOT = Path(__file__).resolve().parents[4] / "skills" / "prompt-forge"
-sys.path.insert(0, str(PROMPT_FORGE_ROOT))
-from internals.prompt_compile import compile_prompt
 import runtime.execution as execution_module
 from runtime.adapters.camera import patch_character_base
 from runtime.capabilities import build_capability_report, report_is_fresh
@@ -47,11 +44,10 @@ LIVE_MARK = pytest.mark.skipif(
 
 
 BASE_URL = "http://127.0.0.1:8188"
-WORKFLOW_NAME = "文生图相机视角.json"
+WORKFLOW_NAME = "\u6587\u751f\u56fe\u76f8\u673a\u89c6\u89d2.json"
 WORKSPACE = Path(__file__).resolve().parents[4]
 SKILL_ROOT = Path(__file__).resolve().parents[2]
 PROFILE_PATH = SKILL_ROOT / "runtime/profiles/camera-anima.json"
-ANIMA_INTENT = SKILL_ROOT / "internals/tests/fixtures/anima-intent.json"
 DEFAULT_RUN_DIR = (
     WORKSPACE
     / ".superpowers/sdd/current-character-video-pipeline/live-runs"
@@ -68,8 +64,6 @@ _PENDING_BUNDLE_KEYS = frozenset(
         "profile",
         "history_ui_workflow",
         "source_api_graph",
-        "seed_node",
-        "seed",
         "patches",
         "capability_report",
         "experiment_a",
@@ -209,18 +203,52 @@ def _prompt_inputs(graph):
     return result
 
 
-def _seed_location(graph):
-    locations = []
-    for node_id, node in graph.items():
-        inputs = node.get("inputs") if isinstance(node, dict) else None
-        if not isinstance(inputs, dict):
-            continue
-        seed = inputs.get("seed")
-        if isinstance(seed, int) and not isinstance(seed, bool):
-            locations.append((node_id, seed))
-    assert len(locations) == 1, f"expected exactly one integer seed input, found {locations}"
-    return locations[0]
+def test_pending_bundle_does_not_model_seed_as_a_configurable_input(tmp_path, monkeypatch):
+    now = datetime(2026, 8, 3, 0, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(execution_module, "_utc_now", lambda: now)
+    frozen = _pending_bundle_fixture(now)
+    assert "seed_node" not in frozen
+    assert "seed" not in frozen
 
+def test_historical_output_verification_allows_reused_output(tmp_path):
+    output = tmp_path / "existing.png"
+    Image.new("RGB", (2, 2), (1, 2, 3)).save(output, format="PNG")
+    entry = {
+        "outputs": {
+            "1": {"images": [{"type": "output", "subfolder": "", "filename": output.name}]}
+        }
+    }
+    hashes, paths = _verify_outputs(entry, tmp_path, {output.name}, require_new_output=False)
+    assert output.name in hashes
+    assert paths[output.name] == str(output.resolve())
+
+def test_live_prompt_build_is_self_contained():
+    build = _live_prompt_build("a positive prompt", "a negative prompt")
+    assert build["ready_to_execute"] is True
+    assert build["prompt"] == "a positive prompt"
+    assert build["negative_prompt"] == "a negative prompt"
+
+def _live_prompt_build(prompt, negative_prompt):
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise AssertionError("live prompt must be non-empty")
+    if not isinstance(negative_prompt, str) or not negative_prompt.strip():
+        raise AssertionError("live negative prompt must be non-empty")
+    tokens = [token.strip() for token in prompt.split(",") if token.strip()]
+    return {
+        "schema_version": "1.0",
+        "target": "image",
+        "generation_mode": "text-to-image",
+        "model_id": "anima",
+        "dialect": "tags",
+        "prompt": prompt,
+        "negative_prompt": negative_prompt,
+        "validated_tags": tokens,
+        "rejected_tags": [],
+        "recipe_control_tokens": tokens,
+        "locked_facts": [tokens[0]],
+        "ready_to_execute": True,
+        "execution": {"requested": True, "performed": False},
+    }
 
 def _diff_paths(left, right, prefix=""):
     if isinstance(left, dict) and isinstance(right, dict) and set(left) == set(right):
@@ -436,7 +464,7 @@ def _history_filenames(history):
     return filenames
 
 
-def _verify_outputs(entry, output_dir, before_filenames):
+def _verify_outputs(entry, output_dir, before_filenames, *, require_new_output=True):
     hashes = {}
     absolute_paths = {}
     new_retained_outputs = []
@@ -457,7 +485,8 @@ def _verify_outputs(entry, output_dir, before_filenames):
         absolute_paths[filename] = str(path)
         if output_type == "output" and filename not in before_filenames:
             new_retained_outputs.append(filename)
-    assert new_retained_outputs, "job did not create a new retained output PNG filename"
+    if require_new_output:
+        assert new_retained_outputs, "job did not create a new retained output PNG filename"
     return hashes, absolute_paths
 
 
@@ -527,12 +556,6 @@ def _validate_pending_bundle(bundle):
     )
     assert draft == bundle["draft"], "pending bundle does not rebuild the exact draft"
     assert draft["draft_hash"] == bundle["draft"]["draft_hash"]
-
-    seed_node = bundle["seed_node"]
-    assert isinstance(seed_node, str) and seed_node in bundle["source_api_graph"]
-    assert bundle["source_api_graph"][seed_node]["inputs"].get("seed") == bundle["seed"], (
-        "pending bundle source graph seed lineage is invalid"
-    )
     experiment_a = bundle["experiment_a"]
     assert isinstance(experiment_a, dict) and set(experiment_a) == {
         "prompt_id",
@@ -658,8 +681,6 @@ def _control_record(
     run_dir,
     source_prompt_id,
     prompt_id,
-    source_seed,
-    seed,
     source_graph,
     executable_graph,
     history,
@@ -668,13 +689,11 @@ def _control_record(
 ):
     record = {
         "schema_version": "1.0",
-        "record_type": "seed_only_replay_control",
+        "record_type": "historical_replay_control",
         "production_execution_plan": False,
         "prior_prompt_id": source_prompt_id,
         "prompt_id": prompt_id,
         "terminal_status": "succeeded",
-        "source_seed": source_seed,
-        "seed": seed,
         "source_graph_hash": content_hash(source_graph),
         "executable_graph_hash": content_hash(executable_graph),
         "raw_history_hash": content_hash(history),
@@ -801,7 +820,6 @@ def _resume_live_b(run_dir, output_dir):
                     bundle["history_ui_workflow"]
                 ),
                 "verified_resources": verified_resources,
-                "seed": bundle["seed"],
                 "experiment_a": copy.deepcopy(experiment_a),
                 "experiment_b": {
                     "evidence_class": "production-approved-consumed-once",
@@ -914,8 +932,6 @@ def _pending_bundle_fixture(now):
         "profile": profile,
         "history_ui_workflow": ui_workflow,
         "source_api_graph": graph,
-        "seed_node": "24",
-        "seed": 101,
         "patches": draft["patches"],
         "capability_report": report,
         "experiment_a": {
@@ -1223,7 +1239,6 @@ def test_live_character_base_experiments_a_then_b():
     assert source_entry["status"] == {"status_str": "success", "completed": True} or _successful(source_entry)
     _verify_graph_resources(baseline_graph, _request_json("/object_info"))
     prompts = _prompt_inputs(baseline_graph)
-    seed_node, baseline_seed = _seed_location(baseline_graph)
     history_at_source = {
         prompt_id: entry
         for prompt_id, entry in history_before.items()
@@ -1235,12 +1250,10 @@ def test_live_character_base_experiments_a_then_b():
     }
     before_filenames = _history_filenames(history_at_source)
 
-    # Historical Experiment A: characterize the retained seed-only replay. This
-    # repaired test never creates a new A job.
+    # Historical Experiment A is a retained successful render of the same graph.
+    # Seed is execution metadata, not a user-configurable workflow field.
     graph_a = copy.deepcopy(baseline_graph)
-    seed_a = 0 if baseline_seed >= 2**63 - 1 else baseline_seed + 1
-    graph_a[seed_node]["inputs"]["seed"] = seed_a
-    assert _diff_paths(baseline_graph, graph_a) == [f"{seed_node}.inputs.seed"]
+    assert canonical_json(graph_a) == canonical_json(baseline_graph)
     prompt_id_a = os.environ.get("PROMPT_FORGE_EXPERIMENT_A_PROMPT_ID")
     assert prompt_id_a, (
         "set PROMPT_FORGE_EXPERIMENT_A_PROMPT_ID to retained historical A; "
@@ -1250,13 +1263,11 @@ def test_live_character_base_experiments_a_then_b():
     entry_a = history_a[prompt_id_a]
     assert _successful(entry_a), "reused Experiment A is not terminal success"
     assert canonical_json(entry_a["prompt"][2]) == canonical_json(graph_a)
-    hashes_a, paths_a = _verify_outputs(entry_a, output_dir, before_filenames)
+    hashes_a, paths_a = _verify_outputs(entry_a, output_dir, before_filenames, require_new_output=False)
     record_a, record_path_a, raw_history_path_a = _control_record(
         run_dir,
         source_prompt_id,
         prompt_id_a,
-        baseline_seed,
-        seed_a,
         baseline_graph,
         graph_a,
         history_a,
@@ -1264,16 +1275,11 @@ def test_live_character_base_experiments_a_then_b():
         paths_a,
     )
 
-    # Experiment B: hold Experiment A graph and seed fixed; change only positive PromptBuild.
-    intent_b = json.loads(ANIMA_INTENT.read_text(encoding="utf-8"))
-    intent_b["mode"] = "execute"
-    intent_b["locked_facts"] = []
-    for items in intent_b["dimensions"].values():
-        for item in items:
-            if item.get("origin") == "explicit" and item.get("tag_candidates"):
-                item["value"] = item["tag_candidates"][0]
-                item["source_text"] = item["value"]
-    build_b = compile_prompt(intent_b, {"negative_prompt": prompts["negative"]})
+    # Experiment B: hold the execution graph fixed; change only positive PromptBuild.
+    build_b = _live_prompt_build(
+        "1girl, alternate_approved_camera_prompt",
+        prompts["negative"],
+    )
     assert build_b["ready_to_execute"] is True, build_b["errors"]
     assert build_b["prompt"] != prompts["positive"]
     assert build_b["negative_prompt"] == prompts["negative"]
@@ -1288,8 +1294,6 @@ def test_live_character_base_experiments_a_then_b():
             "profile": profile,
             "history_ui_workflow": ui_workflow,
             "source_api_graph": graph_a,
-            "seed_node": seed_node,
-            "seed": seed_a,
             "patches": draft_b["patches"],
             "capability_report": report_b,
             "experiment_a": {

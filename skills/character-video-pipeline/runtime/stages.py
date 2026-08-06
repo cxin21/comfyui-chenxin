@@ -1023,8 +1023,8 @@ def build_video_plan(*args, **kwargs):
         for field in ("positive_zh", "positive_en"):
             if not isinstance(prompt_build.get(field), str) or not prompt_build[field].strip():
                 raise StageError(f"video PromptBuild {field} is required")
-        if prompt_build.get("negative_prompt") != "":
-            raise StageError("video uses the workflow-owned negative conditioning; negative_prompt must be empty")
+        if not isinstance(prompt_build.get("negative_prompt", ""), str):
+            raise StageError("video negative_prompt must be a string")
     intent = kwargs.get("intent")
     if strict_video_contract and not isinstance(intent, dict):
         raise StageError("production video requires a PromptIntent quality contract")
@@ -1041,8 +1041,8 @@ def build_video_plan(*args, **kwargs):
             raise StageError("video PromptBuild is not ready to execute")
         if not isinstance(prompt_build.get("prompt"), str) or not prompt_build["prompt"].strip():
             raise StageError("video prompt is empty")
-        if prompt_build.get("negative_prompt") != "":
-            raise StageError("video uses the workflow-owned negative conditioning; negative_prompt must be empty")
+        if not isinstance(prompt_build.get("negative_prompt", ""), str):
+            raise StageError("video negative_prompt must be a string")
     if duration_profile is None:
         selected_profile_id = "ltx-yusu-director-v1"
         selected_profile = {"duration_seconds": 1.0, "frames": 24, "fps": 24, "output_frames": 25}

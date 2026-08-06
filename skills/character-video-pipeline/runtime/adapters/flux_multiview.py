@@ -20,7 +20,7 @@ _FLAT_PROFILE_ID = "flux2-klein-multiview-flat-v2"
 _FLAT_WORKFLOW_ID = "prompt-forge-flat-v2"
 _FLAT_WORKFLOW_NAME = "PromptForge-Flux2-Klein-multiview-flat-v2.json"
 _VIEW_PROFILE_ID = "flux2-klein-view-selection-v1"
-_VIEW_PLAN_KEYS = frozenset(("views", "switches", "prompts", "seeds", "dimensions", "base_image", "orientation_evidence"))
+_VIEW_PLAN_KEYS = frozenset(("views", "switches", "prompts", "dimensions", "base_image", "orientation_evidence", "lora_plan"))
 
 
 def _validated_slots(slots: object) -> dict[str, int]:
@@ -97,7 +97,7 @@ def _validated_view_profile(profile: object) -> dict:
         raise FluxAdapterError("view profile base-image slots must resolve to LoadImage")
     resolved_slots = _validated_slots({name: item.get("id") if isinstance(item, dict) else None for name, item in slots.items()})
     spec = profile.get("view_plan")
-    if not isinstance(spec, dict) or set(spec) != {"switches", "prompt_slots", "seed_slots", "dimension_slots"}:
+    if not isinstance(spec, dict) or set(spec) != {"switches", "prompt_slots", "dimension_slots"}:
         raise FluxAdapterError("view profile view_plan schema is invalid")
     outputs = profile.get("output_nodes")
     if not isinstance(outputs, dict) or not outputs:
@@ -117,7 +117,7 @@ def _validated_view_profile(profile: object) -> dict:
         raise FluxAdapterError("view profile cannot allowlist an immutable pose reference")
     return {
         "slots": resolved_slots, "switches": _profile_paths(spec["switches"], "switches"),
-        "prompts": _profile_paths(spec["prompt_slots"], "prompt_slots"), "seeds": _profile_paths(spec["seed_slots"], "seed_slots"),
+        "prompts": _profile_paths(spec["prompt_slots"], "prompt_slots"),
         "dimensions": _profile_paths(spec["dimension_slots"], "dimension_slots"), "output_nodes": copy.deepcopy(outputs),
         "output_labels": labels, "pose_ids": list(pose_ids),
     }
@@ -150,14 +150,12 @@ def validate_view_plan(view_plan: object, profile: object) -> dict:
         raise FluxAdapterError("view plan output label is not mapped by the profile: " + ", ".join(unmapped))
     switches = _validated_patch_map(view_plan.get("switches"), "switches", contract["switches"])
     prompts = _validated_patch_map(view_plan.get("prompts"), "prompts", contract["prompts"])
-    seeds = _validated_patch_map(view_plan.get("seeds"), "seeds", contract["seeds"])
+
     dimensions = _validated_patch_map(view_plan.get("dimensions"), "dimensions", contract["dimensions"])
     if any(not isinstance(value, bool) for value in switches.values()):
         raise FluxAdapterError("view plan switch values must be booleans")
     if any(not isinstance(value, str) or not value.strip() for value in prompts.values()):
         raise FluxAdapterError("view plan prompt values must be non-empty strings")
-    if any(not isinstance(value, int) or isinstance(value, bool) or value < 0 or value > 2**64 - 1 for value in seeds.values()):
-        raise FluxAdapterError("view plan seed values must be unsigned 64-bit integers")
     for node_id, value in dimensions.items():
         inputs = contract["dimensions"][node_id].get("inputs")
         if isinstance(inputs, list):
@@ -168,6 +166,9 @@ def validate_view_plan(view_plan: object, profile: object) -> dict:
             values = (value,)
         if any(not isinstance(item, int) or isinstance(item, bool) or item <= 0 or item > 16384 for item in values):
             raise FluxAdapterError("view plan dimensions must be positive integers at most 16384")
+    lora_plan = view_plan.get("lora_plan")
+    if lora_plan is not None and not isinstance(lora_plan, dict):
+        raise FluxAdapterError("view plan lora_plan must be an object")
     base_image = view_plan.get("base_image")
     if base_image is not None:
         _validated_image_name(base_image)
@@ -175,8 +176,9 @@ def validate_view_plan(view_plan: object, profile: object) -> dict:
     if not isinstance(orientation, dict):
         raise FluxAdapterError("view plan orientation_evidence must be an object")
     return {
-        "views": list(views), "switches": switches, "prompts": prompts, "seeds": seeds, "dimensions": dimensions,
+        "views": list(views), "switches": switches, "prompts": prompts, "dimensions": dimensions,
         "base_image": base_image, "orientation_evidence": copy.deepcopy(orientation),
+        "lora_plan": copy.deepcopy(lora_plan),
         "output_map": {node_id: item for node_id, item in sorted(contract["output_nodes"].items()) if item["view_label"] in views},
     }
 
@@ -219,7 +221,7 @@ def patch_view_plan(graph: dict, view_plan: dict, profile: dict) -> dict:
         image_name = safe["base_image"]
     patched = patch_base_images(graph, image_name, contract["slots"])
     allowed = {(str(node_id), _INPUT) for node_id in contract["slots"].values()}
-    for label in ("switches", "prompts", "seeds"):
+    for label in ("switches", "prompts"):
         for node_id, value in safe[label].items():
             descriptor = contract[label][node_id]
             input_name = descriptor.get("input")

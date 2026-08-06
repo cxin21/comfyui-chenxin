@@ -76,7 +76,7 @@ _CAMERA_DIRECTION_POS_X = {
     "left": -0.5,
     "left_45": -0.25,
 }
-_CAMERA_ELEVATION_POS_Y = {"high": 0.5, "eye-level": 0.0, "low": -0.5}
+_CAMERA_ELEVATION_POS_Y = {"high": 0.5, "high-angle": 0.5, "eye-level": 0.0, "low": -0.5, "low-angle": -0.5}
 _CAMERA_DISTANCE_POS_Z = {
     "extreme_close_up": 0.9,
     "close_up": 0.5,
@@ -268,7 +268,8 @@ def normalize_camera_api_graph(
     existing_text = literal_inputs.get(literal["input_name"])
     if (
         literal["input_name"] in literal_inputs
-        and existing_text is not None
+        and isinstance(existing_text, str)
+        and existing_text.strip()
         and existing_text != ui_lora_text
     ):
         raise CameraAdapterError("camera API LoRA text conflicts with UI")
@@ -904,3 +905,4 @@ def patch_img2img_graph(
     if source_identity != patched_identity:
         raise CameraAdapterError("img2img patch changed data outside the allowlist")
     return patched
+

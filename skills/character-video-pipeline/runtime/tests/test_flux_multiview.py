@@ -63,7 +63,6 @@ def _view_profile():
                 "756": {"input": "boolean", "type": "ImpactBoolean"},
             },
             "prompt_slots": {"700": {"input": "text", "type": "Text Multiline"}},
-            "seed_slots": {"701": {"input": "noise_seed", "type": "RandomNoise"}},
             "dimension_slots": {
                 "702": {
                     "inputs": ["width", "height"],
@@ -115,7 +114,6 @@ def test_view_plan_changes_only_allowlisted_paths_and_keeps_pose_inputs_immutabl
         "views": ["front", "rear"],
         "switches": {"731": True},
         "prompts": {"700": "front and rear identity sheet"},
-        "seeds": {"701": 42},
         "dimensions": {"702": {"width": 768, "height": 1024}},
         "base_image": "runs/abc/base.png",
         "orientation_evidence": {
@@ -127,7 +125,6 @@ def test_view_plan_changes_only_allowlisted_paths_and_keeps_pose_inputs_immutabl
     assert graph == original
     assert patched["731"]["inputs"]["boolean"] is True
     assert patched["700"]["inputs"]["text"] == "front and rear identity sheet"
-    assert patched["701"]["inputs"]["noise_seed"] == 42
     assert patched["702"]["inputs"] == {"width": 768, "height": 1024}
     assert patched["111"]["inputs"]["image"] == "runs/abc/base.png"
     assert patched["667"]["inputs"]["image"] == "runs/abc/base.png"
@@ -147,7 +144,7 @@ def test_grouped_flux_profile_is_rejected_for_view_plan_patching():
     grouped = _view_profile()
     grouped["base_profile_id"] = "flux2-klein-multiview-v1"
     grouped["workflow_id"] = "grouped-reference-only"
-    grouped["workflow_name"] = "Flux2-Klein人物一键多视图工作流.json"
+    grouped["workflow_name"] = "Flux2-Klein浜虹墿涓€閿瑙嗗浘宸ヤ綔娴?json"
     with pytest.raises(FluxAdapterError, match="flat-v2|flat v2"):
         patch_view_plan(_flat_v2_graph(), {"views": ["front"]}, grouped)
 

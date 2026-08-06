@@ -1,6 +1,8 @@
 {
   "schema_version": "1.0",
   "profile_id": "flux2-klein-view-selection-v1",
+  "fixed_workflow_asset": "flux2-klein-multiview-flat-v2.json",
+  "fixed_workflow_fingerprint": "9dc2b01e2aea0b051113b187b134d007f452df6c83cfcbbd8d325eaa4c29e4da",
   "base_profile_id": "flux2-klein-multiview-flat-v2",
   "workflow_id": "prompt-forge-flat-v2",
   "workflow_name": "PromptForge-Flux2-Klein-multiview-flat-v2.json",
@@ -40,16 +42,6 @@
       "361": {"input": "text", "type": "CR Text"},
       "365": {"input": "text", "type": "CR Text"},
       "374": {"input": "text", "type": "CR Text"}
-    },
-    "seed_slots": {
-      "186": {"input": "seed", "type": "Seed (rgthree)"},
-      "487": {"input": "seed", "type": "Seed (rgthree)"},
-      "518": {"input": "seed", "type": "Seed (rgthree)"},
-      "574": {"input": "seed", "type": "Seed (rgthree)"},
-      "612": {"input": "seed", "type": "Seed (rgthree)"},
-      "672": {"input": "seed", "type": "Seed (rgthree)"},
-      "739": {"input": "seed", "type": "Seed (rgthree)"},
-      "740": {"input": "seed", "type": "Seed (rgthree)"}
     },
     "dimension_slots": {
       "349": {"input": "value", "type": "Int"},

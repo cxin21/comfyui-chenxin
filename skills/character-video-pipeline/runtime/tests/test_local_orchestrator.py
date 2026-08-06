@@ -9,6 +9,7 @@ from runtime.execution import ExecutionError, validate_stage_handoff
 from runtime.stage_execution import StageExecutionError
 from runtime.mcp_bridge import McpBridge
 from runtime.local_orchestrator import (
+    _fixed_camera_source_graph,
     submit_character_base_via_local_rest,
     submit_stage_via_local_rest,
     validate_trusted_stage_profile,
@@ -433,6 +434,16 @@ def test_validate_stage_handoff_rejects_missing_or_malformed_hashes(
     with pytest.raises(ExecutionError, match="SHA-256"):
         validate_stage_handoff(plan, reference)
 
+
+def test_fixed_camera_source_graph_loads_without_workflow_mcp():
+    profile = json.loads(
+        (Path(__file__).parents[1] / "profiles" / "camera-anima.json").read_text(encoding="utf-8")
+    )
+
+    graph = _fixed_camera_source_graph({}, profile)
+
+    assert graph["24"]["class_type"] == "ImpactWildcardProcessor"
+    assert graph["35"]["class_type"] == "Image Saver Simple"
 
 def test_submit_character_base_via_local_rest_uses_live_queue_and_transport(monkeypatch, tmp_path):
     submission = {"stage": "character-base", "api_graph": {}}

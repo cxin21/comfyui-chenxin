@@ -1,0 +1,40 @@
+{
+  "name": "comfyui-chenxin",
+  "version": "0.0.0+codex.20260805114512",
+  "description": "Local-first ComfyUI plugin: Prompt Forge prompt authoring plus an approval-gated character-to-video production pipeline.",
+  "author": {
+    "name": "cxin21",
+    "url": "https://github.com/cxin21"
+  },
+  "homepage": "https://github.com/cxin21/comfyui-chenxin",
+  "repository": "https://github.com/cxin21/comfyui-chenxin",
+  "license": "MIT",
+  "keywords": [
+    "comfyui",
+    "prompt-engineering",
+    "character-consistency",
+    "flux",
+    "ltx",
+    "video",
+    "ai-image"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "ComfyUI Chenxin",
+    "shortDescription": "Prompt authoring and approval-gated ComfyUI character-to-video production.",
+    "longDescription": "Two bounded skills: prompt-forge authors and quality-reviews image/video prompts offline; character-video-pipeline consumes approved PromptPackages through an approval-gated local ComfyUI/MCP four-stage production flow.",
+    "developerName": "cxin21",
+    "category": "Creative",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use prompt-forge to author a txt2img prompt.",
+      "Run stage 1 with character-video-pipeline.",
+      "Review the PromptPackage before production."
+    ]
+  }
+}

@@ -276,12 +276,15 @@ def patch_yusu_timeline(
     profile: dict,
     *,
     timeline_segments: list[dict] | None = None,
+    negative_prompt: str | None = None,
 ) -> dict:
     """Patch one image segment and all Yusu derived fields atomically."""
     if not isinstance(graph, dict):
         raise YusuTimelineError("Yusu API graph must be an object")
     if not isinstance(prompt, str) or not prompt.strip():
         raise YusuTimelineError("Yusu segment prompt is required")
+    if negative_prompt is not None and not isinstance(negative_prompt, str):
+        raise YusuTimelineError("Yusu negative prompt must be a string")
     if not isinstance(frames, int) or isinstance(frames, bool) or frames <= 0:
         raise YusuTimelineError("Yusu frames must be a positive integer")
     if not isinstance(fps, int) or isinstance(fps, bool) or fps <= 0:
@@ -316,6 +319,8 @@ def patch_yusu_timeline(
     patched_inputs["end_frame"] = frames - 1
     patched_inputs["duration_frames"] = frames
     patched_inputs["frame_rate"] = fps
+    if negative_prompt is not None:
+        _node(patched, negative_id, "negative")["inputs"]["text"] = negative_prompt
     validate_yusu_sync(patched, profile)
 
     try:
@@ -323,9 +328,16 @@ def patch_yusu_timeline(
         patched_identity = canonical_json(_without_director_fields(patched, director_id))
     except (TypeError, ValueError) as exc:
         raise YusuTimelineError(f"Yusu API graph must be canonical JSON: {exc}") from exc
+    if negative_prompt is not None:
+        source_identity_graph = json.loads(source_identity)
+        patched_identity_graph = json.loads(patched_identity)
+        source_identity_graph[str(negative_id)]["inputs"]["text"] = "__NEGATIVE_PROMPT__"
+        patched_identity_graph[str(negative_id)]["inputs"]["text"] = "__NEGATIVE_PROMPT__"
+        source_identity = canonical_json(source_identity_graph)
+        patched_identity = canonical_json(patched_identity_graph)
     if source_identity != patched_identity:
         raise YusuTimelineError("Yusu timeline patch changed fields outside the allowlist")
-    if patched[str(negative_id)] != graph[str(negative_id)]:
+    if negative_prompt is None and patched[str(negative_id)] != graph[str(negative_id)]:
         raise YusuTimelineError("Yusu workflow-owned negative node was changed")
     return patched
 

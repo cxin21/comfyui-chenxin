@@ -70,7 +70,7 @@ from runtime.local_orchestrator import (
 from runtime.workflow_profile import ProfileError, structure_fingerprint
 
 
-_PREFIX = "[prompt-forge-runtime]"
+_PREFIX = "[character-video-pipeline-runtime]"
 
 
 class CliUsageError(ValueError):
@@ -95,7 +95,7 @@ def _add_json_source(parser: argparse.ArgumentParser, *, workflow: bool = False)
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = JsonArgumentParser(prog="prompt-forge-runtime")
+    parser = JsonArgumentParser(prog="character-video-pipeline-runtime")
     commands = parser.add_subparsers(dest="command", required=True, parser_class=JsonArgumentParser)
 
     discover = commands.add_parser("discover", help="build a live CapabilityReport")

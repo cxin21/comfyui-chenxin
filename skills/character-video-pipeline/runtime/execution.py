@@ -30,7 +30,10 @@ from .multiview_evidence import (
 from .prompt_quality import validate_anima_prompt_build
 from .reference_select import EXPLICIT_ORIENTATION_SOURCES
 from .workflow_profile import ProfileError, resolve_slots, structure_fingerprint
+from .workflow_profile import structure_fingerprint as _fixed_structure_fingerprint
+from .workflow_assets import WorkflowAssetError, asset_for_stage, load_fixed_api_workflow, load_fixed_workflow
 from .mcp_bridge import McpBridge, McpBridgeError
+from .lora_discovery import hash_inventory, verify_lora_presence
 
 
 class ExecutionError(ValueError):
@@ -189,7 +192,7 @@ _CHARACTER_BASE_SELECTORS = {
 _MULTIVIEW_STAGE = "character-multiview"
 _VIEW_SELECTION_FINGERPRINT = "9dc2b01e2aea0b051113b187b134d007f452df6c83cfcbbd8d325eaa4c29e4da"
 _VIEW_SELECTION_SOURCE_API_GRAPH_HASH = "450e6e6570a7c21aee6bc2bd32d19ac579e3460de9ccc1eca456b0dd960eec36"
-_VIEW_SELECTION_PROFILE_HASH = "d225a4be9a9fb9e41cb4c823ebf824d500e5b30f016c9c6c00d5728162f9ebda"
+_VIEW_SELECTION_PROFILE_HASH = "f3cba6b1bcac5e9f25c630fe1b4519c75e2f7002f79921fb46975fb8b11f1dd8"
 _VIEW_SELECTION_PROFILE_PATH = Path(__file__).parent / "profiles" / "flux2-klein-view-selection.json"
 _PATCH_KEYS = frozenset(("slot", "input", "value"))
 _TERMINAL_STATUSES = frozenset(("succeeded", "failed"))
@@ -562,7 +565,19 @@ def build_execution_draft(
 
     _validate_character_base_profile(profile, workflow_profile_id)
     _require_idle_local_capability(capability_report, _utc_now())
-    _require_workflow_candidate(capability_report, workflow_profile_id)
+    fixed_asset = profile.get("fixed_workflow_asset") if isinstance(profile, dict) else None
+    if fixed_asset is None and isinstance(profile, dict) and profile.get("source_profile_id") == _CHARACTER_BASE_PROFILE_ID:
+        fixed_asset = "camera-anima.json"
+    if fixed_asset is not None and actual_ui_workflow is None and api_graph is None:
+        try:
+            actual_ui_workflow = load_fixed_workflow(fixed_asset)
+            api_graph = load_fixed_api_workflow(fixed_asset)
+        except WorkflowAssetError as exc:
+            raise ExecutionError(f"fixed character-base workflow asset is invalid: {exc}") from exc
+    elif fixed_asset is not None and (actual_ui_workflow is None or api_graph is None):
+        raise ExecutionError("fixed character-base execution requires both UI and API assets")
+    else:
+        _require_workflow_candidate(capability_report, workflow_profile_id)
     if not isinstance(api_graph, dict):
         raise ExecutionError("actual API graph must be an object")
 
@@ -595,10 +610,11 @@ def build_execution_draft(
 
     # This call is validation, not execution: it deep-copies the graph and proves
     # nodes 24/25, their class types and all four prompt inputs exist.
-    from .adapters.camera import CameraAdapterError, normalize_camera_api_graph, patch_character_base
+    from .adapters.camera import CameraAdapterError, normalize_camera_api_graph
+    from .stage_config_surface import StageSurfaceError, compile_fixed_character_base_plan
 
     try:
-        normalized_source = normalize_camera_api_graph(api_graph, actual_ui_workflow, profile)
+        normalized_source = api_graph if fixed_asset is not None else normalize_camera_api_graph(api_graph, actual_ui_workflow, profile)
     except CameraAdapterError as exc:
         raise ExecutionError(f"camera source normalization failed: {exc}") from exc
     if normalized_source != api_graph:
@@ -606,7 +622,10 @@ def build_execution_draft(
             "camera source API graph must be normalized with normalize-camera before planning"
         )
 
-    patched_graph = patch_character_base(api_graph, prompt_build, prompt_slots)
+    try:
+        patched_graph = compile_fixed_character_base_plan(api_graph, prompt_build)["api_graph"]
+    except StageSurfaceError as exc:
+        raise ExecutionError(f"character-base API graph Config Surface compilation failed: {exc}") from exc
     executable_graph_hash = content_hash(patched_graph)
     derived_preflight = _derived_preflight(
         actual_fingerprint,
@@ -870,13 +889,13 @@ def _validated_stage1_source(
         raise ExecutionError("Stage 1 prompt_id is invalid")
     if stage1_record.get("terminal_status") != "succeeded":
         raise ExecutionError("Stage 1 RunRecord must be a successful terminal run")
-    from .adapters.camera import patch_character_base
+    from .stage_config_surface import StageSurfaceError, compile_fixed_character_base_plan
 
     history_status, history_outputs = _parse_history(
         stage1_history,
         stage1_record.get("prompt_id"),
         stage1_record.get("terminal_status"),
-        patch_character_base(stage1_api_graph, prompt_build, _CHARACTER_BASE_SLOTS),
+        compile_fixed_character_base_plan(stage1_api_graph, prompt_build)["api_graph"],
     )
     if stage1_record.get("history_status") != history_status or not _history_outputs_equal(
         stage1_record.get("history_outputs"), history_outputs
@@ -930,6 +949,16 @@ def _load_view_selection_profile() -> dict:
         raise ExecutionError("flat-v2 view-selection profile is unreadable") from exc
     if not isinstance(profile, dict) or content_hash(profile) != _VIEW_SELECTION_PROFILE_HASH:
         raise ExecutionError("flat-v2 view-selection profile hash is outside the production pin")
+    if profile.get("fixed_workflow_asset") is not None:
+        try:
+            asset_name = asset_for_stage("multiview")
+            if profile.get("fixed_workflow_asset") != asset_name:
+                raise ExecutionError("flat-v2 profile fixed workflow asset is not the registered asset")
+            fixed_workflow = load_fixed_workflow(asset_name)
+            if _fixed_structure_fingerprint(fixed_workflow) != profile.get("fixed_workflow_fingerprint"):
+                raise ExecutionError("flat-v2 fixed workflow asset fingerprint is invalid")
+        except WorkflowAssetError as exc:
+            raise ExecutionError(f"flat-v2 fixed workflow asset validation failed: {exc}") from exc
     return profile
 
 
@@ -967,11 +996,11 @@ def _multiview_executable_from_plan(api_graph: dict, plan: dict) -> dict:
             raise ExecutionError(f"Stage 2 {field} is not bound to the approved view plan")
     executable_plan = copy.deepcopy(expected["view_plan"])
     executable_plan["base_image"] = plan["uploaded_filename"]
-    from .adapters.flux_multiview import FluxAdapterError, patch_view_plan
+    from .stage_config_surface import StageSurfaceError, compile_fixed_multiview_plan
     try:
-        return patch_view_plan(api_graph, executable_plan, selection_profile)
-    except FluxAdapterError as exc:
-        raise ExecutionError(f"Stage 2 API graph is invalid: {exc}") from exc
+        return compile_fixed_multiview_plan(api_graph, executable_plan)["api_graph"]
+    except StageSurfaceError as exc:
+        raise ExecutionError(f"Stage 2 Config Surface compilation failed: {exc}") from exc
 
 
 def validate_multiview_mcp_preflight(
@@ -1078,11 +1107,11 @@ def _build_multiview_draft_from_validated_mcp(
     view_binding = _bind_multiview_view_plan(selected_view_plan, selection_profile)
     executable_view_plan = copy.deepcopy(selected_view_plan)
     executable_view_plan["base_image"] = filename
-    from .adapters.flux_multiview import FluxAdapterError, patch_view_plan
+    from .stage_config_surface import StageSurfaceError, compile_fixed_multiview_plan
     try:
-        executable = patch_view_plan(api_graph, executable_view_plan, selection_profile)
-    except FluxAdapterError as exc:
-        raise ExecutionError(f"Flux API graph is invalid: {exc}") from exc
+        executable = compile_fixed_multiview_plan(api_graph, executable_view_plan)["api_graph"]
+    except StageSurfaceError as exc:
+        raise ExecutionError(f"Flux Config Surface compilation failed: {exc}") from exc
     source_hash = content_hash(api_graph)
     executable_hash = content_hash(executable)
     report_hash = content_hash(capability_report)
@@ -1225,7 +1254,19 @@ def build_multiview_draft_with_mcp(
     if workflow_id != profile.get("workflow_id"):
         raise ExecutionError("production multiview workflow_id does not match the v2 profile")
     _require_idle_local_capability(capability_report, _utc_now())
-    _require_workflow_candidate(capability_report, workflow_profile_id)
+    fixed_asset = profile.get("fixed_workflow_asset") if isinstance(profile, dict) else None
+    if fixed_asset is None and isinstance(profile, dict) and profile.get("source_profile_id") == _CHARACTER_BASE_PROFILE_ID:
+        fixed_asset = "camera-anima.json"
+    if fixed_asset is not None and actual_ui_workflow is None and api_graph is None:
+        try:
+            actual_ui_workflow = load_fixed_workflow(fixed_asset)
+            api_graph = load_fixed_api_workflow(fixed_asset)
+        except WorkflowAssetError as exc:
+            raise ExecutionError(f"fixed character-base workflow asset is invalid: {exc}") from exc
+    elif fixed_asset is not None and (actual_ui_workflow is None or api_graph is None):
+        raise ExecutionError("fixed character-base execution requires both UI and API assets")
+    else:
+        _require_workflow_candidate(capability_report, workflow_profile_id)
     load_arguments = {"filename": profile["workflow_name"], "format": "ui"}
     convert_arguments = {"filename": profile["workflow_name"], "format": "api"}
     strip_arguments = {"filename": profile["workflow_name"], "format": "api"}
@@ -1918,11 +1959,12 @@ def build_character_base_submission(
         approval_consumption,
         consumption_path,
     )
-    from .adapters.camera import CameraAdapterError, patch_character_base
+    from .adapters.camera import CameraAdapterError
+    from .stage_config_surface import StageSurfaceError, compile_fixed_character_base_plan
 
     try:
-        executable = patch_character_base(source_api_graph, prompt_build, _CHARACTER_BASE_SLOTS)
-    except (CameraAdapterError, TypeError, KeyError) as exc:
+        executable = compile_fixed_character_base_plan(source_api_graph, prompt_build)["api_graph"]
+    except (StageSurfaceError, CameraAdapterError, TypeError, KeyError) as exc:
         raise ExecutionError(f"character-base submission graph failed validation: {exc}") from exc
     if content_hash(executable) != safe_plan["executable_api_graph_hash"]:
         raise ExecutionError("character-base submission executable graph does not match the approved plan")
@@ -2201,11 +2243,23 @@ def build_multiview_submission(
     upload_receipt: dict,
     approval_consumption: dict,
     consumption_path: str | Path,
+    lora_inventory: object | None = None,
 ) -> dict:
     """Build the only graph object authorized for one consumed Stage 2 enqueue."""
     safe_plan = _validate_approved_plan(approved_plan, trusted_now=_utc_now())
     if safe_plan["stage"] != _MULTIVIEW_STAGE:
         raise ExecutionError("Flux submission requires an approved character-multiview plan")
+    view_plan = safe_plan.get("view_plan")
+    lora_plan = view_plan.get("lora_plan") if isinstance(view_plan, dict) else None
+    if lora_plan is not None:
+        if lora_inventory is None:
+            raise ExecutionError("multiview LoRA execution requires a fresh MCP inventory")
+        if hash_inventory(lora_inventory) != lora_plan.get("inventory_hash"):
+            raise ExecutionError("multiview LoRA inventory hash does not match the approved plan")
+        try:
+            verify_lora_presence(lora_inventory, lora_plan.get("selections"))
+        except Exception as exc:
+            raise ExecutionError(f"multiview LoRA selection is not present in the fresh inventory: {exc}") from exc
     if not isinstance(source_api_graph, dict) or content_hash(source_api_graph) != safe_plan["source_api_graph_hash"]:
         raise ExecutionError("Flux submission source graph does not match approved plan")
     artifact_identity = {
@@ -2306,6 +2360,7 @@ def submit_multiview(
     approval_consumption: dict,
     consumption_path: str | Path,
     enqueue_workflow,
+    lora_inventory: object | None = None,
 ) -> dict:
     """Submit one consumed multiview graph through a trusted local MCP adapter.
 
@@ -2321,6 +2376,7 @@ def submit_multiview(
         upload_receipt=upload_receipt,
         approval_consumption=approval_consumption,
         consumption_path=consumption_path,
+        lora_inventory=lora_inventory,
     )
     request = {
         "prompt": copy.deepcopy(submission["api_graph"]),
@@ -2529,9 +2585,12 @@ def _validate_plan_lineage(plan: object, prompt_build: dict, api_graph: dict) ->
         raise ExecutionError("ExecutionPlan source_api_graph_hash does not match API graph")
     if plan.get("patches") != _character_base_patches(prompt_build):
         raise ExecutionError("ExecutionPlan exact four patches do not match PromptBuild")
-    from .adapters.camera import patch_character_base
+    from .stage_config_surface import StageSurfaceError, compile_fixed_character_base_plan
 
-    patched_graph = patch_character_base(api_graph, prompt_build, _CHARACTER_BASE_SLOTS)
+    try:
+        patched_graph = compile_fixed_character_base_plan(api_graph, prompt_build)["api_graph"]
+    except StageSurfaceError as exc:
+        raise ExecutionError(f"character-base API graph Config Surface compilation failed: {exc}") from exc
     if plan["executable_api_graph_hash"] != content_hash(patched_graph):
         raise ExecutionError("ExecutionPlan executable_api_graph_hash does not match patched graph")
 
@@ -2898,11 +2957,9 @@ def build_run_record(
     safe_outputs = _validated_hashes(output_hashes, "output")
     if terminal_status == "succeeded" and not safe_outputs:
         raise ExecutionError("succeeded RunRecord requires output hashes")
-    from .adapters.camera import patch_character_base
+    from .stage_config_surface import StageSurfaceError, compile_fixed_character_base_plan
 
-    executable_graph = patch_character_base(
-        api_graph, prompt_build, _CHARACTER_BASE_SLOTS
-    )
+    executable_graph = compile_fixed_character_base_plan(api_graph, prompt_build)["api_graph"]
     history_status, history_outputs = _parse_history(
         history, prompt_id, terminal_status, executable_graph
     )

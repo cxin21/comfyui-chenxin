@@ -1,6 +1,8 @@
 {
   "schema_version": "2.0",
   "profile_id": "flux2-klein-multiview-flat-v2",
+  "fixed_workflow_asset": "flux2-klein-multiview-flat-v2.json",
+  "fixed_workflow_fingerprint": "9dc2b01e2aea0b051113b187b134d007f452df6c83cfcbbd8d325eaa4c29e4da",
   "workflow_id": "prompt-forge-flat-v2",
   "workflow_name": "PromptForge-Flux2-Klein-multiview-flat-v2.json",
   "workflow_fingerprint": "9dc2b01e2aea0b051113b187b134d007f452df6c83cfcbbd8d325eaa4c29e4da",

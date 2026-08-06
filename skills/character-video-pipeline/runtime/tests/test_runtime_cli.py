@@ -545,7 +545,7 @@ def test_malformed_json_is_exit_two_with_one_prefixed_stderr_line():
     assert result.stdout == ""
     lines = result.stderr.splitlines()
     assert len(lines) == 1
-    assert lines[0].startswith("[prompt-forge-runtime] ")
+    assert lines[0].startswith("[character-video-pipeline-runtime] ")
 
 
 def test_record_uses_exclusive_create_and_identical_content_is_idempotent(tmp_path):
