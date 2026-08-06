@@ -164,6 +164,8 @@ def _refresh_workflow_before_submission(
     approved_plan: dict,
 ) -> dict:
     """Return the freshly observed/normalized graph or fail closed."""
+    if _fixed_camera_asset(profile) is not None:
+        return _fixed_camera_source_graph(source_api_graph, profile)
     if workflow_tools is None:
         return source_api_graph
     workflow_name = profile.get("workflow_name")
@@ -265,6 +267,8 @@ def validate_trusted_video_evidence(profile: dict, workflow_graph: dict, duratio
 def _bind_workflow_tools(
     workflow_tools: dict | None,
     mcp_bridge: McpBridge | None,
+    *,
+    fixed_asset: bool = False,
 ) -> tuple[dict | None, McpBridge | None]:
     """Resolve a host-neutral bridge into the callable map used by the runtime."""
     if workflow_tools is not None and mcp_bridge is not None:
@@ -272,7 +276,12 @@ def _bind_workflow_tools(
     if mcp_bridge is None:
         return workflow_tools, None
     try:
-        return mcp_bridge.workflow_tools(), mcp_bridge
+        tools = (
+            mcp_bridge.fixed_workflow_tools()
+            if fixed_asset
+            else mcp_bridge.workflow_tools()
+        )
+        return tools, mcp_bridge
     except McpBridgeError as exc:
         raise StageExecutionError(f"MCP bridge negotiation failed: {exc}") from exc
 
@@ -455,7 +464,9 @@ def submit_character_base_via_local_rest(
     The REST client remains transport-only. Approval, exact graph rebuilding,
     and the exclusive receipt are owned by ``submit_character_base``.
     """
-    workflow_tools, mcp_bridge = _bind_workflow_tools(workflow_tools, mcp_bridge)
+    workflow_tools, mcp_bridge = _bind_workflow_tools(
+        workflow_tools, mcp_bridge, fixed_asset=_fixed_camera_asset(profile) is not None
+    )
     _verify_pre_submission_loras(approved_plan, lora_inventory, lora_plan)
     production = isinstance(approved_plan, dict) and (
         approved_plan.get("execution_approved") is True

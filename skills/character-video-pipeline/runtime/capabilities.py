@@ -70,6 +70,7 @@ def build_capability_report(
             saved_workflows=workflows,
             workflow_tools=workflow_tools,
             workflow_specs=workflow_specs,
+        available_node_types=object_info,
             now=now,
         )
     except (TypeError, ValueError) as exc:

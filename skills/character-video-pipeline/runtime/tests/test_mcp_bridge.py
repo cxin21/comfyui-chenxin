@@ -65,6 +65,22 @@ def test_bridge_adapts_host_tool_names_and_records_workflow_receipt():
     assert receipt["calls"][0]["response_hash"] != receipt["calls"][1]["response_hash"]
 
 
+def test_bridge_exposes_reduced_tools_for_fixed_workflows():
+    invoker = RecordingInvoker(_responses())
+    bridge = McpBridge(
+        invoker,
+        tool_names={
+            "validate_workflow": "host.validate",
+            "check_workflow_runtime": "host.runtime",
+        },
+    )
+
+    tools = bridge.fixed_workflow_tools()
+    assert set(tools) == {"validate_workflow", "check_workflow_runtime"}
+    assert tools["validate_workflow"]({"workflow": {}})["errors"] == []
+    assert tools["check_workflow_runtime"]({"graph": {}})["runtime"] == "local"
+
+
 def test_bridge_fails_before_host_call_when_required_tool_is_missing():
     invoker = RecordingInvoker(_responses())
     bridge = McpBridge(

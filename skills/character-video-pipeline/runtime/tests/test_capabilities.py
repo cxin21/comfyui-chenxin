@@ -54,7 +54,7 @@ def test_report_contains_live_counts_and_expiry():
     assert report["saved_workflows"] == ["camera-workflow.json"]
     assert report["queue"] == {"running": 0, "pending": 0}
     assert report["workflow_candidates"]
-    assert all(candidate["status"] == "unavailable" for candidate in report["workflow_candidates"])
+    assert all(candidate["status"] in {"unavailable", "rejected"} for candidate in report["workflow_candidates"])
     assert report_is_fresh(report, now)
 
 
@@ -109,6 +109,49 @@ def test_report_can_bind_negotiated_workflow_discovery_callables():
 
     assert report["workflow_candidates"][0]["status"] == "ready"
     assert report["workflow_candidates"][0]["production_ready"] is True
+
+
+def test_fixed_asset_candidate_does_not_require_saved_workflow():
+    from runtime.workflow_assets import asset_descriptor
+
+    descriptor = asset_descriptor("camera-anima.json")
+    from runtime.workflow_assets import load_fixed_api_workflow
+
+    class FixedApi(FakeApi):
+        def object_info(self):
+            graph = load_fixed_api_workflow("camera-anima.json")
+            return {node["class_type"]: {} for node in graph.values()}
+
+    profile = {
+        **descriptor,
+        "workflow_name": "anima.json",
+        "fixed_workflow_asset": "camera-anima.json",
+    }
+    tools = {
+        "validate_workflow": lambda _args: {
+            "valid": True,
+            "errors": [],
+            "warnings": [],
+        },
+        "check_workflow_runtime": lambda _args: {
+            "runtime": "local",
+            "usesApiNodes": [],
+            "unknownNodes": [],
+        },
+    }
+
+    report = build_capability_report(
+        FixedApi(),
+        local_adapter(tools=list(tools)),
+        datetime(2026, 8, 2, 15, 0, tzinfo=timezone.utc),
+        workflow_tools=tools,
+        workflow_specs=[{"role": "character-base", "profile": profile, "production": True}],
+    )
+
+    candidate = report["workflow_candidates"][0]
+    assert candidate["status"] == "ready"
+    assert candidate["production_ready"] is True
+    assert candidate["fixed_workflow_asset"] == "camera-anima.json"
 
 
 def test_report_expires_after_600_seconds():

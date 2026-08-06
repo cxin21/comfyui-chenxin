@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .contracts import content_hash
+from .workflow_assets import WorkflowAssetError, load_fixed_api_workflow
 from .workflow_profile import ProfileError, resolve_slots, structure_fingerprint
 
 
@@ -216,6 +217,7 @@ def discover_workflow_candidates(
     workflow_tools: dict | None,
     now: datetime,
     workflow_specs: list[dict] | tuple[dict, ...] | None = None,
+    available_node_types: object = None,
 ) -> list[dict]:
     """Observe and validate each configured workflow without mutating ComfyUI.
 
@@ -243,6 +245,66 @@ def discover_workflow_candidates(
         profile = _profile_from_spec(raw_spec)
         candidate = _base_candidate(raw_spec, profile, observed_at)
         workflow_name = candidate["workflow_name"]
+
+        fixed_asset = profile.get("fixed_workflow_asset")
+        if isinstance(fixed_asset, str) and fixed_asset:
+            try:
+                fixed_graph = load_fixed_api_workflow(fixed_asset)
+            except WorkflowAssetError as exc:
+                _mark(candidate, "fixed_asset_invalid", str(exc))
+                candidates.append(candidate)
+                continue
+            candidate["fixed_workflow_asset"] = fixed_asset
+            candidate["workflow_fingerprint"] = profile.get("workflow_fingerprint")
+            candidate["api_graph_hash"] = content_hash(fixed_graph)
+            if isinstance(available_node_types, dict):
+                missing = sorted(
+                    {
+                        node.get("class_type")
+                        for node in fixed_graph.values()
+                        if isinstance(node, dict)
+                        and isinstance(node.get("class_type"), str)
+                        and node.get("class_type") not in available_node_types
+                    }
+                )
+                if missing:
+                    _mark(candidate, "missing_fixed_asset_nodes", ", ".join(missing))
+            fixed_tools = workflow_tools if isinstance(workflow_tools, dict) else {}
+            validate_tool = fixed_tools.get("validate_workflow")
+            runtime_tool = fixed_tools.get("check_workflow_runtime")
+            if not callable(validate_tool) or not callable(runtime_tool):
+                _mark(candidate, "fixed_capability_unchecked", "fixed workflow lacks live validate/runtime evidence")
+            if callable(validate_tool):
+                validation = _tool_call(fixed_tools, "validate_workflow", {"workflow": fixed_graph})
+                if isinstance(validation, dict):
+                    candidate["validation"] = {
+                        "valid": validation.get("valid") is True,
+                        "errors": _bounded_issues(validation.get("errors")),
+                        "warnings": _bounded_issues(validation.get("warnings")),
+                        "digest": content_hash(validation),
+                    }
+                    if candidate["validation"]["valid"] is not True:
+                        _mark(candidate, "workflow_invalid", "bundled fixed workflow validation returned errors")
+            if callable(runtime_tool):
+                runtime = _tool_call(fixed_tools, "check_workflow_runtime", {"graph": fixed_graph})
+                if isinstance(runtime, dict):
+                    candidate["runtime"] = {
+                        "runtime": runtime.get("runtime"),
+                        "uses_api_nodes": _bounded_issues(runtime.get("usesApiNodes", runtime.get("apiNodes"))),
+                        "unknown_nodes": _bounded_issues(runtime.get("unknownNodes")),
+                        "digest": content_hash(runtime),
+                    }
+                    if candidate["runtime"].get("runtime") != "local":
+                        _mark(candidate, "runtime_not_local", "bundled fixed workflow is not confirmed local/free")
+            if not candidate["reason_codes"]:
+                candidate["status"] = "ready"
+                candidate["production_ready"] = candidate["production"] is True
+            elif candidate["reason_codes"] == ["fixed_capability_unchecked"]:
+                candidate["status"] = "unavailable"
+            else:
+                candidate["status"] = "rejected"
+            candidates.append(candidate)
+            continue
 
         if workflow_name not in saved_workflows:
             _mark(candidate, "workflow_not_saved", "workflow is not present in ComfyUI's saved library")

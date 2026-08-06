@@ -30,6 +30,13 @@ The helper boundary is:
 3. `build_fixed_camera_config(...)` validates the semantic config.
 4. `compile_fixed_camera_config(bundle, stage_config)` patches the UI surface and synchronizes the declared values into the API graph. The returned API graph is the only executable payload.
 
+For a fixed workflow asset, capability discovery is asset-scoped: do not require
+the workflow to appear in ComfyUI's saved library and do not require legacy
+`get_workflow`/`strip_workflow` tools. Validate the bundled API graph with
+`validate_workflow`, classify it with `check_workflow_runtime`, and report
+missing live node types or non-local runtime as explicit fail-closed evidence.
+Live workflow read/conversion tools remain required only for non-fixed stages.
+
 After a successful image run, the consumer MUST return the PNG/artifact together with `result_manifest`, `effective_config`, `lora`, and `config_hash`. These fields are reconstructed from the final history prompt graph when available (otherwise the submitted executable graph): prompts, reference image, camera angle, all camera-extra inputs, group controls when available, LoRA Loader stack/raw selections, and the bound TriggerWord Toggle values. Returning only the image or only the requested configuration is incomplete.
 
 The camera surface never exposes `seed`, `sampler`, `scheduler`, `steps`, `cfg`, or other internal execution controls. The UI and API transport must be tested together: a successful queue response is insufficient if ComfyUI history does not contain the requested prompt, camera fields, LoRA stack, and TriggerWord binding.

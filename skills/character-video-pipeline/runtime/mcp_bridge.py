@@ -94,6 +94,15 @@ class McpBridge:
     def require_workflow_tools(self) -> None:
         self.require_tools(REQUIRED_WORKFLOW_TOOLS)
 
+    def fixed_workflow_tools(self) -> dict[str, Callable[[dict], object]]:
+        """Return the reduced MCP surface needed for bundled fixed assets."""
+        required = ("validate_workflow", "check_workflow_runtime")
+        self.require_tools(required)
+        return {
+            name: (lambda arguments, logical=name: self.call(logical, arguments))
+            for name in required
+        }
+
     def workflow_tools(self) -> dict[str, Callable[[dict], object]]:
         """Return the callable map expected by ``workflow_discovery``."""
         self.require_workflow_tools()

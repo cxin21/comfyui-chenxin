@@ -512,7 +512,7 @@ def test_fresh_workflow_ui_drift_is_rejected_even_when_api_graph_is_unchanged():
         )
 
 
-def test_camera_base_profile_uses_trusted_workflow_name_fallback(monkeypatch):
+def test_camera_base_profile_uses_fixed_asset_without_live_reread(monkeypatch):
     import runtime.local_orchestrator as orchestrator
 
     profile = json.loads(
@@ -528,8 +528,8 @@ def test_camera_base_profile_uses_trusted_workflow_name_fallback(monkeypatch):
     result = orchestrator._refresh_workflow_before_submission(
         {}, profile, {}, {"stage": "character-base"}
     )
-    assert result == {}
-    assert observed["name"] == "文生图相机视角.json"
+    assert result
+    assert observed == {}
 
 
 def test_submit_stage_rejects_grouped_or_caller_converted_graph_before_api(monkeypatch, tmp_path):
