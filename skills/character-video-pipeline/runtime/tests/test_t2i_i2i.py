@@ -5,7 +5,30 @@ from unittest.mock import MagicMock
 import pytest
 
 from runtime import t2i_camera, i2i_camera
-from runtime.config_schema import RunConfig
+from runtime.config_schema import GROUPS, GroupsConfig, RunConfig
+
+
+@pytest.fixture
+def complete_workflow(monkeypatch):
+    """Augment load_workflow with group member nodes that groups.json
+    references but the tracked 25-node workflow.json stub omits.
+
+    Mirrors the fixture in test_graph_patcher.py. Needed by the ControlNet
+    end-to-end test because _apply_controlnet_image writes node 129 strictly
+    (fail-loud). When workflow.json grows to its full node set, this is a no-op.
+    """
+    from runtime import graph_patcher as _gp
+
+    real_load = _gp.load_workflow
+    extras = {"129": {"inputs": {"image": ""}, "class_type": "LoadImage"}}
+
+    def augmented(stage):
+        merged = dict(real_load(stage))
+        merged.update(extras)
+        return merged
+
+    monkeypatch.setattr(_gp, "load_workflow", augmented)
+    return augmented
 
 
 @pytest.fixture
@@ -81,13 +104,18 @@ def test_run_i2i_new_signature_accepts_config_object(tmp_path: Path, fake_mcp):
     fake_mcp.upload_image.assert_called_once_with("/tmp/ref.png")
 
 
-def test_run_i2i_uploads_controlnet_image_when_provided(tmp_path: Path, fake_mcp):
+def test_run_i2i_uploads_controlnet_image_when_provided(
+    tmp_path: Path, fake_mcp, complete_workflow
+):
     payload, code = i2i_camera.run_i2i(
         mcp=fake_mcp,
         output_dir=tmp_path,
         config=_base_config(
             reference_image="/tmp/ref.png",
             controlnet_image="/tmp/pose.png",
+            # controlnet_image is cross-validated against the group: supplying
+            # the image requires enabling ControlNet LLLite（G1）.
+            groups=GroupsConfig(g1=[GROUPS.CONTROLNET_LLLITE]),
         ),
         timeout=10,
     )

@@ -39,8 +39,10 @@ def test_node_static_default_reads_workflow_value():
     graph = load_workflow(STAGES.T2I)
     # node 50 default steps = 40 per the workflow dump
     assert _node_static_default(graph, "50", "steps") == 40
-    # node 65 default seed = 665005389889224
-    assert _node_static_default(graph, "65", "seed") == 665005389889224
+    # node 65 static seed is -1 in the read-only workflow.json ("randomize"
+    # sentinel for Seed (rgthree)); _node_static_default is a pure passthrough,
+    # so it reports the asset's real value.
+    assert _node_static_default(graph, "65", "seed") == -1
 
 
 def test_describe_config_returns_workflow_bound_defaults():
