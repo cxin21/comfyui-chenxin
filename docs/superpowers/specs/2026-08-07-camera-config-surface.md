@@ -227,25 +227,44 @@ class ConfigFlag:
     help: str = ""
 
 CONFIG_FLAGS: tuple[ConfigFlag, ...] = (
-    ConfigFlag("--envelope",                "envelope",                "both", kind="envelope"),
-    ConfigFlag("--positive",                "positive_override",      "both"),
-    ConfigFlag("--negative",                "negative_override",      "both"),
-    ConfigFlag("--camera",                  "camera",                  "both", kind="kv_csv"),
-    ConfigFlag("--camera-extra",            "camera_extra",            "both", kind="kv_csv"),
-    ConfigFlag("--lora",                    "lora_selections",         "both", kind="csv"),
-    ConfigFlag("--g1",                      "groups.g1",               "both", kind="csv"),
-    ConfigFlag("--g2",                      "groups.g2",               "both", kind="csv"),
-    ConfigFlag("--sampling-steps-first",    "sampling.steps_first",    "both"),
-    ConfigFlag("--sampling-cfg",            "sampling.cfg",            "both"),
-    ConfigFlag("--sampling-sampler",        "sampling.sampler",        "both"),
-    ConfigFlag("--sampling-scheduler",      "sampling.scheduler",      "both"),
-    ConfigFlag("--sampling-denoise-first",  "sampling.denoise_first",  "both"),
-    ConfigFlag("--sampling-steps-refine",   "sampling.steps_refine",   "both"),
-    ConfigFlag("--sampling-denoise-refine", "sampling.denoise_refine", "both"),
-    ConfigFlag("--seed",                    "seed",                    "both"),
-    ConfigFlag("--image-size",              "image_size",              "both", kind="kv_csv"),
-    ConfigFlag("--controlnet-image",        "controlnet_image",        "both", kind="path"),
-    ConfigFlag("--reference",               "reference_image",         "i2i",  kind="path"),
+    ConfigFlag("--envelope",                "envelope",                "both", kind="envelope",
+               help="path to prompt-forge envelope JSON (required)"),
+    ConfigFlag("--positive",                "positive_override",      "both",
+               help="inline override of envelope.draft.positive"),
+    ConfigFlag("--negative",                "negative_override",      "both",
+               help="inline override of envelope.draft.negative"),
+    ConfigFlag("--camera",                  "camera",                  "both", kind="kv_csv",
+               help="k=v pairs: direction,elevation,distance,roll"),
+    ConfigFlag("--camera-extra",            "camera_extra",            "both", kind="kv_csv",
+               help="k=v pairs for any of the 13 CameraExtraConfigNode fields"),
+    ConfigFlag("--lora",                    "lora_selections",         "both", kind="csv",
+               help="comma-separated short LoRA names (resolved against inventory)"),
+    ConfigFlag("--g1",                      "groups.g1",               "both", kind="csv",
+               help="comma-separated G1 group titles to enable"),
+    ConfigFlag("--g2",                      "groups.g2",               "both", kind="csv",
+               help="comma-separated G2 group titles to enable"),
+    ConfigFlag("--sampling-steps-first",    "sampling.steps_first",    "both",
+               help="node 50.steps (first-pass KSampler)"),
+    ConfigFlag("--sampling-cfg",            "sampling.cfg",            "both",
+               help="node 50.cfg"),
+    ConfigFlag("--sampling-sampler",        "sampling.sampler",        "both",
+               help="node 50.sampler (e.g. dpmpp_2m)"),
+    ConfigFlag("--sampling-scheduler",      "sampling.scheduler",      "both",
+               help="node 50.scheduler (e.g. karras)"),
+    ConfigFlag("--sampling-denoise-first",  "sampling.denoise_first",  "both",
+               help="node 50.denoise (t2i default 1.0; i2i forced via WORKFLOW_CONVENTIONS)"),
+    ConfigFlag("--sampling-steps-refine",   "sampling.steps_refine",   "both",
+               help="node 51.steps (refine KSampler)"),
+    ConfigFlag("--sampling-denoise-refine", "sampling.denoise_refine", "both",
+               help="node 51.denoise"),
+    ConfigFlag("--seed",                    "seed",                    "both",
+               help="node 65 seed (omit for random)"),
+    ConfigFlag("--image-size",              "image_size",              "both", kind="kv_csv",
+               help="k=v: width,height for nodes 68/71 (default 1216x832)"),
+    ConfigFlag("--controlnet-image",        "controlnet_image",        "both", kind="path",
+               help="path to ControlNet image (requires group ControlNet LLLite)"),
+    ConfigFlag("--reference",               "reference_image",         "i2i",  kind="path",
+               help="reference image for img2img (run-i2i only)"),
 )
 
 def _add_flags_to_parser(parser, subcommand: str) -> None:
@@ -354,7 +373,7 @@ def _add_flags_to_parser(parser, subcommand: str) -> None:
 - [x] RunConfig and 4 sub-dataclass fields fully specified with types.
 - [x] STAGES, GROUPS, MANDATORY_GROUPS_BY_STAGE, WORKFLOW_CONVENTIONS, REFERENCE_IMAGE_NODE, CONTROLNET_IMAGE_NODE constants have explicit values.
 - [x] NODE_FIELD_MAP: 11 entries enumerated.
-- [x] CONFIG_FLAGS: 17 entries enumerated with `applies_to`, `kind`, `help` placeholders.
+- [x] CONFIG_FLAGS: 17 entries enumerated with `applies_to`, `kind`, `help` text inline.
 - [x] Error table covers every raise path mentioned.
 - [x] Test plan maps 1:1 to scope items.
 - [x] Out-of-scope list is independently verifiable (no future-decision dependencies).
