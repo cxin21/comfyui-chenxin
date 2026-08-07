@@ -18,7 +18,7 @@ No backwards compatibility: this spec replaces the current `patch_graph(*, posit
 2. **Single source of truth: NODE_FIELD_MAP** (decision §3 fix): every field the patcher writes is enumerated in `NODE_FIELD_MAP` (path → `(node_id, input_field)`). The patcher, the helper, and the CLI flag table all read from this map. Adding a tunable is a one-line change.
 3. **Stage-as-constant, conventions-as-table** (decision §4 fix): stage identifiers, group titles, mandatory groups per stage, workflow-level hard conventions (e.g. i2i forces `node 27.denoise = 0.6`), and per-stage reference-image / controlnet-image node ids are all tables. No string literals scattered through the patcher.
 4. **CLI flags generated from CONFIG_FLAGS table** (decision §5 fix): argparse wiring is derived from a single `CONFIG_FLAGS` tuple; per-flag metadata includes `applies_to` (`"both"` / `"t2i"` / `"i2i"`), `kind` (`"scalar"` / `"csv"` / `"kv_csv"` / `"path"` / `"envelope"`), and `help` text.
-5. **No backwards compatibility**: old `patch_graph(*, positive=..., camera=..., enabled_g1=..., ...)` is deleted. Old CLI flags (`--positive`, `--negative`, `--camera`, `--lora`, `--g1`, `--g2`, `--reference`) are replaced by the `CONFIG_FLAGS` schema.
+5. **No backwards compatibility**: old `patch_graph(*, positive=..., camera=..., enabled_g1=..., ...)` is deleted. Old CLI flags (`--positive`, `--negative`, `--camera`, `--lora`, `--g1`, `--g2`, `--reference`) are replaced by the `CONFIG_FLAGS` schema. **`--positive` / `--negative` removed** — the only path to write positive/negative text is `--envelope` (prompt-forge gate); inline override would bypass the hard rule.
 6. **Workflow-bound, not hard-coded** (decision §3): `describe_config` reads NODE_FIELD_MAP + the loaded workflow.json to extract default values for every tunable. If workflow.json changes a default, the helper output updates automatically.
 7. **i2i hard conventions stay enforced** (decision §4): the patcher auto-appends `加载图片（G1）` to `groups.g1` when `stage == STAGES.I2I`; reference_image is required; KSampler denoise is forced to `0.6` via `WORKFLOW_CONVENTIONS`. These are not user-configurable.
 
@@ -163,6 +163,19 @@ WORKFLOW_CONVENTIONS: dict[str, dict] = {
 
 REFERENCE_IMAGE_NODE:   dict[str, str] = {STAGES.I2I: "21"}
 CONTROLNET_IMAGE_NODE: dict[str, str] = {STAGES.T2I: "129", STAGES.I2I: "129"}
+
+# Core-render-path groups that MUST always be active for any working render.
+# Patcher merges these with the user's `RunConfig.groups.g1/g2` (user-provided
+# groups are added on top — they can enable MORE, never disable these).
+DEFAULT_ENABLED_G1: list[str] = [
+    "保存图片（G1）",          # node 35 Image Saver
+    "第二轮采样器（G1）",      # node 51 KSampler (refine)
+    "相机视角生图（G1）",      # nodes 583 CameraAngleNode + 585 CameraExtraConfigNode
+]
+DEFAULT_ENABLED_G2: list[str] = [
+    "图像锐化（G2）",          # node 111 ImageSharpen
+    "对比度（G2）",            # node 96  AdjustContrast
+]
 ```
 
 ### `graph_patcher.py`
@@ -207,13 +220,24 @@ def _activate_img2img(graph, image_name, ri_node="21"): ...  # existing
 ```
 
 **Cross-stage rules inside `patch_graph`**:
-1. Validate `controlnet_image` ↔ `GROUPS.CONTROLNET_LLLITE` (both directions):
-   - `controlnet_image` provided but group not in `g1` → raise `ValueError`.
-   - Group in `g1` but `controlnet_image is None` → raise `ValueError`.
-2. Auto-append `MANDATORY_GROUPS_BY_STAGE[stage]` to `g1`.
-3. After `apply_group_modes`, write `controlnet_image` to `CONTROLNET_IMAGE_NODE[stage]["image"]` (only when provided and group is active).
-4. Apply `WORKFLOW_CONVENTIONS[stage]` (e.g. i2i forces `node 27.denoise = 0.6`).
-5. i2i: require `reference_image`; call `_activate_img2img(graph, reference_image)`.
+1. Merge groups: `final_g1 = list(set(RunConfig.groups.g1 or []) | DEFAULT_ENABLED_G1)`, similarly for g2. User can enable MORE groups, never disable defaults.
+2. Auto-append `MANDATORY_GROUPS_BY_STAGE[stage]` to `final_g1` (after the merge above).
+3. Validate `controlnet_image` ↔ `GROUPS.CONTROLNET_LLLITE` (both directions):
+   - `controlnet_image` provided but group not in `final_g1` → raise `ValueError`.
+   - Group in `final_g1` but `controlnet_image is None` → raise `ValueError`.
+4. After `apply_group_modes`, write `controlnet_image` to `CONTROLNET_IMAGE_NODE[stage]["image"]` (only when provided and group is active).
+5. Apply `WORKFLOW_CONVENTIONS[stage]` (e.g. i2i forces `node 27.denoise = 0.6`).
+6. i2i: require `reference_image`; call `_activate_img2img(graph, reference_image)`.
+
+**CLI bridge layer (kwargs → RunConfig)**:
+`runtime_cli._add_flags_to_parser` binds every CONFIG_FLAGS entry to argparse. After parsing, the kwargs need to be assembled into a RunConfig. The bridge layer:
+- Reads `--lora` (csv short names) and wraps as `{"selections": [short1, short2, ...]}` before assigning to `RunConfig.lora`.
+- Reads `--camera` (kv string) and constructs a `CameraConfig(direction=, elevation=, distance=, roll=)` from the parsed k=v pairs.
+- Reads `--image-size` (kv string) and constructs an `ImageSizeConfig(width=, height=)`.
+- Reads `--sampling-X` (one per field) and constructs a `SamplingConfig` with only the provided fields populated.
+- Reads `--g1` / `--g2` (csv titles) and constructs a `GroupsConfig(g1=, g2=)`.
+- All other scalar flags (`--seed`, `--controlnet-image`, `--reference`, `--envelope`) pass through unchanged.
+- No `--positive` / `--negative` flag: prompt text MUST come from `--envelope`.
 
 ### `runtime_cli.py`
 
@@ -228,17 +252,13 @@ class ConfigFlag:
 
 CONFIG_FLAGS: tuple[ConfigFlag, ...] = (
     ConfigFlag("--envelope",                "envelope",                "both", kind="envelope",
-               help="path to prompt-forge envelope JSON (required)"),
-    ConfigFlag("--positive",                "positive_override",      "both",
-               help="inline override of envelope.draft.positive"),
-    ConfigFlag("--negative",                "negative_override",      "both",
-               help="inline override of envelope.draft.negative"),
+               help="path to prompt-forge envelope JSON (required; prompt-forge is the only path to write positive/negative)"),
     ConfigFlag("--camera",                  "camera",                  "both", kind="kv_csv",
                help="k=v pairs: direction,elevation,distance,roll"),
     ConfigFlag("--camera-extra",            "camera_extra",            "both", kind="kv_csv",
                help="k=v pairs for any of the 13 CameraExtraConfigNode fields"),
-    ConfigFlag("--lora",                    "lora_selections",         "both", kind="csv",
-               help="comma-separated short LoRA names (resolved against inventory)"),
+    ConfigFlag("--lora",                    "lora",                    "both", kind="csv",
+               help="comma-separated short LoRA names; CLI bridge wraps as {\"selections\": [...]} before RunConfig"),
     ConfigFlag("--g1",                      "groups.g1",               "both", kind="csv",
                help="comma-separated G1 group titles to enable"),
     ConfigFlag("--g2",                      "groups.g2",               "both", kind="csv",
@@ -371,9 +391,17 @@ def _add_flags_to_parser(parser, subcommand: str) -> None:
 
 - [x] No TBD / TODO / placeholder language.
 - [x] RunConfig and 4 sub-dataclass fields fully specified with types.
-- [x] STAGES, GROUPS, MANDATORY_GROUPS_BY_STAGE, WORKFLOW_CONVENTIONS, REFERENCE_IMAGE_NODE, CONTROLNET_IMAGE_NODE constants have explicit values.
+- [x] STAGES, GROUPS, MANDATORY_GROUPS_BY_STAGE, WORKFLOW_CONVENTIONS, REFERENCE_IMAGE_NODE, CONTROLNET_IMAGE_NODE, DEFAULT_ENABLED_G1/G2 constants have explicit values.
 - [x] NODE_FIELD_MAP: 11 entries enumerated.
-- [x] CONFIG_FLAGS: 17 entries enumerated with `applies_to`, `kind`, `help` text inline.
+- [x] CONFIG_FLAGS: 15 entries (down from 17 after removing `--positive`/`--negative`) with `applies_to`, `kind`, `help` text inline.
 - [x] Error table covers every raise path mentioned.
+- [x] CLI bridge layer (`_add_flags_to_parser` → RunConfig) is specified: csv→dict wrapping for `--lora`; kv→dataclass construction for `--camera`, `--image-size`, `--sampling-*`, `--g1`/`--g2`; scalar passthrough for `--seed`, `--controlnet-image`, `--reference`, `--envelope`.
 - [x] Test plan maps 1:1 to scope items.
 - [x] Out-of-scope list is independently verifiable (no future-decision dependencies).
+
+**Second-pass cross-consistency review** (resolved 2026-08-07):
+- ✅ CONFIG_FLAGS entries all map to a real `RunConfig` field (no orphan dest_paths).
+- ✅ `--lora` CLI bridge wraps csv short names as `{"selections": [...]}` into `RunConfig.lora`.
+- ✅ `--positive` / `--negative` removed from CONFIG_FLAGS — prompt-forge is the only path.
+- ✅ DEFAULT_ENABLED_G1/G2 (core render path) explicitly retained as patcher-internal defaults; user `groups.g1/g2` is additive.
+- ✅ NODE_FIELD_MAP, CONFIG_FLAGS, and `describe_config` output share `NODE_FIELD_MAP` as single source of truth for field → (node_id, input) mapping.
