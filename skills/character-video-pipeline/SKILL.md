@@ -146,3 +146,29 @@ Implementation lives under `skills/character-video-pipeline/runtime/`. The host 
 ## Prompt boundary
 
 Prompt Forge is offline and side-effect free. It owns CreativeEvidence, model prompt dialects, visual-language styles, exact tag validation, PromptPackage authoring, and deterministic lint. This skill owns only the external production lifecycle. Model availability never changes what makes a prompt excellent; it only affects whether a separate production request can run.
+
+## ⚠️ 提示词硬性规则（2026-08-07 起）
+
+**所有 stage 和场景的提示词（positive / negative）必须先经 prompt-forge 技能生成，再进入 character-video-pipeline。**
+
+- **唯一入口**：`runtime.t2i_camera.run_t2i` / `runtime.i2i_camera.run_i2i`（CLI 对应 `run-t2i` / `run-i2i` 子命令）
+- 流程：Claude 准备 envelope（`{evidence, draft, dialect_id}`）→ 调 `run_t2i(evidence=..., draft=..., config=RunConfig(...))` → 函数内 prompt-forge `compile_envelope` 校验 → 通过后自动喂给 `patch_graph` 提交
+- 边界：evidence/draft 不得含 `camera / lora / sampler / cfg / steps / seed / denoise` 等执行字段；这些仍是 character-video-pipeline 的可配置项
+- bridge 实现：`runtime/prompt_forge_bridge.py`（`compile_envelope` 严格模式，`compile_or_minimal` 退路）
+- **没有第二入口**：CLI 上唯一能产生图片的子命令就是 `run-t2i` / `run-i2i`，意图是"单入口，方便维护"——避免出现 prompt-forge 闸门可绕过的旁路
+
+## 新增配置项（2026-08-07 起）
+
+在 `RunConfig` 上增加了 5 个 tunables，按节点分组：
+
+| 配置项 | dataclass | 节点 |
+|--------|-----------|------|
+| `sampling.steps_first` / `cfg` / `sampler` / `scheduler` / `denoise_first` | `SamplingConfig` | node 50 |
+| `sampling.steps_refine` / `denoise_refine` | `SamplingConfig` | node 51 |
+| `seed` | `RunConfig.seed` | node 65 |
+| `image_size.width` / `image_size.height` | `ImageSizeConfig` | node 68 / 71 |
+| `controlnet_image` | `RunConfig.controlnet_image` | node 129（仅 ControlNet LLLite 组启用时） |
+
+CLI 入口通过 `runtime_cli.py` 的 `CONFIG_FLAGS` 表 + `_add_flags_to_parser` 自动生成（`--sampling-steps-first`、`--seed`、`--image-size`、`--controlnet-image` 等）。
+
+`describe-config` helper 输出 workflow-bound 配置表（含 default），与 `NODE_FIELD_MAP` 单源同步。

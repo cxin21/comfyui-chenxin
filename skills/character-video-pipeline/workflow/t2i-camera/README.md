@@ -36,16 +36,36 @@
 
 ```bash
 python -m runtime.runtime_cli run-t2i \
-  --positive "1girl, solo, outdoor, sunlight" \
-  --negative "lowres, bad anatomy, bad hands" \
-  --camera "direction=front,elevation=eye-level,distance=full_body" \
-  --loras "add_detail,anima-base-1-masterpiece-v51" \
-  --g1 "保存图片（G1）,第二轮采样器（G1）" \
+  --envelope path/to/anima-envelope.json \
+  --camera "direction=front,elevation=high,distance=cowboy_shot" \
+  --sampling-steps-first 50 \
+  --sampling-cfg 7 \
+  --seed 12345 \
+  --image-size "width=1024,height=1280" \
+  --lora "add_detail,masterpiece" \
+  --g1 "保存图片（G1）,手部 ADetailer（G1）" \
   --g2 "图像锐化（G2）"
 ```
 
 ## 运行时模块入口
 
 ```
-runtime_cli.cmd_run_t2i -> t2i_camera.run_t2i -> patch_graph -> mcp.validate/enqueue -> download -> record
+runtime_cli.cmd_run_t2i
+  -> _kwargs_to_run_config (CLI bridge: csv->dict, kv->dataclass)
+  -> t2i_camera.run_t2i(mcp, output_dir, config: RunConfig)
+       -> prompt_forge_bridge.compile_envelope  (硬性闸门)
+       -> if controlnet_image: mcp.upload_image
+       -> patch_graph(stage=STAGES.T2I, config, mcp_list_loras)
+            -> loads workflow.json + groups.json
+            -> writes prompts (24/25) from config.draft
+            -> writes camera (583) + camera_extra (585) if set
+            -> writes lora (26/66) via build_lora_patch
+            -> writes sampling (50/51), seed (65), image_size (68/71) if set
+            -> merges DEFAULT_ENABLED_G1/G2 + user groups.g1/g2 + mandatory groups
+            -> cross-validates controlnet_image <-> ControlNet LLLite group
+            -> applies WORKFLOW_CONVENTIONS
+       -> mcp.validate / mcp.check_runtime / mcp.enqueue
+       -> mcp.get_history (text/dict dual-format parse)
+       -> mcp.get_image (multipart content list)
+       -> record_attempt (run-record.json schema_version 2.0)
 ```

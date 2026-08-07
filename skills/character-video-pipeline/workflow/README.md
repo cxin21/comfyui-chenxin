@@ -6,15 +6,19 @@
 
 | Stage | 目录 | 状态 | 编译路径 |
 |-------|------|------|---------|
-| t2i-camera（文生图） | [t2i-camera/](t2i-camera/) | 已实现 | 加载固定 API 图 -> patch 输入 -> MCP validate -> MCP enqueue |
-| i2i-camera（图生图） | [i2i-camera/](i2i-camera/) | 已实现 | 上传参考图 -> 加载固定 API 图 -> patch 输入 -> MCP validate -> MCP enqueue |
+| t2i-camera（文生图） | [t2i-camera/](t2i-camera/) | 已实现 | prompt-forge validate -> RunConfig -> patch_graph(stage=t2i-camera) -> validate -> enqueue |
+| i2i-camera（图生图） | [i2i-camera/](i2i-camera/) | 已实现 | prompt-forge validate -> mcp.upload_image -> RunConfig -> patch_graph(stage=i2i-camera, auto-append 加载图片（G1）) -> validate -> enqueue |
 | multiview（多视角） | [multiview/](multiview/) | 占位 | 未实现 |
 | video（视频） | [video/](video/) | 占位 | 未实现 |
 
 ## 编译路径说明
 
 ```
-load_fixed_api_graph  ->  patch_graph()  ->  MCP validate_workflow  ->  MCP enqueue_workflow
+prompt-forge compile_envelope  ->  build RunConfig (CLI bridge: _kwargs_to_run_config)
+                                ->  load_fixed_api_graph (load_workflow)
+                                ->  patch_graph (single source: NODE_FIELD_MAP)
+                                ->  apply WORKFLOW_CONVENTIONS (e.g. i2i denoise=0.6)
+                                ->  MCP validate_workflow  ->  MCP enqueue_workflow
 ```
 
 - **固定 API 图**：`workflow/<stage>/workflow.json` 是已通过 MCP validate_workflow 验证的 ComfyUI API 格式图（35 节点，0 错误）。运行时直接加载，不经过 strip、不经过 UI-to-API 转换。

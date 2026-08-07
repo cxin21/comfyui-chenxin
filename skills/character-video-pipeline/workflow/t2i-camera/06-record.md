@@ -6,27 +6,47 @@
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "stage": "t2i-camera",
   "prompt_id": "abc-123-def",
   "artifact": {
-    "filename": "ComfyUI_00001_.png",
+    "filename": "2026-08-07-121510__0.png",
     "subfolder": "",
-    "path": "outputs/ComfyUI_00001_.png",
-    "bytes": 2097152,
-    "sha256": "e3b0c44298fc1c149afbf4c8996fb924..."
+    "path": "outputs/2026-08-07-121510__0.png",
+    "bytes": 611226,
+    "sha256": "523209d41ecab4ce7c02347aa760db0b52a9ba735c2239dd42da6e7ae4e34c95"
   },
-  "duration_ms": 45230,
+  "duration_ms": 117406,
   "config": {
-    "positive": "1girl, solo, outdoor",
-    "negative": "lowres, bad anatomy",
-    "camera": {"direction": "front", "elevation": "eye-level", "distance": "full_body"},
-    "lora_selections": ["add_detail", "anima-base-1-masterpiece-v51"]
+    "evidence": {"locked_facts": ["1girl"]},
+    "draft": {"positive": "1girl, solo, anime", "negative": "lowres"},
+    "dialect_id": "anima",
+    "strict_prompt": false,
+    "camera": {"direction": "front", "elevation": "high", "distance": "cowboy_shot", "roll": 0.0},
+    "camera_extra": {"lens_value": "85mm lens"},
+    "lora": {"selections": ["add_detail"]},
+    "groups": {"g1": ["手部 ADetailer（G1）"], "g2": ["图像锐化（G2）"]},
+    "sampling": {"steps_first": 50, "cfg": 7.0, "sampler": "dpmpp_2m", "scheduler": "karras",
+                 "denoise_first": 1.0, "steps_refine": 25, "denoise_refine": 0.2},
+    "seed": 12345,
+    "image_size": {"width": 1024, "height": 1280},
+    "controlnet_image": null,
+    "reference_image": null
+  },
+  "prompt_package_quality": {
+    "ready_for_review": true,
+    "facts_preserved": true,
+    "dialect_valid": true
   }
 }
 ```
 
 写入 `run_dir/run-record.json`（`run_dir` 默认为 `output_dir/runs/t2i-<timestamp>/`）。
+
+`schema_version` is "2.0" (was "1.0" before 2026-08-07). The `config`
+field is the full frozen RunConfig serialized via dataclasses.asdict. All
+RunConfig fields appear even when None, so consumers can rely on the
+schema being stable.
 
 ### artifact 字段
 
