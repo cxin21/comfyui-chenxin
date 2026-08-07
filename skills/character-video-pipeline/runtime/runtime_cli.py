@@ -17,6 +17,7 @@ must come through --envelope. There is intentionally no --positive or
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import os
 import shutil
@@ -270,11 +271,29 @@ def _load_envelope_json(args) -> str:
 
     _kwargs_to_run_config expects raw JSON content, not a path.
     """
-    envelope_path = Path(args.envelope_json)
+    envelope_path = Path(args.envelope)
     if not envelope_path.exists():
         print(json.dumps({"error": f"envelope file not found: {envelope_path}"}), file=sys.stderr)
         sys.exit(2)
     return envelope_path.read_text(encoding="utf-8")
+
+
+def _build_run_config_kwargs(args, envelope_content: str) -> dict[str, Any]:
+    """Filter argparse Namespace down to kwargs _kwargs_to_run_config accepts.
+
+    `_kwargs_to_run_config`'s signature is the single source of truth — we
+    only forward parameters it knows about (filtering out `command`, `func`,
+    `output_dir`, the raw `--envelope` path, etc.).
+    """
+    accepted = inspect.signature(_kwargs_to_run_config).parameters
+    config_kwargs: dict[str, Any] = {
+        k: getattr(args, k)
+        for k in accepted
+        if k not in ("envelope_json", "strict") and hasattr(args, k)
+    }
+    config_kwargs["envelope_json"] = envelope_content
+    config_kwargs["strict"] = args.strict
+    return config_kwargs
 
 
 def cmd_run_t2i(args):
@@ -282,8 +301,8 @@ def cmd_run_t2i(args):
     from .t2i_camera import run_t2i
 
     envelope_content = _load_envelope_json(args)
-    rest_kwargs = {k: v for k, v in vars(args).items() if k != "envelope_json"}
-    config = _kwargs_to_run_config(envelope_json=envelope_content, **rest_kwargs)
+    config_kwargs = _build_run_config_kwargs(args, envelope_content)
+    config = _kwargs_to_run_config(**config_kwargs)
     command, server_args = _resolve_mcp_launch()
     with McpClient.from_subprocess(command, server_args, timeout=600.0) as mcp:
         payload, code = run_t2i(
@@ -301,8 +320,8 @@ def cmd_run_i2i(args):
     from .i2i_camera import run_i2i
 
     envelope_content = _load_envelope_json(args)
-    rest_kwargs = {k: v for k, v in vars(args).items() if k != "envelope_json"}
-    config = _kwargs_to_run_config(envelope_json=envelope_content, **rest_kwargs)
+    config_kwargs = _build_run_config_kwargs(args, envelope_content)
+    config = _kwargs_to_run_config(**config_kwargs)
     command, server_args = _resolve_mcp_launch()
     with McpClient.from_subprocess(command, server_args, timeout=600.0) as mcp:
         payload, code = run_i2i(

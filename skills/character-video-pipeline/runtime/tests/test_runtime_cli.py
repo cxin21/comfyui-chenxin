@@ -111,3 +111,70 @@ def test_kwargs_to_run_config_no_explicit_flags_gives_minimal_config():
     assert cfg.image_size is None
     assert cfg.reference_image is None
     assert cfg.controlnet_image is None
+
+
+def test_main_run_t2i_dispatch_passes_runconfig(monkeypatch, tmp_path, capsys):
+    """End-to-end CLI dispatch test for run-t2i.
+
+    Exercises the executable path: argparse -> _load_envelope_json ->
+    _build_run_config_kwargs -> _kwargs_to_run_config -> McpClient.from_subprocess
+    -> run_t2i. Mocks McpClient.from_subprocess and run_t2i so no live
+    ComfyUI/MCP is required. Asserts that:
+      * argparse internals (`command`, `func`, `output_dir`, the raw
+        `--envelope` path string) do NOT leak into _kwargs_to_run_config
+        (this was Bug 2).
+      * args.envelope is read (not args.envelope_json — this was Bug 1).
+      * The dispatch returns a RunConfig with expected fields forwarded.
+    """
+    import json
+    from runtime.config_schema import RunConfig
+    from runtime import mcp_client
+    from runtime import t2i_camera
+
+    envelope_path = tmp_path / "envelope.json"
+    envelope_path.write_text(
+        json.dumps({
+            "evidence": {"intent": "test"},
+            "draft": {"positive": "a cat", "negative": "blurry"},
+            "dialect_id": "anima",
+        }),
+        encoding="utf-8",
+    )
+
+    captured: dict = {}
+
+    class FakeMcp:
+        def __enter__(self):
+            return self
+        def __exit__(self, *exc):
+            return False
+        def __getattr__(self, name):
+            return lambda *a, **kw: {}
+
+    def fake_from_subprocess(command, server_args, timeout=60.0):
+        return FakeMcp()
+
+    def fake_run_t2i(*, mcp, output_dir, config, timeout=600.0, **kw):
+        captured["config"] = config
+        captured["output_dir"] = output_dir
+        return {"ok": True, "echo": "t2i"}, 0
+
+    monkeypatch.setattr(mcp_client.McpClient, "from_subprocess", staticmethod(fake_from_subprocess))
+    monkeypatch.setattr(t2i_camera, "run_t2i", fake_run_t2i)
+
+    rc = runtime_cli.main([
+        "run-t2i",
+        "--envelope", str(envelope_path),
+        "--seed", "42",
+        "--lora", "add_detail,masterpiece",
+    ])
+    assert rc == 0
+    assert "config" in captured, "run_t2i was not invoked — dispatch path broken"
+    config = captured["config"]
+    assert isinstance(config, RunConfig)
+    assert config.seed == 42
+    assert config.lora == {"selections": ["add_detail", "masterpiece"]}
+    assert config.draft == {"positive": "a cat", "negative": "blurry"}
+    assert config.dialect_id == "anima"
+    assert config.strict_prompt is False
+    assert captured["output_dir"] == tmp_path / "outputs" or str(captured["output_dir"]).endswith("outputs")
