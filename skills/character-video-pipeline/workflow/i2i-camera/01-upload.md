@@ -1,6 +1,9 @@
-# 01-upload：上传参考图 + 激活 img2img
+# 01-upload：上传参考图（+ 可选 controlnet 图）
 
-i2i-camera 的第一步：通过 MCP 上传参考图，然后在 patch_graph 中激活 img2img 路径。
+> i2i-camera 同样走 prompt-forge envelope 路径（详见 `../t2i-camera/02-configure.md`）。本步骤只负责：
+> 1. 上传 `RunConfig.reference_image`（必填，本地路径 → mcp.upload_image）
+> 2. 可选上传 `RunConfig.controlnet_image`（仅当 ControlNet LLLite 组被启用时）
+> 3. 在 patch_graph 阶段自动 append `加载图片（G1）` 到 enabled_g1
 
 ## MCP 调用
 
@@ -15,13 +18,13 @@ mcp.health()  # -> health_check({})
 ### 2. upload_image(source_path)
 
 ```python
-upload_result = mcp.upload_image(reference_image_path)
-# -> upload_image({"source_path": "path/to/reference.png"})
+upload_result = mcp.upload_image(config.reference_image)
+# -> upload_image({"source_path": "/tmp/source.png"})
 ```
 
 返回：
 ```json
-{"name": "reference.png", "subfolder": ""}
+{"name": "source.png", "subfolder": ""}
 ```
 
 `i2i_camera.run_i2i()` 提取 `image_name`：
@@ -32,38 +35,16 @@ if subfolder:
     image_name = f"{subfolder}/{image_name}"
 ```
 
-## patch_graph 激活 img2img
+### 3. upload_image(controlnet_image)（可选）
 
-`patch_graph(stage="i2i-camera", reference_image=image_name)` 在完成 t2i 所有 patch 步骤后，额外调用 `_activate_img2img(graph, image_name)`：
-
-### 激活 LoadImage 组（node 21/57/58/59）
-
-```python
-for nid in ("21", "57", "58", "59"):
-    graph[nid]["mode"] = MODE_ACTIVE  # mode=0
-```
-
-这 4 个节点在 t2i 模式下被 bypass（mode=4），i2i 模式下激活。
-
-### 设置 LoadImage 图片名（node 21）
-
-```python
-graph["21"]["inputs"]["image"] = image_name
-```
-
-### 切换 latent 来源（node 75 ImpactSwitch）
-
-```python
-graph["75"]["inputs"]["select"] = 0
-```
-
-ImpactSwitch `select=0` 路由到 input2（VAEEncode，从参考图编码 latent），`select=1` 路由到 input1（EmptyLatent，从噪声生成）。
+`config.controlnet_image` 非空时走同一条上传链路，上传后的文件名交给 patch_graph 写入 node 129。
+是否必填由 patch_graph 与 ControlNet LLLite 组做双向交叉校验：启用该组却没给图会抛 `ValueError`。
 
 ## 后续步骤
 
-上传和激活完成后，流程与 t2i-camera 步骤 02-06 一致：
-- 02-configure：组装配置（reference_image 已设置）
-- 03-patch：patch_graph 完成（img2img 已激活）
+上传完成后，流程与 t2i-camera 步骤 02-06 一致：
+- 02-configure：编译 envelope，组装 `RunConfig`
+- 03-patch：见 [03-patch.md](03-patch.md)（在通用流程后追加 img2img 激活）
 - 04-validate：MCP 验证
 - 05-submit：MCP 提交 + 下载
 - 06-record：记录（stage="i2i-camera"）
