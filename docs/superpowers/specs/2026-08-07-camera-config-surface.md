@@ -115,8 +115,22 @@ class SamplingConfig:
 
 @dataclass(frozen=True)
 class ImageSizeConfig:
-    width:  int | None = None   # node 68
-    height: int | None = None   # node 71
+    width:  int | None = None   # node 68 (easy int) value
+    height: int | None = None   # node 71 (easy int) value
+
+# i2i nodes — single source for the latent-rewire step (was hardcoded in
+# _activate_img2img). Node ids: 21 LoadImage, 57/58/59 VAEEncode chain,
+# 75 ImpactSwitch (latent router), 86 EmptyLatentImage (t2i source),
+# 27 KSampler (first-pass; latent_image is rewired between 86 and 59).
+@dataclass(frozen=True)
+class I2INodes:
+    LOAD_IMAGE:        str = "21"   # receives config.reference_image after upload
+    VAE_ENCODE:        str = "59"   # receives LOAD_IMAGE output; emits latent for KSampler
+    IMPACT_SWITCH:     str = "75"   # latent router; select=0 -> VAE_ENCODE, select=1 -> EmptyLatentImage
+    EMPTY_LATENT:      str = "86"   # t2i latent source; bypassed in i2i
+    KSAMPLER:          str = "27"   # receives the rewired latent
+    LOAD_IMAGE_CHAIN:  tuple[str, ...] = ("21", "57", "58", "59")  # all set MODE_ACTIVE
+I2I_NODES = I2INodes()
 
 @dataclass(frozen=True)
 class GroupsConfig:
@@ -126,22 +140,22 @@ class GroupsConfig:
 @dataclass(frozen=True)
 class RunConfig:
     # prompt-forge gate (always required)
-    evidence:     dict
-    draft:        dict
-    dialect_id:   str   = "anima"
-    strict_prompt: bool = False
+    evidence:      dict
+    draft:         dict            # must contain keys "positive" and "negative"
+    dialect_id:    str   = "anima"  # forwarded to prompt_forge.compile_envelope
+    strict_prompt: bool  = False   # forwarded to prompt_forge.compile_envelope
     # existing tunables
-    camera:       CameraConfig | None = None
-    camera_extra: dict | None         = None
-    lora:         dict | None         = None
-    groups:       GroupsConfig | None  = None
+    camera:        CameraConfig | None = None
+    camera_extra:  dict | None         = None
+    lora:          dict | None         = None   # supported keys: {"selections": [short,...]}
+    groups:        GroupsConfig | None  = None
     # new tunables
-    sampling:     SamplingConfig | None = None
-    seed:         int | None            = None
-    image_size:   ImageSizeConfig | None = None
+    sampling:      SamplingConfig | None = None
+    seed:          int | None            = None
+    image_size:    ImageSizeConfig | None = None
     # stage-specific
-    reference_image:   str | None = None   # i2i only
-    controlnet_image: str | None = None   # iff group enabled
+    reference_image:   str | None = None   # i2i only: local path (run_i2i uploads via mcp.upload_image)
+    controlnet_image: str | None = None   # t2i and i2i: local path (run_t2i/run_i2i uploads via mcp.upload_image)
 
 class STAGES:
     T2I = "t2i-camera"
@@ -216,7 +230,29 @@ def _set_prompt(graph, node_id, text): ...           # existing
 def _set_camera(graph, coords): ...                    # existing
 def _set_camera_extra(graph, extra): ...              # existing
 def _set_lora(graph, lora_patch): ...                  # existing
-def _activate_img2img(graph, image_name, ri_node="21"): ...  # existing
+def _activate_img2img(graph, image_name: str) -> None:
+    """Rewire KSampler latent from EmptyLatentImage to VAEEncode for i2i.
+
+    Reads node ids from I2I_NODES (single source). After this function:
+    - I2I_NODES.LOAD_IMAGE[image] = image_name (uploaded filename)
+    - I2I_NODES.VAE_ENCODE[pixels]  = [I2I_NODES.LOAD_IMAGE, 0]
+    - I2I_NODES.KSAMPLER[latent_image] = [I2I_NODES.VAE_ENCODE, 0]
+    - I2I_NODES.KSAMPLER[denoise]   = 0.6 (also enforced by WORKFLOW_CONVENTIONS,
+      this is the explicit per-stage override)
+    - All nodes in I2I_NODES.LOAD_IMAGE_CHAIN set mode = MODE_ACTIVE
+    """
+    n = I2I_NODES
+    for nid in n.LOAD_IMAGE_CHAIN:
+        if nid in graph:
+            graph[nid]["mode"] = MODE_ACTIVE
+    if n.LOAD_IMAGE in graph:
+        graph[n.LOAD_IMAGE]["inputs"]["image"] = image_name
+    if n.VAE_ENCODE in graph and n.LOAD_IMAGE in graph:
+        graph[n.VAE_ENCODE]["inputs"]["pixels"] = [n.LOAD_IMAGE, 0]
+    if n.KSAMPLER in graph and n.VAE_ENCODE in graph:
+        graph[n.KSAMPLER]["inputs"]["latent_image"] = [n.VAE_ENCODE, 0]
+    if n.KSAMPLER in graph:
+        graph[n.KSAMPLER]["inputs"]["denoise"] = 0.6
 ```
 
 **Cross-stage rules inside `patch_graph`**:
@@ -238,6 +274,36 @@ def _activate_img2img(graph, image_name, ri_node="21"): ...  # existing
 - Reads `--g1` / `--g2` (csv titles) and constructs a `GroupsConfig(g1=, g2=)`.
 - All other scalar flags (`--seed`, `--controlnet-image`, `--reference`, `--envelope`) pass through unchanged.
 - No `--positive` / `--negative` flag: prompt text MUST come from `--envelope`.
+
+**Upload timing**:
+- `RunConfig.reference_image` and `RunConfig.controlnet_image` carry local file paths. The patcher never touches them.
+- `run_i2i` calls `mcp.upload_image(reference_image)` and `mcp.upload_image(controlnet_image)` (the latter only when the user provided it AND the ControlNet LLLite group is enabled), then passes the post-upload filenames into `RunConfig` (a thin wrapper override) — **or** uses a small dataclass wrapper:
+  ```python
+  @dataclass(frozen=True)
+  class I2IResolvedConfig:
+      config: RunConfig
+      uploaded_reference: str         # filename from mcp.upload_image
+      uploaded_controlnet: str | None # filename from mcp.upload_image (None if no controlnet)
+  ```
+- `patch_graph` then writes `uploaded_reference` to `I2I_NODES.LOAD_IMAGE` and `uploaded_controlnet` to `CONTROLNET_IMAGE_NODE[stage]`.
+- Upload errors (file missing, network failure) propagate as `RuntimeError` from `run_i2i` and are caught by the outer try/except → `record_attempt(failed)`.
+
+**`run_t2i` / `run_i2i` signature rewrite** (NO compat shim):
+- Old kwargs (`camera: dict`, `camera_extra: dict`, `lora_selections: list[str]`, `enabled_g1: list[str]`, `enabled_g2: list[str]`) are deleted.
+- New kwargs: `run_t2i(*, mcp, output_dir, config: RunConfig, timeout=600, poll_interval=3, run_dir=None)`.
+- New kwargs: `run_i2i(*, mcp, output_dir, config: RunConfig, timeout=600, poll_interval=3, run_dir=None)`.
+- The internal helpers (`_wait_for_completion`, `_parse_history`, `_download_artifact`) are kept as-is (they don't touch config surface; only their surrounding function signature changes).
+- The `reference_image_path` parameter on old `run_i2i` is replaced by `RunConfig.reference_image`.
+
+**`run-record.json` schema bump**:
+- `schema_version` goes from `"1.0"` to `"2.0"` (major: config surface replacement).
+- `config` field is replaced by the full `RunConfig` dict (frozen dataclasses serialize field-by-field via `dataclasses.asdict`). Includes all fields: `evidence, draft, dialect_id, strict_prompt, camera, camera_extra, lora, groups, sampling, seed, image_size, reference_image, controlnet_image`.
+- `prompt_package_quality` retained.
+
+**`build_lora_patch` signature adjustment**:
+- Current: `build_lora_patch(selections: list[str] | None, mcp_list_loras)`.
+- New: `build_lora_patch(run_config_lora: dict | None, mcp_list_loras)`.
+- Internally reads `run_config_lora["selections"]` (only supported key); if absent → uses default plan.
 
 ### `runtime_cli.py`
 
@@ -342,6 +408,7 @@ def _add_flags_to_parser(parser, subcommand: str) -> None:
 | Group enabled but `controlnet_image` not set | `patch_graph` cross-validation | `ValueError` |
 | LoRA short name not in inventory | `lora_resolver.resolve_lora_names` | `ValueError(LoRA X not found)` |
 | NODE_FIELD_MAP references missing node | patcher write → KeyError | `KeyError` (workflow invariant break — fail loud) |
+| `mcp.upload_image` failure (i2i / controlnet) | `run_t2i` / `run_i2i` outer try | `RuntimeError(upload failed: ...)` |
 | MCP health / enqueue / poll / download failure | `run_t2i`/`run_i2i` outer try | `record_attempt(failed)` + return `(payload, exit_code=1)` |
 
 ## Testing
@@ -394,12 +461,20 @@ def _add_flags_to_parser(parser, subcommand: str) -> None:
 - [x] STAGES, GROUPS, MANDATORY_GROUPS_BY_STAGE, WORKFLOW_CONVENTIONS, REFERENCE_IMAGE_NODE, CONTROLNET_IMAGE_NODE, DEFAULT_ENABLED_G1/G2 constants have explicit values.
 - [x] NODE_FIELD_MAP: 11 entries enumerated.
 - [x] CONFIG_FLAGS: 15 entries (down from 17 after removing `--positive`/`--negative`) with `applies_to`, `kind`, `help` text inline.
-- [x] Error table covers every raise path mentioned.
+- [x] Error table covers every raise path mentioned (added `mcp.upload_image` failure row).
 - [x] CLI bridge layer (`_add_flags_to_parser` → RunConfig) is specified: csv→dict wrapping for `--lora`; kv→dataclass construction for `--camera`, `--image-size`, `--sampling-*`, `--g1`/`--g2`; scalar passthrough for `--seed`, `--controlnet-image`, `--reference`, `--envelope`.
+- [x] `I2I_NODES` table extracted (was hardcoded literals in `_activate_img2img`); `I2I_NODES.LOAD_IMAGE/VAE_ENCODE/IMPACT_SWITCH/EMPTY_LATENT/KSAMPLER/LOAD_IMAGE_CHAIN` all explicit.
+- [x] ImageSizeConfig node ids corrected: nodes 68/71 are `easy int` (value field), not EmptyLatentImage.
+- [x] Upload timing: `reference_image` and `controlnet_image` are local paths in `RunConfig`; `run_i2i` uploads via `mcp.upload_image`, post-upload filenames flow into a thin `I2IResolvedConfig` wrapper or RunConfig overrides, then patch_graph writes them.
+- [x] `run_t2i` / `run_i2i` signature rewrite: old kwargs (camera dict / camera_extra dict / lora_selections list / enabled_g1/g2 list / reference_image_path) all deleted; new sig takes `*, mcp, output_dir, config: RunConfig, ...`.
+- [x] `run-record.json` schema_version bumps to `"2.0"`; `config` becomes the full `RunConfig` (via `dataclasses.asdict`).
+- [x] `build_lora_patch` signature: `(run_config_lora: dict | None, mcp_list_loras)`; reads `run_config_lora["selections"]`.
 - [x] Test plan maps 1:1 to scope items.
 - [x] Out-of-scope list is independently verifiable (no future-decision dependencies).
 
-**Second-pass cross-consistency review** (resolved 2026-08-07):
+**Third-pass detail-completeness review** (resolved 2026-08-07):
+- ✅ RunConfig now carries `dialect_id` + `strict_prompt` (prompt-forge gate fields), so callers don't pass them as separate kwargs.
+- ✅ All P0 gaps (NODE 68/71 correction, I2I_NODES extraction, mcp.upload_image timing, run-record schema bump, build_lora_patch signature, run_t2i/run_i2i signature rewrite, reference_image_path naming) are explicit.
 - ✅ CONFIG_FLAGS entries all map to a real `RunConfig` field (no orphan dest_paths).
 - ✅ `--lora` CLI bridge wraps csv short names as `{"selections": [...]}` into `RunConfig.lora`.
 - ✅ `--positive` / `--negative` removed from CONFIG_FLAGS — prompt-forge is the only path.
