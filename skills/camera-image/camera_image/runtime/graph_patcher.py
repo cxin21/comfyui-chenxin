@@ -96,8 +96,12 @@ _UI_WIDGET_INDEX: dict[tuple[str, str], int] = {
     ("4", "populated_text"): 1,
     ("5", "wildcard_text"): 0,
     ("5", "populated_text"): 1,
-    # Lora Loader (26)
-    ("26", "text"): 1,
+    # Lora Loader (26) — `text` widget input is the first widget in the
+    # source UI's widgets_values list. Position 0 holds the literal stack
+    # text; position 1 is the LoraManager metadata dict (`{"version":1,
+    # "textWidgetName":"text"}`) which the strip ignores. Position 2 is
+    # the LoRA selection list (handled directly by ``_set_lora``).
+    ("26", "text"): 0,
     # Input Parameters / Image Saver (50) — first-pass sampling
     # widgets_values layout: [seed, control_after_generate, steps,
     # cfg, sampler, scheduler, denoise]; widget input positions skip
@@ -265,7 +269,10 @@ def _set_lora(graph: dict, lora_patch: dict) -> None:
     # UI format has nodes in a list, not keyed by id.
     node_26 = _get_node(graph, "26")
     if node_26 is not None:
-        # 1. Stack text (widgets_values[1] in UI; inputs["text"] in API).
+        # 1. Stack text. UI position is widgets_values[0] after the R1 fix
+        # (the source workflow reordered so the literal stack text is at
+        # position 0; position 1 is the LoraManager metadata dict).
+        # API position is inputs["text"].
         _set_value(graph, "26", "text", lora_patch["node_26"]["text"])
         # 2. LoRA list (widgets_values[2] in UI). ComfyUI's strip step reads
         # widget slot 2 to populate the API graph; the text-only write above
@@ -279,6 +286,28 @@ def _set_lora(graph: dict, lora_patch: dict) -> None:
     if node_66 is not None and isinstance(node_66.get("inputs"), dict):
         for key, value in lora_patch["node_66"].items():
             node_66["inputs"][key] = value
+
+
+def _ensure_lora_text(api_graph: dict, stack_text: str) -> None:
+    """Force node 26's ``inputs["text"]`` to ``stack_text`` in an API graph.
+
+    ComfyUI's server-side strip drops the ``text`` widget input on node 26
+    (Lora Loader (LoraManager)) for two reasons: (a) the input is declared
+    with the custom ``AUTOCOMPLETE_TEXT_LORAS`` type which the stripper
+    does not always preserve; (b) the source UI's ``widgets_values`` had a
+    metadata dict at position 0 that the positional strip would lift as
+    the literal ``text``. After the R1 fix moves the literal text to
+    position 0, (b) is gone — but (a) may still drop the input depending
+    on the installed LoraManager version. We belt-and-braces by writing
+    the stack text directly into the API dict here, post-strip.
+    """
+    node = api_graph.get("26") if isinstance(api_graph, dict) else None
+    if not isinstance(node, dict):
+        return
+    inputs = node.get("inputs")
+    if not isinstance(inputs, dict):
+        return
+    inputs["text"] = stack_text
 
 
 def _lora_widget_object(sel: dict) -> dict:
@@ -447,16 +476,11 @@ def apply_run_config(
     if config.controlnet_image is not None:
         _apply_controlnet_image(graph, config.controlnet_image)
 
-    # 7. WORKFLOW_CONVENTIONS per stage.
-    if stage in WORKFLOW_CONVENTIONS:
-        for nid, value in WORKFLOW_CONVENTIONS[stage].get("denoise_override", {}).items():
-            graph[nid]["inputs"]["denoise"] = value
-
-    # 8. i2i activation (after group validation so the upload path is enforced).
-    if stage == STAGES.I2I:
-        if not config.reference_image:
-            raise ValueError("reference_image is required for i2i-camera")
-        _activate_img2img(graph, config.reference_image)
+    # 7. WORKFLOW_CONVENTIONS (e.g. i2i denoise=0.6) is applied
+    # post-strip in ``source_workflow.prepare_temporary_workflow`` so it
+    # runs against the API graph (this function is called against the UI
+    # graph pre-strip, where ``graph["27"]`` doesn't exist — UI nodes
+    # live in ``graph["nodes"]``).
 
     return graph
 

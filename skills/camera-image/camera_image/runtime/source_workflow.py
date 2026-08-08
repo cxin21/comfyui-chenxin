@@ -219,4 +219,37 @@ def prepare_temporary_workflow(
         except OSError:
             pass
 
+    # i2i latent-rewire activation + per-stage WORKFLOW_CONVENTIONS run
+    # HERE — after the strip, on the API graph. Doing them on the UI
+    # graph (pre-strip) KeyErrors because UI nodes live in
+    # graph["nodes"], not keyed by id.
+    #
+    # 1. Apply per-stage denoise_override (e.g. i2i denoise=0.6 on node 27).
+    # 2. For i2i: rewire KSampler latent from EmptyLatentImage to
+    #    VAEEncode of the uploaded reference_image.
+    from .config_schema import WORKFLOW_CONVENTIONS
+    if stage in WORKFLOW_CONVENTIONS:
+        for nid, value in WORKFLOW_CONVENTIONS[stage].get("denoise_override", {}).items():
+            api_graph[nid]["inputs"]["denoise"] = value
+
+    if stage == STAGES.I2I:
+        if config is None or not getattr(config, "reference_image", None):
+            raise ValueError("reference_image is required for i2i-camera")
+        from .graph_patcher import _activate_img2img
+        _activate_img2img(api_graph, config.reference_image)
+
+    # Belt-and-braces: ensure node 26's text input is present post-strip.
+    # ComfyUI's server-side strip occasionally drops the ``text`` widget on
+    # the Lora Loader (LoraManager) because of the custom AUTOCOMPLETE_TEXT_LORAS
+    # type declaration. We resolve the stack text from the resolver (same
+    # logic as the pre-strip patcher; falls back to DEFAULT_LORA_STACK_TEXT
+    # when config.lora is None) and write it directly into the API dict so
+    # the run never fails on "Required input is missing (text)".
+    from .graph_patcher import _ensure_lora_text, build_lora_patch
+    lora_patch = build_lora_patch(
+        run_config_lora=getattr(config, "lora", None) if config is not None else None,
+        mcp_list_loras=getattr(mcp, "list_loras", None) if hasattr(mcp, "list_loras") else None,
+    )
+    _ensure_lora_text(api_graph, lora_patch["node_26"]["text"])
+
     return api_graph
