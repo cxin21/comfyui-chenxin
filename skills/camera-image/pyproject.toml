@@ -16,5 +16,5 @@ camera-image = "camera_image.mcp_bridge:register"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["camera_image*"]
-exclude = ["workflow*"]
+include = ["camera_image*", "runtime*"]
+exclude = ["workflow*", "tests*", "test*", "*.tests", "*.tests.*"]

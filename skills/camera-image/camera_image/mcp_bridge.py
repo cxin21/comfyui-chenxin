@@ -10,17 +10,17 @@ import json
 import os
 import shutil
 from pathlib import Path
-from typing import Any
 
-from camera_image.runtime.config_schema import RunConfig
-from camera_image.runtime.graph_patcher import describe_config
-from camera_image.runtime.lora_resolver import (
+from runtime.config_schema import RunConfig
+from runtime.graph_patcher import describe_config
+from runtime.lora_resolver import (
     default_lora_plan,
     filter_anima_loras,
     parse_lora_inventory,
     render_stack_text,
 )
-from camera_image.runtime.mcp_client import McpClient
+from runtime.mcp_client import McpClient
+from runtime.validators import validate_config
 from comfyui_chenxin_mcp.protocol import Server
 from comfyui_chenxin_mcp.registry import SkillRegistration
 
@@ -36,30 +36,9 @@ def _spawn_mcp() -> McpClient:
     )
 
 
-def validate_config(skill: str, stage: str, config: dict[str, Any]) -> dict[str, Any]:
-    """Validate a RunConfig dict before run_t2i_camera / run_i2i_camera.
-
-    The runtime's graph_patcher exposes ``describe_config`` for shape
-    introspection but does not yet ship a ``validate_config`` callable. The
-    MCP layer therefore implements a thin local validator that checks
-    prompt-forge gate presence and stage-specific reference_image
-    requirements. Richer validation lands with the runtime tools in Task 4.
-    """
-    if not isinstance(config, dict):
-        return {"ok": False, "stage": stage, "skill": skill, "error": "config must be an object"}
-    errors: list[str] = []
-    draft = config.get("draft")
-    if not isinstance(draft, dict):
-        errors.append("config.draft must be an object (prompt-forge envelope)")
-    else:
-        for key in ("positive", "negative"):
-            if not isinstance(draft.get(key), str) or not draft[key].strip():
-                errors.append(f"config.draft.{key} must be a non-empty string")
-    if stage == "i2i-camera" and not config.get("reference_image"):
-        errors.append("config.reference_image is required for i2i-camera")
-    if errors:
-        return {"ok": False, "stage": stage, "skill": skill, "errors": errors}
-    return {"ok": True, "stage": stage, "skill": skill}
+# validate_config is imported from runtime.validators (see import above).
+# The re-export keeps ``camera_image.mcp_bridge.validate_config`` importable
+# for test patch targets and the MCP schema dispatcher.
 
 
 def register(mcp: Server) -> None:
@@ -128,7 +107,7 @@ def register(mcp: Server) -> None:
         },
     )
     async def run_t2i_tool(envelope: dict, stage: str = "t2i-camera", **kwargs) -> dict:
-        from camera_image.runtime.runtime_cli import _kwargs_to_run_config
+        from runtime.runtime_cli import _kwargs_to_run_config
 
         cli_args = {"envelope_json": json.dumps(envelope, ensure_ascii=False)}
         for k, v in kwargs.items():
@@ -136,7 +115,7 @@ def register(mcp: Server) -> None:
                 continue
             cli_args[k] = v
         config = _kwargs_to_run_config(**cli_args)
-        from camera_image.runtime.t2i_camera import run_t2i
+        from runtime.t2i_camera import run_t2i
 
         with _spawn_mcp() as mcp:
             payload, code = run_t2i(
@@ -170,7 +149,7 @@ def register(mcp: Server) -> None:
         },
     )
     async def run_i2i_tool(envelope: dict, reference: str, stage: str = "i2i-camera", **kwargs) -> dict:
-        from camera_image.runtime.runtime_cli import _kwargs_to_run_config
+        from runtime.runtime_cli import _kwargs_to_run_config
 
         cli_args = {"envelope_json": json.dumps(envelope, ensure_ascii=False), "reference": reference}
         for k, v in kwargs.items():
@@ -178,7 +157,7 @@ def register(mcp: Server) -> None:
                 continue
             cli_args[k] = v
         config = _kwargs_to_run_config(**cli_args)
-        from camera_image.runtime.i2i_camera import run_i2i
+        from runtime.i2i_camera import run_i2i
 
         with _spawn_mcp() as mcp:
             payload, code = run_i2i(
