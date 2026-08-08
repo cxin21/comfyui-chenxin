@@ -33,6 +33,23 @@ def get_skill_data() -> SkillData:
                 implies=f"group_auto:{GROUPS.LOAD_IMAGE}",
                 direction="forward",
             ),
+            # 区域提示词（G1） requires 3 text prompts (one per channel).
+            # Forward only — text alone does not force the group on.
+            Rule(
+                condition=f"group:{GROUPS.AREA_PROMPT}",
+                implies="config:red_prompt",
+                direction="forward",
+            ),
+            Rule(
+                condition=f"group:{GROUPS.AREA_PROMPT}",
+                implies="config:green_prompt",
+                direction="forward",
+            ),
+            Rule(
+                condition=f"group:{GROUPS.AREA_PROMPT}",
+                implies="config:blue_prompt",
+                direction="forward",
+            ),
         ),
         stage_images={
             STAGES.T2I: (

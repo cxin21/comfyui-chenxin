@@ -53,3 +53,66 @@ def test_skill_data_has_no_apply_fn_field():
     sd = get_skill_data()
     # SkillData no longer carries apply_fn (merged into prepare_fn).
     assert not hasattr(sd, "apply_fn")
+
+
+def test_dependency_rules_cover_region_prompts():
+    """区域提示词（G1） implies 3 config text fields (forward direction)."""
+    from camera_image.runtime.config_schema import GROUPS
+    from comfyui_chenxin_mcp.engine.skill_data import Rule
+
+    sd = get_skill_data()
+    region_rules = [
+        r for r in sd.dependency_rules
+        if r.condition == f"group:{GROUPS.AREA_PROMPT}"
+        and r.direction == "forward"
+    ]
+    assert len(region_rules) == 3, (
+        f"expected 3 forward rules for 区域提示词, got {len(region_rules)}"
+    )
+    implied = {r.implies for r in region_rules}
+    assert implied == {
+        "config:red_prompt",
+        "config:green_prompt",
+        "config:blue_prompt",
+    }
+
+
+def test_dependency_rules_region_prompts_are_forward_only():
+    """region prompt rules must NOT be bidirectional — text alone must not force group on."""
+    from camera_image.runtime.config_schema import GROUPS
+    sd = get_skill_data()
+    for r in sd.dependency_rules:
+        if r.condition == f"group:{GROUPS.AREA_PROMPT}":
+            assert r.direction == "forward", (
+                f"region rule must be forward only, got {r.direction}"
+            )
+            # Reverse-direction check: bidirectional would also write the
+            # group side from the config side, which is wrong semantics.
+            assert r.direction != "bidirectional"
+
+
+def test_run_config_accepts_region_prompt_fields():
+    """RunConfig.from_envelope surfaces red/green/blue_prompt tunables."""
+    from camera_image.runtime.config_schema import RunConfig
+
+    cfg = RunConfig.from_envelope(
+        {"evidence": {}, "draft": {"positive": "x", "negative": "y"}},
+        red_prompt="red dress",
+        green_prompt="green hair",
+        blue_prompt="blue eyes",
+    )
+    assert cfg.red_prompt == "red dress"
+    assert cfg.green_prompt == "green hair"
+    assert cfg.blue_prompt == "blue eyes"
+
+
+def test_run_config_region_prompts_default_none():
+    """RunConfig region prompt fields default to None (not required)."""
+    from camera_image.runtime.config_schema import RunConfig
+
+    cfg = RunConfig.from_envelope(
+        {"evidence": {}, "draft": {"positive": "x", "negative": "y"}},
+    )
+    assert cfg.red_prompt is None
+    assert cfg.green_prompt is None
+    assert cfg.blue_prompt is None

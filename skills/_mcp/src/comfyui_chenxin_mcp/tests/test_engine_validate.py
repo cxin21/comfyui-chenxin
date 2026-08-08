@@ -105,6 +105,95 @@ def test_stage_implies_group_auto_forward_only():
     assert result["ok"] is True
 
 
+# --- Region prompts (text) dependency rules ---
+# When the user enables 区域提示词（G1）, the 3 R/G/B text prompts
+# (red_prompt, green_prompt, blue_prompt) are required — same gating
+# pattern as the corresponding red/green/blue images.
+
+_REGION_PROMPT_RULES = (
+    Rule(condition="group:区域提示词（G1）", implies="config:red_prompt", direction="forward"),
+    Rule(condition="group:区域提示词（G1）", implies="config:green_prompt", direction="forward"),
+    Rule(condition="group:区域提示词（G1）", implies="config:blue_prompt", direction="forward"),
+)
+
+
+def test_region_prompt_group_enabled_all_provided_ok():
+    sd = _skill_data(rules=_REGION_PROMPT_RULES)
+    config = {
+        "draft": {"positive": "1girl", "negative": "lowres"},
+        "red_prompt": "red dress",
+        "green_prompt": "green hair",
+        "blue_prompt": "blue eyes",
+        "groups": {"g1": ["区域提示词（G1）"]},
+    }
+    result = validate_config(sd, "t2i-camera", config)
+    assert result["ok"] is True, result["errors"]
+
+
+def test_region_prompt_group_enabled_missing_red():
+    sd = _skill_data(rules=_REGION_PROMPT_RULES)
+    config = {
+        "draft": {"positive": "1girl", "negative": "lowres"},
+        "green_prompt": "green hair",
+        "blue_prompt": "blue eyes",
+        "groups": {"g1": ["区域提示词（G1）"]},
+    }
+    result = validate_config(sd, "t2i-camera", config)
+    assert result["ok"] is False
+    assert any("red_prompt" in e for e in result["errors"])
+
+
+def test_region_prompt_group_enabled_missing_green():
+    sd = _skill_data(rules=_REGION_PROMPT_RULES)
+    config = {
+        "draft": {"positive": "1girl", "negative": "lowres"},
+        "red_prompt": "red dress",
+        "blue_prompt": "blue eyes",
+        "groups": {"g1": ["区域提示词（G1）"]},
+    }
+    result = validate_config(sd, "t2i-camera", config)
+    assert result["ok"] is False
+    assert any("green_prompt" in e for e in result["errors"])
+
+
+def test_region_prompt_group_enabled_missing_blue():
+    sd = _skill_data(rules=_REGION_PROMPT_RULES)
+    config = {
+        "draft": {"positive": "1girl", "negative": "lowres"},
+        "red_prompt": "red dress",
+        "green_prompt": "green hair",
+        "groups": {"g1": ["区域提示词（G1）"]},
+    }
+    result = validate_config(sd, "t2i-camera", config)
+    assert result["ok"] is False
+    assert any("blue_prompt" in e for e in result["errors"])
+
+
+def test_region_prompt_group_disabled_none_provided_ok():
+    """Forward-only: providing text does NOT force the group on."""
+    sd = _skill_data(rules=_REGION_PROMPT_RULES)
+    config = {
+        "draft": {"positive": "1girl", "negative": "lowres"},
+        "groups": {"g1": []},
+    }
+    result = validate_config(sd, "t2i-camera", config)
+    assert result["ok"] is True
+
+
+def test_region_prompt_text_alone_no_group_ok():
+    """Forward-only: providing text alone (without group) is fine."""
+    sd = _skill_data(rules=_REGION_PROMPT_RULES)
+    config = {
+        "draft": {"positive": "1girl", "negative": "lowres"},
+        "red_prompt": "red dress",
+        "green_prompt": "green hair",
+        "blue_prompt": "blue eyes",
+        "groups": {"g1": []},
+    }
+    result = validate_config(sd, "t2i-camera", config)
+    assert result["ok"] is True
+
+
 def test_config_not_dict():
     sd = _skill_data()
     result = validate_config(sd, "t2i-camera", "not a dict")

@@ -83,11 +83,19 @@ NODE_FIELD_MAP: dict[str, tuple[str, str]] = {
 # UI-format graph (pre-strip) so the value lands in the slot that
 # ComfyUI's strip will lift into the API dict.
 _UI_WIDGET_INDEX: dict[tuple[str, str], int] = {
-    # ImpactWildcardProcessor (24 / 25)
+    # ImpactWildcardProcessor (24 / 25) — positive / negative main prompts.
     ("24", "wildcard_text"): 0,
     ("24", "populated_text"): 1,
     ("25", "wildcard_text"): 0,
     ("25", "populated_text"): 1,
+    # ImpactWildcardProcessor (3 / 4 / 5) — region prompts (Red/Green/Blue)
+    # used by 区域提示词（G1）. Same widget layout as 24/25.
+    ("3", "wildcard_text"): 0,
+    ("3", "populated_text"): 1,
+    ("4", "wildcard_text"): 0,
+    ("4", "populated_text"): 1,
+    ("5", "wildcard_text"): 0,
+    ("5", "populated_text"): 1,
     # Lora Loader (26)
     ("26", "text"): 1,
     # Input Parameters / Image Saver (50) — first-pass sampling
@@ -202,6 +210,19 @@ def _set_value(graph: dict[str, Any], node_id: str, name: str, value: Any) -> No
 def _set_prompt(graph: dict, node_id: str, text: str) -> None:
     _set_value(graph, node_id, "wildcard_text", text)
     _set_value(graph, node_id, "populated_text", text)
+
+
+def _set_region_prompt(graph: dict, channel: str, text: str) -> None:
+    """Write a region prompt (Red/Green/Blue) into its ImpactWildcardProcessor.
+
+    Channel -> node id:
+      red   -> "3"
+      green -> "4"
+      blue  -> "5"
+    """
+    _node_id = {"red": "3", "green": "4", "blue": "5"}[channel]
+    _set_value(graph, _node_id, "wildcard_text", text)
+    _set_value(graph, _node_id, "populated_text", text)
 
 
 def _set_camera(graph: dict, coords: CameraCoords) -> None:
@@ -360,6 +381,15 @@ def apply_run_config(
     # 1. Prompts.
     _set_prompt(graph, "24", config.draft["positive"].strip())
     _set_prompt(graph, "25", config.draft["negative"].strip())
+
+    # 1b. Region prompts (Red/Green/Blue) — only when the G1 group is on.
+    if GROUPS.AREA_PROMPT in enabled_g1:
+        if config.red_prompt is not None:
+            _set_region_prompt(graph, "red", config.red_prompt)
+        if config.green_prompt is not None:
+            _set_region_prompt(graph, "green", config.green_prompt)
+        if config.blue_prompt is not None:
+            _set_region_prompt(graph, "blue", config.blue_prompt)
 
     # 2. Camera + camera_extra.
     if config.camera:

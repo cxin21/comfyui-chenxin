@@ -100,6 +100,11 @@ class RunConfig:
     # stage-specific
     reference_image: str | None = None   # i2i only: local path (run_i2i uploads via mcp.upload_image)
     controlnet_image: str | None = None # t2i and i2i: local path (run_t2i/run_i2i uploads via mcp.upload_image)
+    # region prompts (区域提示词 G1): per-channel text written to nodes 3/4/5.
+    # Required (validated by Rule) when 区域提示词（G1） group is enabled.
+    red_prompt: str | None = None
+    green_prompt: str | None = None
+    blue_prompt: str | None = None
 
     @classmethod
     def from_envelope(cls, envelope: dict, **tunables) -> "RunConfig":
@@ -109,7 +114,8 @@ class RunConfig:
         Optional envelope key: dialect_id (str, default "anima").
         tunables: camera (dict), camera_extra (dict), lora (dict),
                   groups (dict), sampling (dict), seed (int),
-                  image_size (dict), reference_image (str), controlnet_image (str).
+                  image_size (dict), reference_image (str), controlnet_image (str),
+                  red_prompt (str), green_prompt (str), blue_prompt (str).
         """
         camera = tunables.get("camera")
         if isinstance(camera, dict):
@@ -136,6 +142,9 @@ class RunConfig:
             image_size=image_size,
             reference_image=tunables.get("reference_image"),
             controlnet_image=tunables.get("controlnet_image"),
+            red_prompt=tunables.get("red_prompt"),
+            green_prompt=tunables.get("green_prompt"),
+            blue_prompt=tunables.get("blue_prompt"),
         )
 
 
@@ -148,6 +157,7 @@ class STAGES:
 class GroupTitle:
     LOAD_IMAGE: str = "加载图片（G1）"
     CONTROLNET_LLLITE: str = "ControlNet LLLite（G1）"
+    AREA_PROMPT: str = "区域提示词（G1）"
 
 
 GROUPS = GroupTitle()
