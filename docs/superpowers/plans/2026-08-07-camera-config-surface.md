@@ -167,7 +167,7 @@ class RunConfig:
     evidence: dict
     draft: dict
     dialect_id: str = "anima"
-    strict_prompt: bool = False
+    # prompt-forge gate is always hard (no bypass), per commit d5167a3
     # existing tunables
     camera: CameraConfig | None = None
     camera_extra: dict | None = None
@@ -273,8 +273,8 @@ git -c user.email=claude@anthropic.com -c user.name=Claude commit -m "feat(confi
   WORKFLOW_CONVENTIONS, REFERENCE_IMAGE_NODE, CONTROLNET_IMAGE_NODE,
   DEFAULT_ENABLED_G1/G2)
 - I2I_NODES dataclass (was hardcoded literals in _activate_img2img)
-- RunConfig.dialect_id + strict_prompt carried inline (RunConfig
-  fully self-contained for prompt-forge gate + patcher)
+- RunConfig.dialect_id carried inline (RunConfig fully self-contained
+  for prompt-forge gate + patcher; gate is always hard per commit d5167a3)
 
 Co-Authored-By: Claude <noreply@anthropic.com>"
 ```
@@ -1255,8 +1255,8 @@ def run_t2i(
     uploaded_controlnet: str | None = None
     try:
         # Step 1: prompt-forge validation gate.
-        compile_fn = compile_envelope if config.strict_prompt else compile_or_minimal
-        package = compile_fn(config.evidence, config.draft, config.dialect_id)
+        # prompt-forge gate is always hard (no bypass); commit d5167a3.
+        package = compile_envelope(config.evidence, config.draft, config.dialect_id)
 
         # Step 2: upload controlnet_image (if provided).
         if config.controlnet_image is not None:
@@ -1582,8 +1582,8 @@ def run_i2i(
     uploaded_controlnet: str | None = None
     try:
         # Step 1: prompt-forge validation gate.
-        compile_fn = compile_envelope if config.strict_prompt else compile_or_minimal
-        package = compile_fn(config.evidence, config.draft, config.dialect_id)
+        # prompt-forge gate is always hard (no bypass); commit d5167a3.
+        package = compile_envelope(config.evidence, config.draft, config.dialect_id)
 
         # Step 2: upload reference_image (required).
         ref_upload = mcp.upload_image(config.reference_image)
@@ -2220,7 +2220,6 @@ def _kwargs_to_run_config(
         evidence=evidence,
         draft=draft,
         dialect_id=dialect_id,
-        strict_prompt=strict,
         camera=camera_cfg,
         camera_extra=camera_extra_dict,
         lora=lora_dict,
@@ -2661,7 +2660,7 @@ config = RunConfig(
     evidence={...},        # CreativeEvidence ledger
     draft={...},            # caller-authored {"positive": "...", "negative": "..."}
     dialect_id="anima",      # 默认 anima
-    strict_prompt=False,    # True 时 ready_for_review==False 直接抛错
+    # prompt-forge gate is always hard (no bypass), per commit d5167a3
 
     # 可选 tunables (None = 用 workflow.json 静态值)
     camera=CameraConfig(direction="front", elevation="high", distance="cowboy_shot", roll=0.0),
@@ -2682,7 +2681,7 @@ config = RunConfig(
 run_t2i(mcp=mcp, output_dir=Path("outputs"), config=config)
 ```
 
-`run_t2i()` 第一行调用 `prompt_forge_bridge.compile_envelope`（或退路 `compile_or_minimal`），把 evidence/draft 喂给 `prompt-forge internals.prompt_compile`。校验通过的 PromptPackage.positive/negative 才进入 node 24/25 的 `wildcard_text` 和 `populated_text` 字段；空字符串会被 prompt-forge 拒绝。
+`run_t2i()` 第一行调用 `prompt_forge_bridge.compile_envelope`（硬闸门，无 bypass；commit `d5167a3` 已删除 `compile_or_minimal` fallback），把 evidence/draft 喂给 `prompt-forge internals.prompt_compile`。校验通过的 PromptPackage.positive/negative 才进入 node 24/25 的 `wildcard_text` 和 `populated_text` 字段；空字符串会被 prompt-forge 拒绝。
 
 evidence/draft 不得含 `camera / lora / sampler / cfg / steps / seed / denoise` 等执行字段（prompt-forge `_reject` 把关）。
 
@@ -2732,7 +2731,6 @@ Replace the JSON example with:
     "evidence": {"locked_facts": ["1girl"]},
     "draft": {"positive": "1girl, solo, anime", "negative": "lowres"},
     "dialect_id": "anima",
-    "strict_prompt": false,
     "camera": {"direction": "front", "elevation": "high", "distance": "cowboy_shot", "roll": 0.0},
     "camera_extra": {"lens_value": "85mm lens"},
     "lora": {"selections": ["add_detail"]},

@@ -143,7 +143,7 @@ class RunConfig:
     evidence:      dict
     draft:         dict            # must contain keys "positive" and "negative"
     dialect_id:    str   = "anima"  # forwarded to prompt_forge.compile_envelope
-    strict_prompt: bool  = False   # forwarded to prompt_forge.compile_envelope
+    # prompt-forge gate is always hard (no bypass), per commit d5167a3
     # existing tunables
     camera:        CameraConfig | None = None
     camera_extra:  dict | None         = None
@@ -297,7 +297,7 @@ def _activate_img2img(graph, image_name: str) -> None:
 
 **`run-record.json` schema bump**:
 - `schema_version` goes from `"1.0"` to `"2.0"` (major: config surface replacement).
-- `config` field is replaced by the full `RunConfig` dict (frozen dataclasses serialize field-by-field via `dataclasses.asdict`). Includes all fields: `evidence, draft, dialect_id, strict_prompt, camera, camera_extra, lora, groups, sampling, seed, image_size, reference_image, controlnet_image`.
+- `config` field is replaced by the full `RunConfig` dict (frozen dataclasses serialize field-by-field via `dataclasses.asdict`). Includes all fields: `evidence, draft, dialect_id, camera, camera_extra, lora, groups, sampling, seed, image_size, reference_image, controlnet_image`.
 - `prompt_package_quality` retained.
 
 **`build_lora_patch` signature adjustment**:
@@ -473,7 +473,7 @@ def _add_flags_to_parser(parser, subcommand: str) -> None:
 - [x] Out-of-scope list is independently verifiable (no future-decision dependencies).
 
 **Third-pass detail-completeness review** (resolved 2026-08-07):
-- ✅ RunConfig now carries `dialect_id` + `strict_prompt` (prompt-forge gate fields), so callers don't pass them as separate kwargs.
+- ✅ RunConfig now carries `dialect_id` (prompt-forge gate field), so callers don't pass it as a separate kwarg. The prompt-forge gate is always hard; bypass is not allowed (commit `d5167a3`).
 - ✅ All P0 gaps (NODE 68/71 correction, I2I_NODES extraction, mcp.upload_image timing, run-record schema bump, build_lora_patch signature, run_t2i/run_i2i signature rewrite, reference_image_path naming) are explicit.
 - ✅ CONFIG_FLAGS entries all map to a real `RunConfig` field (no orphan dest_paths).
 - ✅ `--lora` CLI bridge wraps csv short names as `{"selections": [...]}` into `RunConfig.lora`.

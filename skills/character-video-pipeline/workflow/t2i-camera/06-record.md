@@ -21,7 +21,6 @@
     "evidence": {"locked_facts": ["1girl"]},
     "draft": {"positive": "1girl, solo, anime", "negative": "lowres"},
     "dialect_id": "anima",
-    "strict_prompt": false,  # 已废弃字段；闸门永远严格，不再写入实际逻辑
     "camera": {"direction": "front", "elevation": "high", "distance": "cowboy_shot", "roll": 0.0},
     "camera_extra": {"lens_value": "85mm lens"},
     "lora": {"selections": ["add_detail"]},
