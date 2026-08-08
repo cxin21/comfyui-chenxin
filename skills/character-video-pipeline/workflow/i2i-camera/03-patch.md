@@ -18,4 +18,4 @@ i2i-camera 复用 t2i-camera 的两步 patch 流程，差异在第二阶段。
 
 ## 加载图片（G1） 来源
 
-`MANDATORY_GROUPS_BY_STAGE[STAGES.I2I] = [GROUPS.LOAD_IMAGE]` 在 `compute_enabled_groups` 阶段加入最终 G1 启用集。运行时把节点 21/57/58/59 的 mode 写为 0（启用），再 strip 出 API graph——所以这些节点必然出现在 strip 后的 API 图里，`_activate_img2img` 才能安全地重连它们。
+`MANDATORY_GROUPS_BY_STAGE[STAGES.I2I] = [GROUPS.LOAD_IMAGE]` 在 `compute_enabled_groups` 阶段加入最终 G1 启用集。运行时把节点 21/57/58/59 的 mode 写为 0（启用），再 get_workflow 出 API graph——所以这些节点必然出现在 get_workflow 后的 API 图里，`_activate_img2img` 才能安全地重连它们。

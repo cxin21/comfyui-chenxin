@@ -8,7 +8,7 @@
    - 在内存拷贝上对节点写 `mode=0`（启用）/ `mode=4`（禁用）。
    - 写入 `temp_*.json` 临时文件（系统 temp 目录）。
    - 调 `mcp.save_workflow(temp_filename, ui)` 上传到 ComfyUI user library。
-   - 调 `mcp.strip_workflow(path=temp_filename, format="api")` 产出 API 图。
+   - 调 `mcp.get_workflow(filename=temp_filename, format="api")` 产出 API 图。
    - 删除本地临时文件。
    - 返回 API 图 dict（不含 `mode` 字段）。
 
@@ -36,6 +36,6 @@
 旧实现缓存一份 API 图到 `workflow/<stage>/workflow.json`（42 节点），但：
 - 该资产是 `commit 06c1739` revert 后的 stale 残留。
 - API 图不携带 G1/G2 mode 信息；通过 patch_graph 在 API JSON 上改 `mode` 字段。
-- strip_workflow 会丢弃 bypassed 节点——意味着旧 API JSON 已经被 strip 过了，再改 mode 字段没有意义。
+- get_workflow 会丢弃 bypassed 节点——意味着旧 API JSON 已经被 strip 过了，再改 mode 字段没有意义。
 
 正确路径：**完整 UI workflow**（保留所有节点和 mode 字段）→ 运行时改 mode → strip 出新 API JSON。
