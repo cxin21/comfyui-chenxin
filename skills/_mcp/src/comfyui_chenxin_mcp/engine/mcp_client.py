@@ -47,15 +47,28 @@ class McpClient:
     ) -> "McpClient":
         """Spawn MCP stdio server, complete handshake, return client."""
         creationflags = 0
+        use_shell = False
+        # On Windows, subprocess.Popen with a list-form argv does NOT consult
+        # PATHEXT/PATH to resolve commands like `npx` (no extension) or `.cmd`
+        # shims. Without `shell=True` the kernel reports FileNotFoundError even
+        # when `where npx` succeeds from the same shell. POSIX shells already
+        # resolve via PATH, so we only flip the flag on Windows.
         if os.name == "nt":
             creationflags = subprocess.CREATE_NO_WINDOW
+            use_shell = True
+        argv: list[str] | str
+        if use_shell:
+            argv = " ".join([command, *(str(a) for a in args)])
+        else:
+            argv = [command, *args]
         try:
             proc = subprocess.Popen(
-                [command, *args],
+                argv,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 creationflags=creationflags,
+                shell=use_shell,
                 bufsize=1,
                 text=True,
                 encoding="utf-8",
@@ -91,13 +104,21 @@ class McpClient:
         self.close()
 
     def list_loras(self) -> Any:
-        return self._call("list_local_models", {"model_type": "loras"})
+        # comfyui-mcp ≥ 0.49.0 folded list_local_models into an action-parameterized
+        # tool. `action="list"` with an optional `model_type` filter is the live API.
+        return self._call("list_local_models", {"action": "list", "model_type": "loras"})
 
     def check_runtime(self, graph: dict) -> Any:
-        return self._call("check_workflow_runtime", {"graph": graph})
+        # comfyui-mcp ≥ 0.50.0 deprecated check_workflow_runtime. The replacement
+        # is list_packs (action:"check_runtime") which accepts either a pack name
+        # or a graph. Best-effort: callers should treat None as "unknown".
+        return self._call("list_packs", {"action": "check_runtime", "graph": graph})
 
     def enqueue(self, graph: dict) -> Any:
-        return self._call("enqueue_workflow", {"workflow": graph})
+        # comfyui-mcp ≥ 0.50.0 requires an `action` discriminator on enqueue_workflow.
+        # `action="enqueue"` is the new-headless-submit entry point; same workflow
+        # shape (API-format dict) is forwarded under the `workflow` key.
+        return self._call("enqueue_workflow", {"action": "enqueue", "workflow": graph})
 
     def get_history(self, prompt_id: str) -> dict:
         """Compatibility shim: delegates to ``get_history_raw``.
@@ -138,12 +159,20 @@ class McpClient:
         Downstream consumers (e.g. t2i_camera._download_artifact) inspect
         the list for the image block and base64-decode `data`.
         """
+        # comfyui-mcp ≥ 0.49.0: get_image requires action="get" + filename +
+        # optional subfolder/type.
         return self._call("get_image", {
+            "action": "get",
             "filename": filename, "subfolder": subfolder, "type": image_type,
         })
 
     def upload_image(self, source_path: str) -> Any:
-        return self._call("upload_image", {"source_path": source_path})
+        # comfyui-mcp ≥ 0.49.0: upload_image requires action="image" (for a
+        # local file) plus source_path.
+        return self._call("upload_image", {
+            "action": "image",
+            "source_path": source_path,
+        })
 
     def save_workflow(self, filename: str, workflow: dict) -> Any:
         """Upload a workflow JSON to the ComfyUI user library.
@@ -152,7 +181,11 @@ class McpClient:
         UI workflow (with G1/G2 mode adjustments) to the ComfyUI server
         so ``strip_workflow`` can read it server-side.
         """
+        # comfyui-mcp ≥ 0.49.0: save_workflow requires action="save" + filename +
+        # workflow (Web UI format JSON preferred; API-format is auto-converted
+        # server-side).
         return self._call("save_workflow", {
+            "action": "save",
             "filename": filename,
             "workflow": workflow,
         })
@@ -165,10 +198,18 @@ class McpClient:
         a dict (api format) when format="api", or a dict (ui format)
         when format="ui".
         """
-        return self._call("get_workflow", {"filename": filename, "format": format})
+        # comfyui-mcp ≥ 0.49.0: get_workflow requires action="get" + filename +
+        # optional format (api | ui | raw).
+        return self._call("get_workflow", {
+            "action": "get",
+            "filename": filename, "format": format,
+        })
 
     def health(self) -> Any:
-        return self._call("health_check", {})
+        # comfyui-mcp ≥ 0.50.0 deprecated `health_check`. The replacement is
+        # `get_system_stats (action:"health")` which still exposes a `queue`
+        # field with `running`/`pending` arrays — same shape the engine reads.
+        return self._call("get_system_stats", {"action": "health"})
 
 
 def _make_stdio_caller(proc: subprocess.Popen, timeout: float) -> Callable[..., Any]:

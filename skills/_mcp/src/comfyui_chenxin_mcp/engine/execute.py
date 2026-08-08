@@ -88,8 +88,17 @@ def run_skill(
         # broken, enqueue will fail. We deliberately do NOT pre-validate the
         # graph here: comfyui-mcp's wrapper returns a markdown summary
         # string, not the structured result the engine would need.
-        runtime_check = mcp.check_runtime(graph)
-        if isinstance(runtime_check, dict) and runtime_check.get("runtime") != "local":
+        #
+        # The runtime check itself is best-effort: an older comfyui-mcp that
+        # has not yet migrated to list_packs (action:"check_runtime") will
+        # raise, and we do NOT want that to abort an otherwise-valid run.
+        # Only an authoritative "non-local" verdict gates the run.
+        try:
+            runtime_check = mcp.check_runtime(graph)
+        except Exception as exc:
+            runtime_check = None
+            print(f"[engine] runtime check skipped: {exc}")
+        if isinstance(runtime_check, dict) and runtime_check.get("runtime") not in (None, "local"):
             raise RuntimeError(f"workflow uses non-local runtime: {runtime_check}")
 
         # Step 6: enqueue + wait + download.
