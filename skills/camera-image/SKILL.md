@@ -23,8 +23,10 @@ The skill is pure data. It does not own a CLI, a tool registry, or a transport. 
 | User says | Skill handles |
 |-----------|---------------|
 | "Generate an Anima camera-angle image of X" | `t2i-camera` |
-| "Render this photo in the Anima camera style" | `i2i-camera` |
-| "Use the camera workflow with ControlNet pose" | `t2i-camera` (group `ControlNet LLLite（G1）` enabled) |
+| "Render this photo in the Anima camera style" | `i2i-camera` (requires `reference_image`) |
+| "Use the camera workflow with ControlNet pose" | `t2i-camera` (group `ControlNet LLLite（G1）` enabled, plus `controlnet_image`) |
+| "Inject a signature stamp" | `t2i-camera` (group `添加签名（G1）` enabled, plus `signature_image`) |
+| "Use region prompts to mask R/G/B areas" | `t2i-camera` (group `区域提示词（G1）` enabled, plus `red_image`/`green_image`/`blue_image` and matching `red_prompt`/`green_prompt`/`blue_prompt`) |
 | "What does the camera skill expose?" | `describe_config(skill="camera-image", stage="t2i-camera")` |
 | "Validate this config before running" | `validate_config(skill, stage, config)` |
 
@@ -40,7 +42,7 @@ LLM host (Claude Code / Codex / OpenCode)
 comfyui-chenxin-mcp server  (skills/_mcp)
     │   - 4 unified tools: list_skills, describe_config, validate_config, run_skill
     │   - engine/         (skill-agnostic execution core)
-    │   - entry-points    (discovers installed skills)
+    │   - registry.py     (entry-point discovery)
     ▼
 camera-image entry-point   (skills/camera-image/skill_data.py)
     │   - get_skill_data() -> SkillData
@@ -62,7 +64,9 @@ Every `run_skill` call walks the same flow. The engine in `skills/_mcp/src/comfy
 
 ```
 1. compile_envelope    - prompt-forge gate; refuses if draft is not ready
-2. upload stage_images - reference_image (i2i only) and/or controlnet_image
+2. upload stage_images - one per ImageSpec; uploads only those whose
+                         group dependency is enabled or whose required flag
+                         is set; replaces local path with ComfyUI filename
 3. health              - mcp.health(); aborts if ComfyUI queue is not idle
 4. prepare_fn          - load source UI workflow, apply RunConfig tunables
                          to widgets_values, apply G1/G2 mode toggles,
@@ -86,7 +90,7 @@ Mandatory envelope:
 - `evidence` — CreativeEvidence ledger
 - `draft` — must contain non-empty `positive` and `negative` strings
 
-Optional tunables: `camera`, `camera_extra`, `lora`, `groups`, `sampling`, `seed`, `image_size`, `controlnet_image` (requires the `ControlNet LLLite（G1）` group).
+Optional tunables: `camera`, `camera_extra`, `lora`, `groups`, `sampling`, `seed`, `image_size`, `controlnet_image` (requires the `ControlNet LLLite（G1）` group), `red_image`/`green_image`/`blue_image` (require the `区域提示词（G1）` group), `red_prompt`/`green_prompt`/`blue_prompt` (require the `区域提示词（G1）` group), `signature_image` (requires the `添加签名（G1）` group).
 
 If `controlnet_image` is provided, the engine uploads it and forces the `ControlNet LLLite（G1）` group to be enabled. The dependency rule is declarative (see `Rule(condition="config:controlnet_image", implies="group:ControlNet LLLite（G1）")`).
 
@@ -94,7 +98,7 @@ If `controlnet_image` is provided, the engine uploads it and forces the `Control
 
 All of `t2i-camera`'s inputs, plus:
 
-- `reference_image` — **required**, local file path. The engine uploads it to ComfyUI before queueing.
+- `reference_image` — **required**, local file path. The engine uploads it to ComfyUI before queueing. Adding `加载图片（G1）` to `groups.g1` is bidirectional — enabling the group requires `reference_image`, and providing `reference_image` enables the group automatically.
 - The `加载图片（G1）` group is **auto-appended** to `groups.g1` for this stage (you do not pass it; the engine does).
 
 The engine's `_activate_img2img` rewires `node 27` (KSampler) to consume the VAE-encoded reference instead of an empty latent, and forces `denoise=0.6`.
@@ -125,10 +129,17 @@ The full schema is returned by `describe_config(skill="camera-image", stage="t2i
 | `image_size.height` | int | 832 | node 71 (EmptyLatentImage.height) |
 | `controlnet_image` | path | `null` | node 129 (Load Image ControlNet) |
 | `reference_image` | path | `null` (t2i) / required (i2i) | node 21 (LoadImage) |
+| `red_image` | path | `null` | 区域提示词 channel Red input |
+| `green_image` | path | `null` | 区域提示词 channel Green input |
+| `blue_image` | path | `null` | 区域提示词 channel Blue input |
+| `red_prompt` | str | `null` | node 3 (ImpactWildcardProcessor) |
+| `green_prompt` | str | `null` | node 4 (ImpactWildcardProcessor) |
+| `blue_prompt` | str | `null` | node 5 (ImpactWildcardProcessor) |
+| `signature_image` | path | `null` | 添加签名 input |
 | `groups.g1` | list[str] | defaults + auto | toggles G1 group nodes |
 | `groups.g2` | list[str] | defaults | toggles G2 group nodes |
 
-The exact source for this table is `NODE_FIELD_MAP` in `camera_image/runtime/graph_patcher.py`. There is no separate "field list" to maintain — if the field map changes, `describe_config` picks it up automatically.
+The exact source for this table is `NODE_FIELD_MAP` in `camera_image/runtime/graph_patcher.py` plus the region-prompt node ids in `_UI_WIDGET_INDEX`. There is no separate "field list" to maintain — if the field map changes, `describe_config` picks it up automatically.
 
 ### `camera.direction` / `elevation` / `distance` enums
 
@@ -160,9 +171,39 @@ The semantic values are mapped to `pos_x`/`pos_y`/`pos_z` floats in `[-1, 1]` by
 | `style_enabled` | `false` | bool |
 | `style_value` | `"cinematic"` | string |
 
+## Dependency rules
+
+The skill declares **10 declarative rules** in `camera_image/skill_data.py`. The engine's `validate_config` walks every rule and emits a structured error for any unmet implication. Rules are pure data, not procedural if-checks.
+
+| # | Condition | Implies | Direction | Meaning |
+|---|-----------|---------|-----------|---------|
+| 1 | `config:controlnet_image` | `group:ControlNet LLLite（G1）` | bidirectional | Setting `controlnet_image` requires the group; enabling the group requires the image. |
+| 2 | `stage:i2i-camera` | `group_auto:加载图片（G1）` | forward | i2i stage auto-appends the load-image group. |
+| 3 | `group:加载图片（G1）` | `config:reference_image` | bidirectional | Enabling the group requires `reference_image`; providing it enables the group. |
+| 4 | `group:区域提示词（G1）` | `config:red_image` | forward | The region-prompt group implies red mask image. |
+| 5 | `group:区域提示词（G1）` | `config:green_image` | forward | The region-prompt group implies green mask image. |
+| 6 | `group:区域提示词（G1）` | `config:blue_image` | forward | The region-prompt group implies blue mask image. |
+| 7 | `group:区域提示词（G1）` | `config:red_prompt` | forward | The region-prompt group implies red channel text. |
+| 8 | `group:区域提示词（G1）` | `config:green_prompt` | forward | The region-prompt group implies green channel text. |
+| 9 | `group:区域提示词（G1）` | `config:blue_prompt` | forward | The region-prompt group implies blue channel text. |
+| 10 | `group:添加签名（G1）` | `config:signature_image` | bidirectional | Enabling the signature group requires `signature_image`; providing it enables the group. |
+
+`condition`/`implies` use the prefixes `config:`, `group:`, `stage:`, `group_auto:`. `group_auto:` means the engine will append the group itself (no caller work).
+
 ## Groups
 
 The source UI workflow contains 30+ "group" containers — bundles of nodes that can be enabled or bypassed as a unit via the `mode=0` (enabled) / `mode=4` (bypassed) flag. The `groups.g1` and `groups.g2` config fields let you toggle them by title.
+
+### Group title constants
+
+The four canonical group titles are pinned in `runtime/config_schema.py:GROUPS`:
+
+```python
+GROUPS.LOAD_IMAGE       = "加载图片（G1）"
+GROUPS.CONTROLNET_LLLITE = "ControlNet LLLite（G1）"
+GROUPS.AREA_PROMPT      = "区域提示词（G1）"
+GROUPS.ADD_SIGNATURE    = "添加签名（G1）"
+```
 
 ### Default always-on groups
 
@@ -191,6 +232,9 @@ Every other group title in `workflow/t2i-camera/groups.json` and `workflow/i2i-c
 - `Detailer（瑕疵修复）（G1）` — general defect repair
 - `Ultimate SD 放大器（G1）` — high-res upscaler chain
 - `移除背景（G1）` — background removal
+- `添加签名（G1）` — signature stamp (requires `signature_image`)
+- `区域提示词（G1）` — region-prompt masking (requires `red_image`/`green_image`/`blue_image` + `red_prompt`/`green_prompt`/`blue_prompt`)
+- `ControlNet LLLite（G1）` — ControlNet pose conditioning (requires `controlnet_image`)
 
 Enable by adding the title to `groups.g1` or `groups.g2`. To bypass everything not in your list, the engine already handles that — any group title not in the final enabled set gets `mode=4`.
 
@@ -248,13 +292,49 @@ Field discipline (enforced both locally in `_check_envelope` and again by prompt
 
 The engine runs `compile_envelope(evidence, draft, "anima")` as step 1. If prompt-forge rejects the envelope (forbidden field, empty draft, `ready_for_review=false`, etc.), the run aborts with a structured error and never reaches ComfyUI.
 
+## stage_images
+
+Each stage declares a tuple of `ImageSpec(config_key, required, requires_group)` in `skill_data.py:stage_images`. The engine uploads them **in order** before the workflow runs, replacing the local path with the ComfyUI-assigned filename on the config object the patcher sees.
+
+### `t2i-camera` — 6 specs (none required)
+
+| Order | config_key | required | requires_group |
+|-------|------------|----------|----------------|
+| 1 | `controlnet_image` | no | `ControlNet LLLite（G1）` |
+| 2 | `reference_image` | no | `加载图片（G1）` |
+| 3 | `red_image` | no | `区域提示词（G1）` |
+| 4 | `green_image` | no | `区域提示词（G1）` |
+| 5 | `blue_image` | no | `区域提示词（G1）` |
+| 6 | `signature_image` | no | `添加签名（G1）` |
+
+### `i2i-camera` — 6 specs (1 required)
+
+| Order | config_key | required | requires_group |
+|-------|------------|----------|----------------|
+| 1 | `reference_image` | **yes** | (always) |
+| 2 | `controlnet_image` | no | `ControlNet LLLite（G1）` |
+| 3 | `red_image` | no | `区域提示词（G1）` |
+| 4 | `green_image` | no | `区域提示词（G1）` |
+| 5 | `blue_image` | no | `区域提示词（G1）` |
+| 6 | `signature_image` | no | `添加签名（G1）` |
+
+### Upload semantics
+
+- A spec whose `requires_group` is **enabled** in `groups.g1` (or auto-appended for i2i's `加载图片`) becomes a real upload target.
+- A spec whose group is **not enabled** is a no-op — no upload, no validation error.
+- A spec marked **`required=True`** always uploads (for `i2i-camera`, `reference_image` always uploads).
+- An optional spec whose group IS enabled but the path is `null` triggers the declarative Rule check (see Dependency rules) and emits a structured `validate_config` error.
+
 ## Common error paths and what to do
 
 | Failure | Symptom | Recovery |
 |---------|---------|----------|
 | `prompt-forge rejected envelope` | exit_code=1, error contains `prompt-forge` | Fix `envelope.draft` (forbidden field, empty, or `ready_for_review=false`); re-run |
 | `ComfyUI queue not idle` | exit_code=1, error mentions running/pending jobs | Wait for ComfyUI to drain; re-run |
-| `controlnet_image provided but group not enabled` | `validate_config` returns `ok=false` | Either add `ControlNet LLLite（G1）` to `groups.g1` or omit `controlnet_image` |
+| `group 'ControlNet LLLite（G1）' must be enabled` | `validate_config` returns `ok=false` | Either add the group to `groups.g1` or omit `controlnet_image` |
+| `config 'reference_image' required by group '加载图片（G1）'` | `validate_config` returns `ok=false` | Provide `reference_image` as a local file path, or remove `加载图片（G1）` from `groups.g1` |
+| `config 'red_image' required by group '区域提示词（G1）'` | `validate_config` returns `ok=false` | Provide all three R/G/B images + matching text prompts, or remove `区域提示词（G1）` from `groups.g1` |
+| `config 'signature_image' required by group '添加签名（G1）'` | `validate_config` returns `ok=false` | Provide `signature_image` or remove the group |
 | `reference_image is required for i2i-camera` | engine raises before enqueue | Pass `reference_image` as a local file path |
 | `node N missing from workflow` | engine raises during `prepare_fn` | Source UI workflow is corrupt or modified; reinstall via `scripts/install.ps1` |
 | `no UI widget index mapping for node N input M` | engine raises during `prepare_fn` | New tunable added but `_UI_WIDGET_INDEX` not updated; add the mapping in `runtime/graph_patcher.py` |
@@ -289,6 +369,35 @@ run_skill(skill="camera-image", stage="t2i-camera", envelope={...}, config={...}
   -> {"exit_code": 0, "payload": {"accepted": true, "prompt_id": "...", "artifact": {...}, "duration_ms": 12345, "run_record_path": "..."}}
 ```
 
+### Example: region prompts + signature
+
+```json
+{
+  "skill": "camera-image",
+  "stage": "t2i-camera",
+  "envelope": {
+    "evidence":  { "locked_facts": [] },
+    "draft":     { "positive": "1girl, masterpiece", "negative": "lowres" },
+    "dialect_id": "anima"
+  },
+  "config": {
+    "groups": {
+      "g1": ["区域提示词（G1）", "添加签名（G1）"]
+    },
+    "red_image":    "C:/masks/red.png",
+    "green_image":  "C:/masks/green.png",
+    "blue_image":   "C:/masks/blue.png",
+    "red_prompt":   "red clothing, silk",
+    "green_prompt": "green leaves, foliage",
+    "blue_prompt":  "blue sky, gradient",
+    "signature_image": "C:/brand/sig.png",
+    "camera": { "direction": "front", "distance": "medium" },
+    "sampling": { "steps_first": 30, "cfg": 4.5 },
+    "seed": 42
+  }
+}
+```
+
 See `skills/_mcp/README.md` for the MCP server package doc.
 
 ## Tests
@@ -306,10 +415,10 @@ pytest skills/camera-image/tests/ skills/_mcp/src/comfyui_chenxin_mcp/tests/
 
 What the tests cover:
 
-- `skills/camera-image/tests/test_skill_data.py` — SkillData field validity; function pointers resolve against the real source workflow.
+- `skills/camera-image/tests/test_skill_data.py` — SkillData field validity; all 10 dependency rules match code; all 6 stage_images per stage match code; function pointers resolve against the real source workflow.
 - `skills/_mcp/src/comfyui_chenxin_mcp/tests/test_engine_describe.py` — `describe_config` returns a schema with the expected slot names against the real source workflow.
-- `skills/_mcp/src/comfyui_chenxin_mcp/tests/test_engine_validate.py` — declarative `Rule` checks fire in both directions; envelope shape validated.
-- `skills/_mcp/src/comfyui_chenxin_mcp/tests/test_engine_execute.py` — `run_skill` flow with mocked `McpClient`; image upload order; `output_type` routing; `groups=None` and `groups.g2=None` regression coverage.
+- `skills/_mcp/src/comfyui_chenxin_mcp/tests/test_engine_validate.py` — declarative `Rule` checks fire in both directions; envelope shape validated; region-prompts and signature rules exercised.
+- `skills/_mcp/src/comfyui_chenxin_mcp/tests/test_engine_execute.py` — `run_skill` flow with mocked `McpClient`; image upload order; `output_type` routing; `groups=None` and `groups.g2=None` regression coverage; stage_images walk for both stages.
 - `skills/_mcp/src/comfyui_chenxin_mcp/tests/test_server_smoke.py` — spawn the real stdio server, exercise all 4 tools against the installed `camera-image`.
 
 Tests use the real source workflow at `skills/camera-image/workflow/source/文生图相机视角.json`; no mock workflow JSON.
@@ -322,4 +431,4 @@ These are enforced by code review and by the engine's import surface:
 - `skills/camera-image/camera_image/runtime/*` must NOT import `comfyui_chenxin_mcp`. The runtime is pure skill logic.
 - `camera_image/skill_data.py` is the only file allowed to import both — the `SkillData` dataclass from the engine, plus the function pointers from the runtime.
 - `prompt_forge` lives in `engine/`, not `runtime/`. The skill calls it via the engine; it never imports it directly.
-- `mcp_bridge.py`, `schema.py`, `t2i_camera.py`, `i2i_camera.py`, `validators.py`, `runtime_cli.py` are deleted. If you see references to them, they are stale v1 leftovers — open a doc fix PR.
+- v1 leftovers — `mcp_bridge.py`, `schema.py`, `t2i_camera.py`, `i2i_camera.py`, `validators.py`, `runtime_cli.py` — are deleted. If you see references to them, they are stale — open a doc fix PR.

@@ -22,7 +22,7 @@ Tool count does not grow with the number of skills. Adding a new skill is a `pip
 ```
 comfyui_chenxin_mcp/
   protocol.py          JSON-RPC 2.0 + MCP 2024-11-05 stdio framing
-  registry.py          Entry-point discovery
+  registry.py          Entry-point discovery (comfyui_chenxin_mcp.skills group)
   server.py            Registers 4 unified tools, dispatches by skill name
   engine/
     skill_data.py      SkillData + ImageSpec + Rule dataclasses (data contract)
@@ -32,6 +32,8 @@ comfyui_chenxin_mcp/
     prompt_forge.py    compile_envelope gate (calls prompt-forge subprocess)
     mcp_client.py      Wraps the comfyui-mcp stdio subprocess as a Python client
     state.py           Local attempt-state ledger
+  tools/               MCP tool definitions (one module per tool)
+  tests/               Engine unit + integration tests
 ```
 
 Skills live in their own packages (e.g. `skills/camera-image/`) and provide a single entry-point that returns a `SkillData` describing what they can do plus function pointers the engine calls.
@@ -116,7 +118,7 @@ Return the full schema for a stage.
 { "skill": "camera-image", "stage": "t2i-camera" }
 ```
 
-**Output:** Whatever the skill's `describe_fn` returns. For `camera-image` this includes `stage`, `workflow`, `source_workflow`, and a `slots` object enumerating every tunable (sampling, camera, camera_extra, image_size, lora, groups, seed, ...). See `skills/camera-image/SKILL.md` for the slot list.
+**Output:** Whatever the skill's `describe_fn` returns. For `camera-image` this includes `stage`, `workflow`, `source_workflow`, and a `slots` object enumerating every tunable (sampling, camera, camera_extra, image_size, lora, groups, seed, controlnet_image, reference_image, red_image, green_image, blue_image, red_prompt, green_prompt, blue_prompt, signature_image, ...). See `skills/camera-image/SKILL.md` for the slot list.
 
 ### `validate_config(skill, stage, config)`
 
@@ -147,7 +149,7 @@ Errors are structured strings. Example for a rule violation:
 ```json
 {
   "ok": false,
-  "errors": ["group 'ControlNet LLLite（G1）' must be enabled (dependency rule)"],
+  "errors": ["config 'reference_image' required by group '加载图片（G1）' (dependency rule)"],
   "stage": "t2i-camera",
   "skill": "camera-image"
 }
@@ -174,7 +176,16 @@ Execute a stage end-to-end.
     "seed":         42,
     "image_size":   { "width": 1216, "height": 832 },
     "lora":         { "selections": ["add_detail"] },
-    "groups":       { "g1": ["面部 ADetailer（G1）"], "g2": [] }
+    "groups":       { "g1": ["面部 ADetailer（G1）"], "g2": [] },
+    "controlnet_image": null,
+    "reference_image": null,
+    "red_image":      null,
+    "green_image":    null,
+    "blue_image":     null,
+    "red_prompt":     null,
+    "green_prompt":   null,
+    "blue_prompt":    null,
+    "signature_image": null
   },
   "output_dir": "outputs"
 }
@@ -220,7 +231,7 @@ Execute a stage end-to-end.
 
 ## Adding a new skill
 
-The contract is intentionally minimal — a skill is pure data plus 4 function pointers.
+The contract is intentionally minimal — a skill is pure data plus 3 function pointers.
 
 1. **Create a Python package** with this layout:
 
@@ -260,7 +271,6 @@ The contract is intentionally minimal — a skill is pure data plus 4 function p
            stage_images={STAGES.MAIN: ()},  # tuple of ImageSpec(config_key, required, requires_group)
            output_type="images",  # or "videos"
            describe_fn=describe_config,
-           apply_fn=apply_run_config,
            prepare_fn=prepare_temporary_workflow,
            build_config_fn=RunConfig.from_envelope,
            dialect_id="anima",  # or your own
@@ -270,8 +280,8 @@ The contract is intentionally minimal — a skill is pure data plus 4 function p
 4. **Implement the 3 function pointers** in your `runtime/`:
 
    - `describe_config(stage) -> dict` — return whatever schema you want; the engine passes it through unchanged.
-   - `prepare_temporary_workflow(mcp, *, stage, groups) -> dict` — given an MCP client, stage, and `GroupsConfig | None`, return an API-format workflow dict (the engine does the temp file + ComfyUI upload).
-   - `apply_run_config(graph, *, stage, config, mcp_list_loras=None) -> dict` — mutate `graph` in place, writing your tunables into the right nodes.
+   - `prepare_temporary_workflow(mcp, *, stage, config, groups, mcp_list_loras=None) -> dict` — given an MCP client, stage, `RunConfig | None`, and `GroupsConfig | None`, return an API-format workflow dict (the engine does the temp file + ComfyUI upload).
+   - `build_config_fn(envelope, **tunables) -> RunConfig` — turn the JSON envelope + tunables into your skill's `RunConfig` dataclass. Engine calls this with `(envelope, camera=..., sampling=..., ...)`.
 
 5. **Install** with `pip install -e my-skill/`. The server picks it up at the next startup.
 
@@ -294,16 +304,34 @@ Rule(
 )
 ```
 
-Means: if `config.controlnet_image` is set, `groups.g1` must contain `ControlNet LLLite（G1）`.
+Means: if `config.controlnet_image` is set, `groups.g1` must contain `ControlNet LLLite（G1）`, AND if `ControlNet LLLite（G1）` is in `groups.g1`, `config.controlnet_image` must be set.
+
+A `forward` rule only fires in one direction:
+
+```python
+Rule(
+    condition="group:区域提示词（G1）",
+    implies="config:red_prompt",
+    direction="forward",
+)
+```
+
+Means: enabling the group requires `red_prompt`, but providing `red_prompt` does not force the group on.
 
 ### Stage images
 
-`SkillData.stage_images[stage]` is a tuple of `ImageSpec(config_key, required, requires_group=None)`. The engine uploads them in order before the workflow runs, replacing the local path with the ComfyUI-assigned filename on the config object the patcher sees.
+`SkillData.stage_images[stage]` is a tuple of `ImageSpec(config_key, required, requires_group=None)`. The engine uploads them **in order** before the workflow runs, replacing the local path with the ComfyUI-assigned filename on the config object the patcher sees.
 
 ```python
 ImageSpec("reference_image", required=True),
 ImageSpec("controlnet_image", required=False, requires_group="ControlNet LLLite（G1）"),
 ```
+
+Upload semantics:
+
+- A spec with `requires_group=<title>` is only uploaded when that group is enabled (or auto-enabled).
+- A spec marked `required=True` is always uploaded (e.g. i2i's `reference_image`).
+- A spec with no `requires_group` is always uploaded (rare).
 
 ### Output type
 
