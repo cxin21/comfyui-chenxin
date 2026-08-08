@@ -380,7 +380,7 @@ def _add_flags_to_parser(parser, subcommand: str) -> None:
         "denoise_refine": {"node": "51", "default": 0.2}
       }
     },
-    "seed":       {"source": "config.seed", "node": "65", "default": 665005389889224},
+    "seed":       {"source": "config.seed", "node": "65", "default": -1},
     "image_size": {"source": "config.image_size", "nodes": ["68", "71"],
                    "default": {"width": 1216, "height": 832}},
     "controlnet_image": {"source": "config.controlnet_image", "node": "129",

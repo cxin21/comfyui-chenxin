@@ -456,8 +456,8 @@ def test_node_static_default_reads_workflow_value():
     graph = load_workflow(STAGES.T2I)
     # node 50 default steps = 40 per the workflow dump
     assert _node_static_default(graph, "50", "steps") == 40
-    # node 65 default seed = 665005389889224
-    assert _node_static_default(graph, "65", "seed") == 665005389889224
+    # node 65 default seed = -1
+    assert _node_static_default(graph, "65", "seed") == -1
 
 
 def test_describe_config_returns_workflow_bound_defaults():
@@ -2907,7 +2907,7 @@ python -m runtime.runtime_cli --help
 
 Expected:
 - All tests pass.
-- `describe-config` JSON output contains `sampling.fields.steps_first.default == 40`, `seed.default == 665005389889224`, `image_size.default.{width == 1216, height == 832}`, `groups.g1_titles` populated from groups.json, `groups.auto_appended_g1`.
+- `describe-config` JSON output contains `sampling.fields.steps_first.default == 40`, `seed.default == -1`, `image_size.default.{width == 1216, height == 832}`, `groups.g1_titles` populated from groups.json, `groups.auto_appended_g1`.
 - `--help` shows 4 subcommands: `describe-config`, `list-loras`, `run-t2i`, `run-i2i`. `run-t2i --help` shows `--envelope`, `--sampling-steps-first`, etc.; NO `--positive` / `--negative`. `run-i2i --help` additionally shows `--reference`.
 
 If anything fails, fix the regression before declaring done.
