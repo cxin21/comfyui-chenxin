@@ -104,6 +104,19 @@ def test_run_i2i_new_signature_accepts_config_object(tmp_path: Path, fake_mcp):
     fake_mcp.upload_image.assert_called_once_with("/tmp/ref.png")
 
 
+def test_run_i2i_payload_includes_prompt_forge_warnings_always(
+    tmp_path: Path, fake_mcp
+):
+    payload, code = i2i_camera.run_i2i(
+        mcp=fake_mcp,
+        output_dir=tmp_path,
+        config=_base_config(reference_image="/tmp/ref.png"),
+        timeout=10,
+    )
+    assert code == 0
+    assert "prompt_forge_warnings" in payload  # may be empty or populated
+
+
 def test_run_i2i_uploads_controlnet_image_when_provided(
     tmp_path: Path, fake_mcp, complete_workflow
 ):

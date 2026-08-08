@@ -152,9 +152,8 @@ def run_i2i(
         "artifact": artifact,
         "duration_ms": duration_ms,
         "run_record_path": str(run_dir / "run-record.json"),
+        "prompt_forge_warnings": package.get("warnings", []),
     }
-    if package.get("warnings"):
-        payload["prompt_forge_warnings"] = package["warnings"]
     return payload, 0
 
 
