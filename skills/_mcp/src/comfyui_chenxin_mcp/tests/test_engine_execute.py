@@ -79,10 +79,9 @@ def _mock_mcp():
     mcp.__enter__ = lambda s: mcp
     mcp.__exit__ = lambda *a: False
     mcp.health.return_value = {"queue": {"running": [], "pending": []}}
-    mcp.validate_workflow.return_value = {"error_count": 0}
     mcp.check_runtime.return_value = {"runtime": "local"}
     mcp.enqueue.return_value = {"prompt_id": "test-prompt-123"}
-    mcp.get_history.return_value = {
+    mcp.get_history_raw.return_value = {
         "test-prompt-123": {
             "status": {"status_str": "success"},
             "outputs": {"35": {"images": [{"filename": "out.png", "subfolder": "", "type": "output"}]}},

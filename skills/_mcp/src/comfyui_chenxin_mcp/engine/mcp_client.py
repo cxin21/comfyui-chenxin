@@ -2,9 +2,11 @@
 
 Two construction modes:
 - McpClient(call_tool): wraps a host-injected MCP bridge (production use)
-- McpClient.from_subprocess(command, args, timeout): spawns its own MCP
-  stdio subprocess and performs the JSON-RPC handshake (standalone CLI /
-  install-time smoke test).
+- McpClient.from_subprocess(command, args, timeout, comfyui_url): spawns its
+  own MCP stdio subprocess and performs the JSON-RPC handshake (standalone
+  CLI / install-time smoke test). `comfyui_url` is stored so we can hit
+  ComfyUI's HTTP API directly when the MCP wrapper would otherwise add a
+  markdown layer (e.g. ``get_history``).
 """
 
 from __future__ import annotations
@@ -14,6 +16,8 @@ import os
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 from typing import Any, Callable, Optional
 
 
@@ -24,9 +28,14 @@ class McpClientError(RuntimeError):
 class McpClient:
     """Wraps MCP tool calls for camera operations."""
 
-    def __init__(self, call_tool: Callable[..., Any]):
+    def __init__(
+        self,
+        call_tool: Callable[..., Any],
+        comfyui_url: str = "http://127.0.0.1:8188",
+    ):
         self._call = call_tool
         self._proc: Optional[subprocess.Popen] = None
+        self._comfyui_url = comfyui_url.rstrip("/")
 
     @classmethod
     def from_subprocess(
@@ -34,6 +43,7 @@ class McpClient:
         command: str,
         args: list[str],
         timeout: float = 60.0,
+        comfyui_url: str = "http://127.0.0.1:8188",
     ) -> "McpClient":
         """Spawn MCP stdio server, complete handshake, return client."""
         creationflags = 0
@@ -60,6 +70,7 @@ class McpClient:
         # Use a closure that holds the proc
         client._send_counter = 0
         client._timeout = timeout
+        client._comfyui_url = comfyui_url.rstrip("/")
         client._call = _make_stdio_caller(proc, timeout)
         return client
 
@@ -82,17 +93,40 @@ class McpClient:
     def list_loras(self) -> Any:
         return self._call("list_local_models", {"model_type": "loras"})
 
-    def validate_workflow(self, graph: dict) -> Any:
-        return self._call("validate_workflow", {"workflow": graph})
-
     def check_runtime(self, graph: dict) -> Any:
         return self._call("check_workflow_runtime", {"graph": graph})
 
     def enqueue(self, graph: dict) -> Any:
         return self._call("enqueue_workflow", {"workflow": graph})
 
-    def get_history(self, prompt_id: str) -> Any:
-        return self._call("get_history", {"prompt_id": prompt_id})
+    def get_history(self, prompt_id: str) -> dict:
+        """Compatibility shim: delegates to ``get_history_raw``.
+
+        Historical callers used the comfyui-mcp ``get_history`` tool, which
+        returns a markdown-formatted summary string. Modern callers want the
+        raw dict that ComfyUI itself returns. We expose both names so older
+        test suites keep working while new code reaches for the raw form.
+        """
+        return self.get_history_raw(prompt_id)
+
+    def get_history_raw(self, prompt_id: str) -> dict:
+        """Fetch raw history from ComfyUI's HTTP API.
+
+        Bypasses comfyui-mcp's ``get_history`` tool, which wraps the response
+        in a markdown summary string. ComfyUI's ``GET /history/<prompt_id>``
+        endpoint returns the same JSON the engine wants to parse — keyed by
+        ``prompt_id``, with ``status.status_str`` and ``outputs``.
+        """
+        url = f"{self._comfyui_url}/history/{prompt_id}"
+        try:
+            with urllib.request.urlopen(url, timeout=30) as resp:
+                return json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                # Prompt not yet committed to history — return empty so
+                # the polling loop in ``_wait_for_completion`` keeps waiting.
+                return {}
+            raise
 
     def get_image(self, filename: str, subfolder: str = "", image_type: str = "output") -> Any:
         """Fetch image content from ComfyUI.

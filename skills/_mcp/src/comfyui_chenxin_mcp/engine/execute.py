@@ -81,11 +81,11 @@ def run_skill(
             mcp_list_loras=mcp.list_loras if patch_config.lora else None,
         )
 
-        # Step 6: validate + check runtime.
-        validation = mcp.validate_workflow(graph)
-        if isinstance(validation, dict) and validation.get("error_count", 0) > 0:
-            raise RuntimeError(f"workflow validation failed: {validation}")
-
+        # Step 6: check runtime.
+        # mcp.enqueue is the real validation gate — if the graph is truly
+        # broken, enqueue will fail. We deliberately do NOT pre-validate the
+        # graph here: comfyui-mcp's wrapper returns a markdown summary
+        # string, not the structured result the engine would need.
         runtime_check = mcp.check_runtime(graph)
         if isinstance(runtime_check, dict) and runtime_check.get("runtime") != "local":
             raise RuntimeError(f"workflow uses non-local runtime: {runtime_check}")
@@ -140,10 +140,14 @@ def run_skill(
 
 
 def _wait_for_completion(mcp, prompt_id: str, timeout: float, poll: float) -> dict:
-    """Poll get_history until success or failure."""
+    """Poll get_history_raw until success or failure.
+
+    Bypasses comfyui-mcp's markdown wrapper by calling ComfyUI's
+    ``/history/<prompt_id>`` HTTP endpoint directly via ``mcp.get_history_raw``.
+    """
     deadline = time.monotonic() + timeout
     while True:
-        history = mcp.get_history(prompt_id)
+        history = mcp.get_history_raw(prompt_id)
         entry, status_str, error_detail = _parse_history(history, prompt_id)
         if status_str == "success":
             return entry if entry else {"prompt_id": prompt_id, "outputs": {}}
@@ -155,6 +159,12 @@ def _wait_for_completion(mcp, prompt_id: str, timeout: float, poll: float) -> di
 
 
 def _parse_history(history, prompt_id: str) -> tuple[dict | None, str | None, str]:
+    """Parse the raw ``GET /history/<id>`` response from ComfyUI.
+
+    The wire format is ``{<prompt_id>: {status, outputs, ...}}`` — empty
+    dict means the prompt is not yet committed, so we treat that as
+    "still running" by returning ``(None, None, "")``.
+    """
     if isinstance(history, dict):
         if prompt_id in history:
             entry = history[prompt_id]

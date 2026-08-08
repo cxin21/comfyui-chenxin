@@ -28,6 +28,7 @@ def _spawn_mcp():
     return McpClient.from_subprocess(
         npx, ["-y", "comfyui-mcp@0.49.8", "--full", "--comfyui-url", comfy_url],
         timeout=600.0,
+        comfyui_url=comfy_url,
     )
 
 
