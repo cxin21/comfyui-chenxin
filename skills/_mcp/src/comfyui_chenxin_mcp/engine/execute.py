@@ -74,8 +74,8 @@ def run_skill(
         graph = skill_data.prepare_fn(
             mcp,
             stage=stage,
-            g1=list(patch_config.groups.g1) if patch_config.groups else None,
-            g2=list(patch_config.groups.g2) if patch_config.groups else None,
+            user_g1=list(patch_config.groups.g1) if patch_config.groups else None,
+            user_g2=list(patch_config.groups.g2) if patch_config.groups else None,
         )
 
         # Step 5: apply run config.

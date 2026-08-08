@@ -1,5 +1,4 @@
 """Engine run_skill tests - mock McpClient, verify call sequence."""
-import pytest
 from unittest.mock import MagicMock, patch
 from pathlib import Path
 
@@ -26,7 +25,7 @@ def _skill_data():
         output_type="images",
         describe_fn=lambda stage: {},
         apply_fn=lambda graph, stage, config, **kw: None,
-        prepare_fn=lambda mcp, stage, g1, g2: {"nodes": [], "links": []},
+        prepare_fn=lambda mcp, stage, user_g1, user_g2: {"nodes": [], "links": []},
     )
 
 
@@ -125,8 +124,8 @@ def test_run_skill_calls_prepare_and_apply(mock_compile, tmp_path):
     prepare_called = []
     apply_called = []
 
-    def track_prepare(m, stage, g1, g2):
-        prepare_called.append((stage, g1, g2))
+    def track_prepare(m, stage, user_g1, user_g2):
+        prepare_called.append((stage, user_g1, user_g2))
         return {"nodes": [], "links": []}
 
     def track_apply(graph, stage, config, **kw):
