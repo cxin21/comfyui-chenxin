@@ -299,58 +299,8 @@
       "input1": [
         "86",
         0
-      ],
-      "input2": [
-        "59",
-        0
       ]
     }
-  },
-  "21": {
-    "class_type": "LoadImage",
-    "inputs": {
-      "image": ""
-    }
-  },
-  "57": {
-    "class_type": "ImageScale",
-    "inputs": {}
-  },
-  "58": {
-    "class_type": "VAEEncode",
-    "inputs": {
-      "pixels": [
-        "21",
-        0
-      ]
-    }
-  },
-  "59": {
-    "class_type": "VAEEncode",
-    "inputs": {
-      "pixels": [
-        "57",
-        0
-      ]
-    }
-  },
-  "124": {
-    "class_type": "RemBG",
-    "inputs": {}
-  },
-  "129": {
-    "class_type": "LoadImage",
-    "inputs": {
-      "image": ""
-    }
-  },
-  "130": {
-    "class_type": "ControlNetLoader",
-    "inputs": {}
-  },
-  "137": {
-    "class_type": "ControlNetApply",
-    "inputs": {}
   },
   "76": {
     "class_type": "VAEDecode",
