@@ -13,7 +13,7 @@ Each `camera-*` skill (`camera-image`, `camera-multiview`, `camera-video`) has i
 2. **Package name:** `comfyui-chenxin-mcp`
 3. **Entry point:** `comfyui-chenxin-mcp-server`
 4. **Transport:** stdio
-5. **Skill registry via Python entry-points:** each skill declares a `comfyui_chenxin_mcp.skill` entry-point in its own `pyproject.toml` pointing at `register(mcp)`. The MCP server iterates entry-points at startup — adding a new skill = pip-install the new skill package; no MCP server code changes.
+5. **Skill registry via Python entry-points:** each skill declares a `comfyui_chenxin_mcp.skills` entry-point in its own `pyproject.toml` pointing at `register(mcp)`. The MCP server iterates entry-points at startup — adding a new skill = pip-install the new skill package; no MCP server code changes.
 6. **Schema source of truth:** each skill's own `runtime.graph_patcher.describe_config`. MCP server dispatches to it lazily; never duplicates the field map.
 7. **`validate_config` is a separate MCP tool** (not a CLI subcommand) so LLM gets structured errors before invoking `run-*`.
 
