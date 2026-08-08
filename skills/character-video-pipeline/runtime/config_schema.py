@@ -142,13 +142,12 @@ DEFAULT_ENABLED_G2: list[str] = [
 
 # i2i nodes — single source for the latent-rewire step (was hardcoded in
 # _activate_img2img). Node ids: 21 LoadImage, 57/58/59 VAEEncode chain,
-# 75 ImpactSwitch (latent router), 86 EmptyLatentImage (t2i source),
+# 86 EmptyLatentImage (t2i source),
 # 27 KSampler (first-pass; latent_image is rewired between 86 and 59).
 @dataclass(frozen=True)
 class I2INodes:
     LOAD_IMAGE: str = "21"
     VAE_ENCODE: str = "59"
-    IMPACT_SWITCH: str = "75"
     EMPTY_LATENT: str = "86"
     KSAMPLER: str = "27"
     LOAD_IMAGE_CHAIN: tuple[str, ...] = ("21", "57", "58", "59")
