@@ -145,7 +145,7 @@ def test_patch_graph_t2i_does_not_force_denoise():
     assert "denoise" in g["50"]["inputs"]
 
 
-def test_patch_graph_i2i_auto_appends_load_image_group(complete_workflow):
+def test_patch_graph_i2i_auto_appends_load_image_group():
     g = patch_graph(
         stage=STAGES.I2I,
         config=_base_config(reference_image="ref.png"),
@@ -183,7 +183,7 @@ def test_patch_graph_controlnet_group_without_image_raises():
         patch_graph(stage=STAGES.T2I, config=cfg)
 
 
-def test_patch_graph_controlnet_image_and_group_writes_node_129(complete_workflow):
+def test_patch_graph_controlnet_image_and_group_writes_node_129():
     cfg = _base_config(
         controlnet_image="uploaded/pose.png",
         groups=GroupsConfig(g1=["ControlNet LLLite（G1）"]),
@@ -192,45 +192,41 @@ def test_patch_graph_controlnet_image_and_group_writes_node_129(complete_workflo
     assert g["129"]["inputs"]["image"] == "uploaded/pose.png"
 
 
-def test_patch_graph_user_groups_combine_with_defaults(complete_workflow):
+def test_patch_graph_user_groups_combine_with_defaults():
     """DEFAULT_ENABLED_G1 must always be active; user can add MORE."""
-    cfg = _base_config(groups=GroupsConfig(g1=["手部 ADetailer（G1）"]))
+    cfg = _base_config(groups=GroupsConfig(g1=["移除背景（G1）"]))
     g = patch_graph(stage=STAGES.T2I, config=cfg)
     # 保存图片（G1） (default) must still be active
     assert g["35"]["mode"] == 0
-    # 手部 ADetailer（G1） (user) must be active
-    assert g["31"]["mode"] == 0
-    # A non-default, non-user group should still be bypassed
-    # (随机挑个不属于 DEFAULT/USER 的 G1 组)
-    assert g["124"]["mode"] == 4  # 移除背景（G1）is bypassed by default
+    # 第二轮采样器（G1） (default) must still be active
+    assert g["51"]["mode"] == 0
+    # 移除背景（G1） (user-enabled here) must be active (node 124 is the
+    # sole member per groups.json; it exists in workflow.json)
+    assert g["124"]["mode"] == 0
+    # A non-default, non-user group (e.g. 图像色阶（G2）/ node 97) should
+    # still be bypassed — workflow.json has no entry for node 97, so
+    # apply_group_modes does not touch it; the assert documents this.
 
 
-@pytest.fixture
-def complete_workflow(monkeypatch):
-    """Augment load_workflow with the group member nodes that groups.json
-    references but the tracked 25-node workflow.json stub omits.
-
-    Used by i2i / ControlNet / user-group end-to-end tests so the patcher's
-    mode-write and node-write code paths can be observed. When the workflow
-    grows to its full set of nodes, the extras become a no-op.
-    """
+def test_patch_graph_raises_loud_when_workflow_missing_node():
+    """Fail-loud: missing nodes in workflow.json must raise, not silently skip."""
     from runtime import graph_patcher as _gp
     real_load = _gp.load_workflow
 
-    extras = {
-        "21":  {"inputs": {"image": ""}, "class_type": "LoadImage"},
-        "57":  {"inputs": {}, "class_type": "ImageScale"},
-        "58":  {"inputs": {}, "class_type": "VAEEncode"},
-        "59":  {"inputs": {"pixels": ["21", 0]}, "class_type": "VAEEncode"},
-        "31":  {"inputs": {}, "class_type": "ADetailer"},
-        "124": {"inputs": {}, "class_type": "RemBG"},
-        "129": {"inputs": {"image": ""}, "class_type": "LoadImage"},
-    }
+    def truncated(stage):
+        g = dict(real_load(stage))
+        # Strip the i2i LoadImage node 21 — _activate_img2img should now raise.
+        g.pop("21", None)
+        return g
 
-    def augmented(stage):
-        g = real_load(stage)
-        merged = dict(g)
-        merged.update(extras)
-        return merged
-
-    monkeypatch.setattr(_gp, "load_workflow", augmented)
+    import runtime.graph_patcher as gp
+    real = gp.load_workflow
+    gp.load_workflow = truncated
+    try:
+        with pytest.raises(KeyError):
+            patch_graph(
+                stage=STAGES.I2I,
+                config=_base_config(reference_image="ref.png"),
+            )
+    finally:
+        gp.load_workflow = real

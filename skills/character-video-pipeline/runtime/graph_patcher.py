@@ -166,19 +166,18 @@ def _activate_img2img(graph: dict, image_name: str) -> None:
     - I2I_NODES.KSAMPLER[latent_image] = [I2I_NODES.VAE_ENCODE, 0]
     - I2I_NODES.KSAMPLER[denoise]   = 0.6
     - All nodes in I2I_NODES.LOAD_IMAGE_CHAIN set mode = MODE_ACTIVE
+
+    Raises KeyError if any required node is missing from the workflow. The
+    gate fail-loud: silently skipping makes i2i run produce t2i-style output
+    with denoise=0.6, masking the bug at the cost of garbage results.
     """
     n = I2I_NODES
     for nid in n.LOAD_IMAGE_CHAIN:
-        if nid in graph:
-            graph[nid]["mode"] = MODE_ACTIVE
-    if n.LOAD_IMAGE in graph:
-        graph[n.LOAD_IMAGE]["inputs"]["image"] = image_name
-    if n.VAE_ENCODE in graph and n.LOAD_IMAGE in graph:
-        graph[n.VAE_ENCODE]["inputs"]["pixels"] = [n.LOAD_IMAGE, 0]
-    if n.KSAMPLER in graph and n.VAE_ENCODE in graph:
-        graph[n.KSAMPLER]["inputs"]["latent_image"] = [n.VAE_ENCODE, 0]
-    if n.KSAMPLER in graph:
-        graph[n.KSAMPLER]["inputs"]["denoise"] = 0.6
+        graph[nid]["mode"] = MODE_ACTIVE
+    graph[n.LOAD_IMAGE]["inputs"]["image"] = image_name
+    graph[n.VAE_ENCODE]["inputs"]["pixels"] = [n.LOAD_IMAGE, 0]
+    graph[n.KSAMPLER]["inputs"]["latent_image"] = [n.VAE_ENCODE, 0]
+    graph[n.KSAMPLER]["inputs"]["denoise"] = 0.6
 
 
 def patch_graph(
