@@ -87,12 +87,9 @@ graph = apply_group_modes(graph, groups_meta, final_g1, final_g2)
 
 例如 i2i 强制 `node 27.denoise = 0.6`（来自 `WORKFLOW_CONVENTIONS[STAGES.I2I]`），保证即使 i2i 链路被中途截断也保持参考图语义。
 
-### 9. img2img 激活（仅 i2i-camera）
+### 9. i2i-camera 流程
 
-t2i-camera 跳过此步。i2i-camera 调用 `_activate_img2img(graph, image_name)`：
-- node 21/57/58/59 设为 mode=0（active）
-- node 21 的 `image` 字段设为上传后的图片名
-- node 75（ImpactSwitch）`select` 设为 0（路由到 VAEEncode 而非 EmptyLatent）
+i2i-camera 流程详见 `../i2i-camera/03-patch.md`，此处不再重复。
 
 ## 输出
 
@@ -112,6 +109,5 @@ t2i-camera 跳过此步。i2i-camera 调用 `_activate_img2img(graph, image_name
 8. `apply_group_modes(graph, groups_meta, final_g1, final_g2)`
 9. 写 controlnet_image (129) if enabled
 10. apply WORKFLOW_CONVENTIONS (e.g. i2i forces node 27.denoise=0.6)
-11. i2i: require reference_image; call `_activate_img2img(graph, reference_image)`
 
 NODE_FIELD_MAP（11 项）是 patcher 与 describe_config helper 的单源真相；workflow.json 静态值通过 `_node_static_default` 读取。
