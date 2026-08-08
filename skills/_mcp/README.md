@@ -37,55 +37,34 @@ The server speaks JSON-RPC 2.0 over stdin/stdout.
 
 ## Tool catalog
 
-The actual tool surface is provided by individual skill packages. The camera-image skill exposes these tools:
+The MCP server exposes 4 unified tools that work across all installed skills:
 
-### `describe_camera_config(stage)`
-Return the full schema (defaults, groups, enums) for a camera stage.
+### `list_skills()`
+List installed camera skills and their stages.
 
-**Parameters**: 
-- `stage`: Either `"t2i-camera"` or `"i2i-camera"`
+### `describe_config(skill, stage)`
+Return the full schema (defaults, groups, enums, dependencies) for a skill stage.
 
-### `validate_camera_config(stage, config)`
-Validate a RunConfig dict before running generation.
+**Parameters**:
+- `skill`: Skill name (e.g. `"camera-image"`)
+- `stage`: Stage name (e.g. `"t2i-camera"` or `"i2i-camera"`)
 
-**Parameters**: 
-- `stage`: Either `"t2i-camera"` or `"i2i-camera"`
+### `validate_config(skill, stage, config)`
+Validate a config dict before running generation.
+
+**Parameters**:
+- `skill`: Skill name
+- `stage`: Stage name
 - `config`: Configuration object to validate
 
-### `list_camera_loras()`
-List available Anima LoRA short names.
+### `run_skill(skill, stage, envelope, config)`
+Run a skill stage.
 
-### `run_t2i_camera(envelope, ...)`
-Run text-to-image camera generation.
-
-**Parameters**: 
+**Parameters**:
+- `skill`: Skill name
+- `stage`: Stage name
 - `envelope`: Prompt package envelope object
-- `stage`: Defaults to `"t2i-camera"`
-- `camera`: Camera configuration object
-- `camera_extra`: Additional camera parameters
-- `lora`: LoRA configuration object
-- `groups`: Group controller selections
-- `sampling`: Sampling configuration
-- `seed`: Random seed (integer)
-- `image_size`: Image dimensions
-- `controlnet_image`: Optional controlnet input image path
-- `output_dir`: Output directory (default: "outputs")
-
-### `run_i2i_camera(envelope, reference, ...)`
-Run image-to-image camera generation.
-
-**Parameters**: 
-- `envelope`: Prompt package envelope object
-- `reference`: Reference image path
-- `stage`: Defaults to `"i2i-camera"`
-- `camera`: Camera configuration object
-- `lora`: LoRA configuration object
-- `groups`: Group controller selections
-- `sampling`: Sampling configuration
-- `seed`: Random seed (integer)
-- `image_size`: Image dimensions
-- `controlnet_image`: Optional controlnet input image path
-- `output_dir`: Output directory (default: "outputs")
+- `config`: Configuration object (RunConfig fields)
 
 ## Architecture note
 

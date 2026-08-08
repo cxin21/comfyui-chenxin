@@ -148,11 +148,11 @@ Prompt Forge is offline and side-effect free. It owns CreativeEvidence, model pr
 
 ## Via MCP
 
-`comfyui-chenxin-mcp` server (sibling package) exposes:
-- `describe_camera_config(stage)`
-- `validate_camera_config(stage, config)`
-- `list_camera_loras`
-- `run_t2i_camera(envelope, ...)` / `run_i2i_camera(envelope, reference, ...)`
+`comfyui-chenxin-mcp` server (sibling package) exposes 4 unified tools:
+- `list_skills()` - list installed skills + stages
+- `describe_config(skill, stage)` - return full schema for a skill stage
+- `validate_config(skill, stage, config)` - validate config before running
+- `run_skill(skill, stage, envelope, config)` - execute a skill stage
 
 See `skills/_mcp/README.md` for install + tool catalog.
 

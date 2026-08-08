@@ -2,8 +2,6 @@
 
 Public API:
 - prompt_forge_bridge.compile_envelope                        -- prompt-forge gate
-- t2i_camera.run_t2i                                          -- text-to-image
-- i2i_camera.run_i2i                                          -- image-to-image
 - source_workflow.prepare_temporary_workflow                  -- source UI -> API strip
 - graph_patcher.apply_run_config / describe_config            -- tunables
 - graph_patcher.NODE_FIELD_MAP                                -- single source
