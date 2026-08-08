@@ -19,7 +19,14 @@
     "ai-image"
   ],
   "skills": "./skills/",
-  "mcpServers": "./.mcp.json",
+  "mcpServers": {
+    "comfyui-chenxin-mcp": {
+      "type": "stdio",
+      "command": "comfyui-chenxin-mcp-server",
+      "args": [],
+      "env": {}
+    }
+  },
   "interface": {
     "displayName": "ComfyUI Chenxin",
     "shortDescription": "Prompt authoring and approval-gated ComfyUI character-to-video production.",

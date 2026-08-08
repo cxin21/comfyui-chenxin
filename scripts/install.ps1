@@ -256,6 +256,9 @@ if (-not $SkipCodex) {
         'skills/character-video-pipeline/runtime/attempt_state.py'
         'skills/prompt-forge/SKILL.md'
         'skills/prompt-forge/preflight-env.ps1'
+        'skills/_mcp/SKILL.md'
+        'skills/_mcp/preflight-env.ps1'
+        'skills/_mcp/runtime/preflight.py'
     )
     foreach ($rel in $criticalFiles) {
         $cacheFile = Join-Path $target ($rel -replace '/', '\')
