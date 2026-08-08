@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [project.entry-points."comfyui_chenxin_mcp.skills"]
-camera-image = "camera_image.mcp_bridge:register"
+camera-image = "camera_image.skill_data:get_skill_data"
 
 [tool.setuptools.packages.find]
 where = ["."]
