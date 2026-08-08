@@ -36,6 +36,7 @@ from .config_schema import (
     I2I_NODES,
     MANDATORY_GROUPS_BY_STAGE,
     REFERENCE_IMAGE_NODE,
+    CONTROLNET_IMAGE_NODE,
     RunConfig,
     SamplingConfig,
     ImageSizeConfig,
@@ -213,12 +214,8 @@ def patch_graph(
             final_g1.append(mandatory)
 
     # 6. Cross-validate controlnet_image <-> ControlNet LLLite group.
-    cn_node_for_stage = None
-    if stage == STAGES.T2I:
-        cn_node_for_stage = "129"
-    elif stage == STAGES.I2I:
-        cn_node_for_stage = "129"
-    if config.controlnet_image is not None and not cn_node_for_stage:
+    cn_node_for_stage = CONTROLNET_IMAGE_NODE.get(stage)
+    if config.controlnet_image is not None and cn_node_for_stage is None:
         raise ValueError(f"controlnet_image not supported in stage={stage!r}")
     if config.controlnet_image is not None and GROUPS.CONTROLNET_LLLITE not in final_g1:
         raise ValueError(
