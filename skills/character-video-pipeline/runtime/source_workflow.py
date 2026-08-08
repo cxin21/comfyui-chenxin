@@ -11,7 +11,7 @@ Every run performs:
 4.  Write the copy to a unique ``temp_*.json`` file in the system temp
     dir.
 5.  Hand the file to the ComfyUI server via MCP ``save_workflow``.
-6.  ``strip_workflow`` produces the API graph.
+6.  ``get_workflow(filename, format="api")`` returns the API graph.
 7.  Local temp file is deleted.
 
 The returned API dict has no ``mode`` fields — strip removed them.
@@ -156,7 +156,7 @@ def prepare_temporary_workflow(
     4.  Write the copy to a unique ``temp_*.json`` file in the system
         temp dir.
     5.  Upload to ComfyUI via MCP ``save_workflow``.
-    6.  ``strip_workflow`` produces the API graph.
+    6.  ``get_workflow(filename, format="api")`` returns the API graph.
     7.  Local temp file is always deleted.
 
     The returned dict has no ``mode`` fields (strip removed them) and
@@ -175,7 +175,11 @@ def prepare_temporary_workflow(
 
         temp_filename = os.path.basename(temp_path)
         mcp.save_workflow(temp_filename, ui)
-        api_graph = mcp.strip_workflow(path=temp_filename, format="api")
+        # get_workflow(format="api") returns the API JSON dict; strip_workflow
+        # via subprocess MCP returns only a markdown summary, so we use
+        # get_workflow instead. Both code paths (subprocess MCP and host-injected
+        # MCP) return the same 42-node dict.
+        api_graph = mcp.get_workflow(filename=temp_filename, format="api")
     finally:
         try:
             os.unlink(temp_path)

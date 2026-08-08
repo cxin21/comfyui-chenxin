@@ -123,13 +123,15 @@ class McpClient:
             "workflow": workflow,
         })
 
-    def strip_workflow(self, *, path: str, format: str = "api") -> Any:
-        """Convert a server-side workflow file to API format.
+    def get_workflow(self, filename: str, format: str = "api") -> Any:
+        """Download a saved workflow from the ComfyUI user library.
 
-        Path is server-side (ComfyUI user library). Returned value is the
-        API-format workflow dict ready for further patching or enqueue.
+        Used by ``source_workflow.prepare_temporary_workflow`` to retrieve
+        the API-format JSON of a freshly uploaded temp workflow. Returns
+        a dict (api format) when format="api", or a dict (ui format)
+        when format="ui".
         """
-        return self._call("strip_workflow", {"path": path, "format": format})
+        return self._call("get_workflow", {"filename": filename, "format": format})
 
     def health(self) -> Any:
         return self._call("health_check", {})
