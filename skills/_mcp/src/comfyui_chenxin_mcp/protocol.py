@@ -104,49 +104,42 @@ class Server:
     async def serve_stdio(self) -> None:
         """Drive the server over stdin/stdout until EOF or fatal error.
 
-        Reads newline-delimited JSON requests via asyncio.StreamReader,
-        dispatches through ``self._dispatch``, and writes JSON-RPC responses
-        via asyncio.StreamWriter. Both stdin EOF and transport errors are
-        handled gracefully so the server exits cleanly.
+        Reads newline-delimited JSON requests via a thread-pool blocking
+        ``sys.stdin.readline`` (``loop.run_in_executor``), dispatches through
+        ``self._dispatch``, and writes JSON-RPC responses via synchronous
+        ``sys.stdout`` writes.
+
+        Thread-pool reads + synchronous writes are used instead of
+        ``connect_read_pipe`` / ``connect_write_pipe`` because on Windows
+        (ProactorEventLoop) both pipe transports fail when stdin/stdout are
+        subprocess pipes (``WinError 6``, or indefinite hang). This approach
+        is cross-platform safe and works for the MCP stdio protocol which is
+        strictly request-response (no concurrent I/O contention).
         """
         loop = asyncio.get_running_loop()
 
-        # Set up the stdin reader.
-        reader = asyncio.StreamReader(limit=2**20)
-        reader_protocol = asyncio.StreamReaderProtocol(reader)
-        try:
-            await loop.connect_read_pipe(lambda: reader_protocol, sys.stdin)
-        except (ValueError, OSError) as exc:
-            raise RuntimeError(f"cannot attach reader to stdin: {exc!r}") from exc
-
-        # Set up the stdout writer. FlowControlMixin is the documented
-        # protocol class for ``connect_write_pipe``; the StreamWriter wraps
-        # it for coroutine-style writes.
-        write_transport, write_protocol = await loop.connect_write_pipe(
-            asyncio.streams.FlowControlMixin, sys.stdout
-        )
-        writer = asyncio.StreamWriter(write_transport, write_protocol, None, loop)
+        def _emit(data: dict) -> None:
+            """Write one JSON-RPC message line to stdout."""
+            sys.stdout.write(json.dumps(data, ensure_ascii=False) + "\n")
+            sys.stdout.flush()
 
         while True:
-            try:
-                raw = await reader.readline()
-            except (asyncio.IncompleteReadError, ConnectionError, OSError):
-                break
-            if not raw:
+            # Read in a thread to avoid blocking the event loop; this also
+            # sidesteps Windows ProactorEventLoop pipe-transport bugs.
+            line = await loop.run_in_executor(None, sys.stdin.readline)
+            if not line:
                 break  # stdin EOF
-            line = raw.decode("utf-8", errors="replace").strip()
+            line = line.strip()
             if not line:
                 continue
             try:
                 msg = json.loads(line)
             except json.JSONDecodeError as exc:
-                err = {
+                _emit({
                     "jsonrpc": "2.0",
                     "id": None,
                     "error": {"code": -32700, "message": f"parse error: {exc}"},
-                }
-                writer.write((json.dumps(err, ensure_ascii=False) + "\n").encode("utf-8"))
-                await writer.drain()
+                })
                 continue
             msg_id = msg.get("id")
             is_notif = msg_id is None
@@ -154,31 +147,19 @@ class Server:
                 result = await self._dispatch(msg)
             except ProtocolError as exc:
                 if not is_notif:
-                    err = {
+                    _emit({
                         "jsonrpc": "2.0",
                         "id": msg_id,
                         "error": {"code": -32600, "message": str(exc)},
-                    }
-                    writer.write((json.dumps(err, ensure_ascii=False) + "\n").encode("utf-8"))
-                    await writer.drain()
+                    })
                 continue
             except Exception as exc:
                 if not is_notif:
-                    err = {
+                    _emit({
                         "jsonrpc": "2.0",
                         "id": msg_id,
                         "error": {"code": -32603, "message": f"internal error: {exc!r}"},
-                    }
-                    writer.write((json.dumps(err, ensure_ascii=False) + "\n").encode("utf-8"))
-                    await writer.drain()
+                    })
                 continue
             if not is_notif and result is not None:
-                resp = {"jsonrpc": "2.0", "id": msg_id, "result": result}
-                writer.write((json.dumps(resp, ensure_ascii=False) + "\n").encode("utf-8"))
-                await writer.drain()
-
-        try:
-            await writer.drain()
-        except (ConnectionError, OSError):
-            pass
-        write_transport.close()
+                _emit({"jsonrpc": "2.0", "id": msg_id, "result": result})
