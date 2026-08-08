@@ -1,0 +1,38 @@
+{
+  "schema_version": "2.0",
+  "stage": "t2i-camera",
+  "prompt_id": "7ff33fc4-d4a0-4112-bd72-cd6da8f861fd",
+  "artifact": {
+    "filename": "e2e_history_raw_00001_.png",
+    "subfolder": "",
+    "path": "D:\\Projects\\comfyui-chenxin\\outputs\\e2e_history_raw\\e2e_history_raw_00001_.png",
+    "bytes": 317,
+    "sha256": "c3a98b7eaf9622a071e8f739ddd96b248b78dcdcf7fc2c4af78db9a94800c91f"
+  },
+  "duration_ms": 6250,
+  "config": {
+    "evidence": {},
+    "draft": {
+      "positive": "1girl",
+      "negative": "lowres"
+    },
+    "dialect_id": "anima",
+    "camera": null,
+    "camera_extra": null,
+    "lora": null,
+    "groups": null,
+    "sampling": null,
+    "seed": null,
+    "image_size": null,
+    "reference_image": null,
+    "controlnet_image": null
+  },
+  "prompt_package_quality": {
+    "facts_preserved": true,
+    "no_unsupported_invention": true,
+    "style_coherent": true,
+    "dialect_valid": true,
+    "temporal_logic_valid": true,
+    "ready_for_review": true
+  }
+}

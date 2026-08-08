@@ -1,209 +1,319 @@
 ---
 name: camera-image
-description: Approval-gated text-to-image and image-to-image ComfyUI consumer for PromptPackage outputs (Anima camera workflow, t2i-camera + i2i-camera stages)
+description: Anima camera workflow consumer for t2i/i2i image generation. Invoked through the comfyui-chenxin-mcp unified tools (list_skills, describe_config, validate_config, run_skill).
 status: active
 side_effects: approval-gated-local-comfyui
 owner: camera-image
+dialect_id: anima
 ---
 
-# Camera Image (was character-video-pipeline, t2i/i2i stages only)
+# camera-image
 
-This skill crosses the local ComfyUI and MCP boundary to execute the Anima camera workflow for **image** generation (t2i-camera and i2i-camera stages). Multiview character sheets and video generation are separate skills (`camera-multiview`, `camera-video`). Prompt text always comes from Prompt Forge.
+The `camera-image` skill runs the Anima camera workflow in a local ComfyUI server, producing single-frame stills for two stages:
 
-## Quick start (mandatory first action)
+- `t2i-camera` — text-to-image from a prompt only.
+- `i2i-camera` — image-to-image from a reference photo plus a prompt.
 
-Before any prompt authoring, file write, or capability probe, run the zero-dependency environment checker:
+Multiview character sheets and video generation are separate skills (`camera-multiview`, `camera-video`) and are out of scope here.
 
-    powershell -ExecutionPolicy Bypass -File skills/camera-image/preflight-env.ps1
+The skill is pure data. It does not own a CLI, a tool registry, or a transport. It declares what it can do via a `SkillData` entry-point, and the `comfyui-chenxin-mcp` engine drives it. The 4 unified MCP tools are the only entry points a host ever calls.
 
-## Environment prerequisites
+## When to use
 
-- **Python 3.10+** -- must be on PATH or at a common location (ComfyUI embedded Python is auto-detected by `preflight-env.ps1`)
-- **ComfyUI** -- running at http://127.0.0.1:8188 (override with `-ComfyUrl`)
-- **MCP tools** -- `check_workflow_runtime`, `get_workflow`, `strip_workflow`, `validate_workflow`, `list_local_models` must be loaded in the host session
-- **Plugin cache** -- must be in sync with the project source (verified by `preflight-env.ps1`)
+| User says | Skill handles |
+|-----------|---------------|
+| "Generate an Anima camera-angle image of X" | `t2i-camera` |
+| "Render this photo in the Anima camera style" | `i2i-camera` |
+| "Use the camera workflow with ControlNet pose" | `t2i-camera` (group `ControlNet LLLite（G1）` enabled) |
+| "What does the camera skill expose?" | `describe_config(skill="camera-image", stage="t2i-camera")` |
+| "Validate this config before running" | `validate_config(skill, stage, config)` |
 
-## Degradation paths
+Do not invoke this skill for non-Anima checkpoints, video, or character sheet generation. Those are separate skills.
 
-- **Python not found** -- Stop. Install Python 3.10+ or ensure ComfyUI's embedded Python is accessible. Do not rewrite runtime tools in Node.js or any other language.
-- **ComfyUI not reachable** -- Stop. Start ComfyUI first. Prompt Forge can run offline, but production stages cannot.
-- **MCP tools missing** -- Stop. Surface the missing tool names to the user. Do not proceed with partial MCP capability.
-- **Cache stale (files missing)** -- Stop. Re-run `scripts/install.ps1` to sync the plugin cache. Do not improvise with on-disk workflow files or direct ComfyUI API calls.
-- **preflight-env.ps1 missing** -- Cache is severely stale. Re-run install.ps1 immediately.
+## Architecture
 
-## Reading rules (agent)
+```
+LLM host (Claude Code / Codex / OpenCode)
+    │
+    │  JSON-RPC 2.0 over stdio
+    ▼
+comfyui-chenxin-mcp server  (skills/_mcp)
+    │   - 4 unified tools: list_skills, describe_config, validate_config, run_skill
+    │   - engine/         (skill-agnostic execution core)
+    │   - entry-points    (discovers installed skills)
+    ▼
+camera-image entry-point   (skills/camera-image/skill_data.py)
+    │   - get_skill_data() -> SkillData
+    │   - function pointers: describe_fn, apply_fn, prepare_fn, build_config_fn
+    ▼
+camera_image.runtime       (skill-specific logic)
+    │   - source_workflow  (UI -> API strip)
+    │   - graph_patcher    (tunable writer)
+    │   - prompt_forge     (gate; lives in engine, not runtime)
+    ▼
+ComfyUI  (local @ http://127.0.0.1:8188)
+```
 
-1. **Only read what the current step requires.** Do not bulk-read the entire runtime directory before starting.
-2. **Step 0 must pass before Step 1.** Do not skip ahead or read ahead.
-3. **A blocker means stop.** Do not search for workarounds, do not rewrite tools, do not continue exploring.
-4. **Code is implementation detail, not an operating manual.** Read function signatures when needed, not entire files.
-5. **Run from the skill root.** Do not operate on arbitrary filesystem paths or search for workflows on disk.
+The skill never imports `comfyui_chenxin_mcp`. The engine never imports `camera_image.runtime`. The only bridge is `camera_image/skill_data.py`, which imports the `SkillData` dataclass and provides function pointers that call into the runtime.
 
-## Two-stage production flow
+## The 5-step run flow
 
-1. Consume an image PromptPackage for the camera-view text-to-image base image.
-2. Consume the accepted reference plus a new shot PromptPackage for camera-view G1 image-to-image.
+Every `run_skill` call walks the same flow. The engine in `skills/_mcp/src/comfyui_chenxin_mcp/engine/execute.py:run_skill` is the single source of truth.
 
-Prompt Forge writes each prompt package. This skill never silently rewrites prompt prose; it may only map approved fields to a pinned workflow slot after approval.
+```
+1. compile_envelope    - prompt-forge gate; refuses if draft is not ready
+2. upload stage_images - reference_image (i2i only) and/or controlnet_image
+3. health              - mcp.health(); aborts if ComfyUI queue is not idle
+4. prepare_fn          - copy source workflow, apply G1/G2 mode toggles,
+                         upload to ComfyUI temp, get back an API graph
+5. apply_fn            - write tunables (prompts, camera, lora, sampling, ...) to the graph
+6. enqueue + wait      - submit prompt; poll /history/<id> for completion
+7. download            - pull first image from history entry; sha256 + bytes
+```
 
-## Out of scope (separate skills)
+Failure at any step returns `{"accepted": false, "exit_code": 1}` with a structured error. The engine writes a `run-record.json` to `outputs/runs/<stage>_<timestamp>/` on success and a `record_attempt(...)` call to the local attempt log on any path.
 
-- **Multiview character sheets** (`Flux2-Klein multiview`): see `skills/camera-multiview/`.
-- **Video generation** (`LTX Yusu Director`): see `skills/camera-video/`.
+## Stages
 
-## Fixed workflow and helper contract
+### `t2i-camera`
 
-The Anima camera workflow is a release asset, not a runtime discovery result. During development or installation, compare the complete live ComfyUI UI workflow with `runtime/workflow_assets/camera-anima.json`, record the node and API mappings, and verify the asset hashes. At runtime, load only the fixed asset through `runtime.camera_config_helper`; do not request or serialize a complete live workflow as configuration.
+Mandatory envelope:
+- `evidence` — CreativeEvidence ledger
+- `draft` — must contain non-empty `positive` and `negative` strings
 
-The helper boundary is:
+Optional tunables: `camera`, `camera_extra`, `lora`, `groups`, `sampling`, `seed`, `image_size`, `controlnet_image` (requires the `ControlNet LLLite（G1）` group).
 
-1. `load_fixed_camera_bundle(stage)` loads the fixed UI/API pair and pinned profile.
-2. `read_fixed_camera_config(bundle)` returns only prompts, reference image, all Anima camera angle fields, all 13 camera-extra fields, the two group-controller selections, and the atomic LoRA/TriggerWord unit.
-3. `build_fixed_camera_config(...)` validates the semantic config.
-4. `compile_fixed_camera_config(bundle, stage_config)` patches the UI surface and synchronizes the declared values into the API graph. The returned API graph is the only executable payload.
+If `controlnet_image` is provided, the engine uploads it and forces the `ControlNet LLLite（G1）` group to be enabled. The dependency rule is declarative (see `Rule(condition="config:controlnet_image", implies="group:ControlNet LLLite（G1）")`).
 
-For a fixed workflow asset, capability discovery is asset-scoped: do not require
-the workflow to appear in ComfyUI's saved library and do not require legacy
-`get_workflow`/`strip_workflow` tools. Validate the bundled API graph with
-`validate_workflow`, classify it with `check_workflow_runtime`, and report
-missing live node types or non-local runtime as explicit fail-closed evidence.
-Live workflow read/conversion tools remain required only for non-fixed stages.
+### `i2i-camera`
 
-After a successful image run, the consumer MUST return the PNG/artifact together with `result_manifest`, `effective_config`, `lora`, and `config_hash`. These fields are reconstructed from the final history prompt graph when available (otherwise the submitted executable graph): prompts, reference image, camera angle, all camera-extra inputs, group controls when available, LoRA Loader stack/raw selections, and the bound TriggerWord Toggle values. Returning only the image or only the requested configuration is incomplete.
+All of `t2i-camera`'s inputs, plus:
 
-The camera surface never exposes `seed`, `sampler`, `scheduler`, `steps`, `cfg`, or other internal execution controls. The UI and API transport must be tested together: a successful queue response is insufficient if ComfyUI history does not contain the requested prompt, camera fields, LoRA stack, and TriggerWord binding.
+- `reference_image` — **required**, local file path. The engine uploads it to ComfyUI before queueing.
+- The `加载图片（G1）` group is **auto-appended** to `groups.g1` for this stage (you do not pass it; the engine does).
 
-Before building a LoRA config, call MCP `list_local_models(model_type="loras")`. Parse the inventory, recommend only candidates compatible with the selected base model, make the selection explicit, preserve the inventory and recommendation hashes, and verify selected files are still present immediately before enqueue. Metadata is optional evidence; unavailable model-explorer metadata must not be invented.
+The engine's `_activate_img2img` rewires `node 27` (KSampler) to consume the VAE-encoded reference instead of an empty latent, and forces `denoise=0.6`.
 
-## Step 0 - preflight gate (mandatory)
+## Configurable items
 
-Before any prompt authoring, file write, or capability probe, the host agent
-MUST run the environment checker and surface blockers with their `remediation` to
-the user. The runtime does not perform code-level workarounds; a blocker means
-stop and tell the user how to fix it.
+The full schema is returned by `describe_config(skill="camera-image", stage="t2i-camera" | "i2i-camera")`. The following table summarises every slot. Defaults come from the source UI workflow at `workflow/source/文生图相机视角.json`; `None` means "fall through to that static value".
 
-The primary entry point is `preflight-env.ps1` (zero-dependency PowerShell). It
-checks cache integrity, Python, and ComfyUI, then delegates to the runtime
-preflight below. If `preflight-env.ps1` is missing, the cache is severely stale
--- re-run `scripts/install.ps1`.
+| Slot | Type | Default | Where it lands |
+|------|------|---------|----------------|
+| `envelope.draft.positive` | str | **required** | node 24 (ImpactWildcardProcessor) |
+| `envelope.draft.negative` | str | **required** | node 25 (ImpactWildcardProcessor) |
+| `camera.direction` | enum | `"front"` | node 583 (CameraAngleNode.pos_x) |
+| `camera.elevation` | enum | `"eye-level"` | node 583 (CameraAngleNode.pos_y) |
+| `camera.distance` | enum | `"full_body"` | node 583 (CameraAngleNode.pos_z) |
+| `camera.roll` | float `[0, 1]` | `0` | node 583 (CameraAngleNode.roll) |
+| `camera_extra.*` | object | see below | node 585 (CameraExtraConfigNode) |
+| `lora.selections` | list[str] | 3-LoRA default stack | nodes 26, 66 |
+| `sampling.steps_first` | int | 40 | node 50 (KSampler.steps) |
+| `sampling.cfg` | float | 4 | node 50 (KSampler.cfg) |
+| `sampling.sampler` | str | `"dpmpp_2m"` | node 50 (KSampler.sampler) |
+| `sampling.scheduler` | str | `"karras"` | node 50 (KSampler.scheduler) |
+| `sampling.denoise_first` | float | 1.0 | node 50 (KSampler.denoise) |
+| `sampling.steps_refine` | int | 25 | node 51 (KSampler.steps) |
+| `sampling.denoise_refine` | float | 0.2 | node 51 (KSampler.denoise) |
+| `seed` | int | random | node 65 |
+| `image_size.width` | int | 1216 | node 68 (EmptyLatentImage.width) |
+| `image_size.height` | int | 832 | node 71 (EmptyLatentImage.height) |
+| `controlnet_image` | path | `null` | node 129 (Load Image ControlNet) |
+| `reference_image` | path | `null` (t2i) / required (i2i) | node 21 (LoadImage) |
+| `groups.g1` | list[str] | defaults + auto | toggles G1 group nodes |
+| `groups.g2` | list[str] | defaults | toggles G2 group nodes |
 
-Commands (one is enough):
+The exact source for this table is `NODE_FIELD_MAP` in `camera_image/runtime/graph_patcher.py`. There is no separate "field list" to maintain — if the field map changes, `describe_config` picks it up automatically.
 
-    powershell -ExecutionPolicy Bypass -File skills/camera-image/preflight-env.ps1
-    python -m runtime.preflight
-    camera-image-runtime preflight --comfy-url http://127.0.0.1:8188
+### `camera.direction` / `elevation` / `distance` enums
 
-Output contract (excerpt):
+The semantic values are mapped to `pos_x`/`pos_y`/`pos_z` floats in `[-1, 1]` by `runtime/camera_mapper.py`. The full enum surface:
 
-    {
-      "ok": false,
-      "runtime_version": "0.0.0+codex.<ts>",
-      "checks": [
-        {"id": "version_stamp", "status": "ok", ...},
-        {"id": "comfyui_reachable", "status": "fail", "remediation": "..."},
-        {"id": "fixed_assets_integrity", "status": "ok", ...},
-        {"id": "host_mcp_tools", "status": "informational",
-         "expected_tools": ["check_workflow_runtime", "get_workflow",
-                             "list_local_models", "strip_workflow",
-                             "validate_workflow"]}
-      ],
-      "blockers": ["comfyui_reachable"]
-    }
+| Field | Accepted values |
+|-------|-----------------|
+| `direction` | `front`, `right_45`, `right`, `rear_45`, `rear`, `back`, `left_45`, `left` |
+| `elevation` | `high`, `high-angle`, `eye-level`, `low`, `low-angle` |
+| `distance` | `extreme_close_up`, `close_up`, `medium`, `cowboy_shot`, `full_body`, `wide` |
 
-The host_mcp_tools check is informational only: the runtime cannot negotiate
-MCP itself. The host agent MUST independently verify that the expected tools
-are loaded in its own session before invoking any production subcommand.
-If any tool is missing, surface the host_mcp_tools remediation to the user
-and stop.
+### `camera_extra` (node 585)
 
-## Step 0b - cross-attempt state (mandatory read-first)
+13 toggles + values. The validator in `runtime/camera_mapper.py` fills in defaults for any key you omit:
 
-Before authoring, the host agent MUST read the most recent attempt record from
-`%USERPROFILE%\.codex\state\comfyui-chenxin\attempts.jsonl` (or the path given
-by `COMFYUI_CHENXIN_STATE_DIR`). If the previous blocker is unresolved and the
-current preflight reproduces it, present the known blocker directly instead of
-re-running the same 16 minutes of authoring.
+| Field | Default | Notes |
+|-------|---------|-------|
+| `extreme_type` | `"无"` | one of `无`, `极限俯视`, `极限仰视` |
+| `extreme_weight` | 10 | non-negative number |
+| `lens_enabled` | `true` | bool |
+| `lens_value` | `"85mm lens"` | string |
+| `dof_enabled` | `false` | bool |
+| `dof_value` | `"shallow depth of field"` | string |
+| `dof_weight` | 1.3 | non-negative number |
+| `movement_enabled` | `false` | bool |
+| `movement_value` | `"handheld camera"` | string |
+| `composition_enabled` | `true` | bool |
+| `composition_value` | `"rule of thirds"` | string |
+| `style_enabled` | `false` | bool |
+| `style_value` | `"cinematic"` | string |
 
-Commands:
+## Groups
 
-    python -m runtime.attempt_state read-last
-    camera-image-runtime attempt-state read-last
+The source UI workflow contains 30+ "group" containers — bundles of nodes that can be enabled or bypassed as a unit via the `mode=0` (enabled) / `mode=4` (bypassed) flag. The `groups.g1` and `groups.g2` config fields let you toggle them by title.
 
-After Step 0 / Step 0b / Step 1 run-stage character-base, the host agent
-records the outcome so the next attempt inherits context:
+### Default always-on groups
 
-    camera-image-runtime attempt-state record < attempts.json
+The skill keeps these on for every run, regardless of what the user passes (you cannot disable them — your `groups` selections are unioned with these, never subtracted):
 
-## Ownership
+| Group | Title | Effect |
+|-------|-------|--------|
+| G1 | `保存图片（G1）` | node 35 Image Saver writes the final PNG |
+| G1 | `第二轮采样器（G1）` | node 51 KSampler runs the refine pass |
+| G1 | `相机视角生图（G1）` | nodes 583 + 585 (camera angle + extras) |
+| G2 | `图像锐化（G2）` | node 111 ImageSharpen |
+| G2 | `对比度（G2）` | node 96 AdjustContrast |
 
-This skill owns workflow discovery and profile pinning, model and node capability checks, ComfyUI/MCP transport, approval, one-time consumption, queue submission, raw history, artifact verification, lineage, and RunRecords. It must fail closed when workflow, profile, fingerprint, history, artifact, or receipt evidence is missing.
+### Stage-mandatory groups
 
-## Runtime boundary
+`i2i-camera` auto-appends `加载图片（G1）` to `groups.g1`. You don't have to pass it; the engine does it for you. If you do pass it, that's fine (set union).
 
-Implementation lives under `skills/camera-image/runtime/`. The host injects a trusted `host_call_tool(tool_name, arguments)` callable for MCP operations. The runtime does not import a host SDK, invent a conversion receipt, or bypass the approval and consumption gates.
+`t2i-camera` has no stage-mandatory groups.
 
-## Prompt boundary
+### Optional toggleable groups
 
-Prompt Forge is offline and side-effect free. It owns CreativeEvidence, model prompt dialects, visual-language styles, exact tag validation, PromptPackage authoring, and deterministic lint. This skill owns only the external production lifecycle. Model availability never changes what makes a prompt excellent; it only affects whether a separate production request can run.
+Every other group title in `workflow/t2i-camera/groups.json` and `workflow/i2i-camera/groups.json` is opt-in. Use `describe_config` to get the full current list (titles change with workflow updates). Common examples:
 
-## Via MCP
+- `面部 ADetailer（G1）` — facial fixup pass
+- `手部 ADetailer（G1）` — hand fixup pass
+- `Detailer（瑕疵修复）（G1）` — general defect repair
+- `Ultimate SD 放大器（G1）` — high-res upscaler chain
+- `移除背景（G1）` — background removal
 
-`comfyui-chenxin-mcp` server (sibling package) exposes 4 unified tools:
-- `list_skills()` - list installed skills + stages
-- `describe_config(skill, stage)` - return full schema for a skill stage
-- `validate_config(skill, stage, config)` - validate config before running
-- `run_skill(skill, stage, envelope, config)` - execute a skill stage
+Enable by adding the title to `groups.g1` or `groups.g2`. To bypass everything not in your list, the engine already handles that — any group title not in the final enabled set gets `mode=4`.
 
-These tools replace the legacy v1 tooling and provide a consistent interface across all camera skills.
+## LoRA
 
-See `skills/_mcp/README.md` for install + tool catalog.
+The `lora` slot is a dict with one optional key, `selections`. Empty / missing / `None` falls through to the default 3-LoRA stack.
 
-## ⚠️ 提示词硬性规则（2026-08-07 起）
+### Default 3-LoRA stack
 
-**所有 stage 和场景的提示词（positive / negative）必须先经 prompt-forge 技能生成，再进入 camera-image。**
+```
+<lora:anima-base-1-masterpiece-v51:1.00>
+<lora:add_detail:1.00>
+<lora:gpt-image-2_anima-base1_v1-1:1.00>
+```
 
-- **唯一入口**：通过 MCP 服务器工具 `run_skill(skill, stage, envelope, config)`
-- 流程：Claude 准备 envelope（`{evidence, draft, dialect_id}`）→ 调 MCP 工具 `run_skill` 执行
-- 边界：evidence/draft 不得含 `camera / lora / sampler / cfg / steps / seed / denoise` 等执行字段；这些仍是 camera-image 的可配置项
-- bridge 实现：`runtime/prompt_forge_bridge.py`（`compile_envelope` 严格模式，无静默退路）
-- **没有第二入口**：所有生产执行通过统一的 MCP 工具接口，避免出现 prompt-forge 闸门可绕过的旁路
+Plus trigger words: `masterpiece`, `very aesthetic`, `@gpt-image-2`.
 
-## 新增配置项（2026-08-07 起）
+### Custom selection
 
-在 `RunConfig` 上增加了 5 个 tunables，按节点分组：
+```json
+{
+  "lora": {
+    "selections": ["add_detail", "anima-base-1-masterpiece-v51"]
+  }
+}
+```
 
-| 配置项 | dataclass | 节点 |
-|--------|-----------|------|
-| `sampling.steps_first` / `cfg` / `sampler` / `scheduler` / `denoise_first` | `SamplingConfig` | node 50 |
-| `sampling.steps_refine` / `denoise_refine` | `SamplingConfig` | node 51 |
-| `seed` | `RunConfig.seed` | node 65 |
-| `image_size.width` / `image_size.height` | `ImageSizeConfig` | node 68 / 71 |
-| `controlnet_image` | `RunConfig.controlnet_image` | node 129（仅 ControlNet LLLite 组启用时） |
-| `groups.g1` / `groups.g2` | `GroupsConfig | None` | passed through to `prepare_temporary_workflow` |
+The resolver (`runtime/lora_resolver.py:resolve_lora_names`) accepts short names (`add_detail`) or full filenames (`Anima\add_detail.safetensors`). Matching is:
 
-CLI 入口 (`runtime_cli.py`) 在 v2 重构中已删除。配置入口由 `comfyui-chenxin-mcp` 的 4 个统一工具统一接管。
+1. Exact short-name (case-insensitive) against the normalized inventory.
+2. Exact full-name match.
+3. Substring match (must be unique; ambiguous matches raise).
 
-`describe-config` helper 输出 workflow-bound 配置表（含 default），与 `NODE_FIELD_MAP` 单源同步。
+Only LoRAs in the `Anima` folder are considered. The engine calls `mcp.list_loras()` to get the inventory when `selections` is non-empty; if you do not have an MCP resolver wired up, only the default stack is allowed.
 
-## 调用方式（v2）
+## Envelopes
 
-通过 `comfyui-chenxin-mcp` 暴露的 4 个统一工具调用本 skill（详见 `skills/_mcp/README.md`）：
+An "envelope" is the input the `run_skill` tool takes for `envelope`. It is the prompt-forge dialect shape. Three top-level keys:
 
-- `list_skills()` → 列出所有已安装 skill（含 `camera-image`）
-- `describe_config(skill="camera-image", stage="t2i-camera")` → 返回该 stage 的完整配置 schema
-- `validate_config(skill, stage, config)` → 校验配置合法性
-- `run_skill(skill, stage, envelope, config)` → 执行；envelope 含 evidence/draft，config 是 RunConfig 字段
+```json
+{
+  "evidence": { "locked_facts": [...], "continuity_locks": [...] },
+  "draft":    { "positive": "...", "negative": "..." },
+  "dialect_id": "anima"
+}
+```
 
-`config.groups` 是 `GroupsConfig | None`（`g1`/`g2` 都是可选列表字段）。
-直接传 `config.groups` 给 `prepare_temporary_workflow` / `compute_enabled_groups` —— 函数内部统一处理 None，调用方无需 `list()` 防御。
+Field discipline (enforced both locally in `_check_envelope` and again by prompt-forge):
 
-## Runtime 边界（v2 重构后）
+**Forbidden in `evidence` and `draft`:** `workflow`, `node`, `hash`, `gpu`, `execution`, `mode`, `runtime`, `profile`, `camera`, `lens`, `lora`, `loras`, `checkpoint`, `sampler`, `seed`, `steps`, `cfg`, `denoise`. These belong to camera-image, not prompt-forge.
 
-v2 删除了以下文件，统一由 `comfyui_chenxin_mcp.engine` 接管：
-- `runtime/schema.py`（被 `engine/describe.py` + `engine/validate.py` 替代）
-- `runtime/mcp_bridge.py`（每个 skill 不再注册自己的工具）
-- `runtime/t2i_camera.py` + `runtime/i2i_camera.py`（执行逻辑合并到 `engine/execute.py`）
-- `runtime/validators.py`（被 `engine/validate.py` 声明式 Rule 替代）
-- `runtime/runtime_cli.py`（CLI 入口删除，统一通过 MCP 工具调用）
+**Required in `draft`:** `positive` and `negative` must be non-empty strings.
 
-skill 通过 setuptools entry-point（`comfyui_chenxin_mcp.skills`）提供 `skill_data.get_skill_data()` 返回 `SkillData` 数据契约（含 `prepare_fn` / `apply_fn` / `describe_fn` / `build_config_fn` 函数指针）。
+**`dialect_id`:** the skill is `anima` (hardcoded in `SkillData.dialect_id`). Other skills will register other dialects.
+
+The engine runs `compile_envelope(evidence, draft, "anima")` as step 1. If prompt-forge rejects the envelope (forbidden field, empty draft, `ready_for_review=false`, etc.), the run aborts with a structured error and never reaches ComfyUI.
+
+## Common error paths and what to do
+
+| Failure | Symptom | Recovery |
+|---------|---------|----------|
+| `prompt-forge rejected envelope` | exit_code=1, error contains `prompt-forge` | Fix `envelope.draft` (forbidden field, empty, or `ready_for_review=false`); re-run |
+| `ComfyUI queue not idle` | exit_code=1, error mentions running/pending jobs | Wait for ComfyUI to drain; re-run |
+| `controlnet_image provided but group not enabled` | `validate_config` returns `ok=false` | Either add `ControlNet LLLite（G1）` to `groups.g1` or omit `controlnet_image` |
+| `reference_image is required for i2i-camera` | engine raises before enqueue | Pass `reference_image` as a local file path |
+| `node N missing from workflow` | engine raises during `apply_fn` | Source UI workflow is corrupt or modified; reinstall via `scripts/install.ps1` |
+| `execution failed: node N: ...` | exit_code=1, history shows `status.status_str=error` | Read the node error; fix config or workflow; re-run |
+| `no output images in history entry` | run completed but artifact not found | Workflow output node may have been bypassed by a group toggle; check `groups` |
+| `LoRA name X is ambiguous` | `apply_fn` raises | Use a more specific short name; substring matches must be unique |
+
+## MCP integration
+
+This skill is auto-discovered. After `pip install -e skills/camera-image`, the entry-point
+
+```toml
+[project.entry-points."comfyui_chenxin_mcp.skills"]
+camera-image = "camera_image.skill_data:get_skill_data"
+```
+
+is registered. The MCP server picks it up at startup via `importlib.metadata.entry_points()` in `registry.discover_skills()`. No code in `skills/_mcp` needs to change to add new skills — the engine is data-driven.
+
+### Quick MCP session
+
+```text
+list_skills()
+  -> {"skills": [{"name": "camera-image", "stages": ["t2i-camera", "i2i-camera"], "output_type": "images"}]}
+
+describe_config(skill="camera-image", stage="t2i-camera")
+  -> {"stage": "t2i-camera", "workflow": "t2i-camera", "source_workflow": "...", "slots": {...}}
+
+validate_config(skill="camera-image", stage="t2i-camera", config={...})
+  -> {"ok": true, "errors": [], "stage": "t2i-camera", "skill": "camera-image"}
+
+run_skill(skill="camera-image", stage="t2i-camera", envelope={...}, config={...}, output_dir="outputs")
+  -> {"exit_code": 0, "payload": {"accepted": true, "prompt_id": "...", "artifact": {...}, "duration_ms": 12345, "run_record_path": "..."}}
+```
+
+See `skills/_mcp/README.md` for the MCP server package doc.
+
+## Tests
+
+```bash
+# skill-level (camera-image itself)
+pytest skills/camera-image/tests/
+
+# engine-level (the shared execution core)
+pytest skills/_mcp/src/comfyui_chenxin_mcp/tests/
+
+# combined
+pytest skills/camera-image/tests/ skills/_mcp/src/comfyui_chenxin_mcp/tests/
+```
+
+What the tests cover:
+
+- `skills/camera-image/tests/test_skill_data.py` — SkillData field validity; function pointers resolve against the real source workflow.
+- `skills/_mcp/src/comfyui_chenxin_mcp/tests/test_engine_describe.py` — `describe_config` returns a schema with the expected slot names against the real source workflow.
+- `skills/_mcp/src/comfyui_chenxin_mcp/tests/test_engine_validate.py` — declarative `Rule` checks fire in both directions; envelope shape validated.
+- `skills/_mcp/src/comfyui_chenxin_mcp/tests/test_engine_execute.py` — `run_skill` flow with mocked `McpClient`; image upload order; `output_type` routing; `groups=None` and `groups.g2=None` regression coverage.
+- `skills/_mcp/src/comfyui_chenxin_mcp/tests/test_server_smoke.py` — spawn the real stdio server, exercise all 4 tools against the installed `camera-image`.
+
+Tests use the real source workflow at `skills/camera-image/workflow/source/文生图相机视角.json`; no mock workflow JSON.
+
+## Boundary rules
+
+These are enforced by code review and by the engine's import surface:
+
+- `skills/_mcp/src/comfyui_chenxin_mcp/engine/*` must NOT import any `camera_image.runtime.*` module. The engine reaches the skill only via `SkillData` function pointers.
+- `skills/camera-image/camera_image/runtime/*` must NOT import `comfyui_chenxin_mcp`. The runtime is pure skill logic.
+- `camera_image/skill_data.py` is the only file allowed to import both — the `SkillData` dataclass from the engine, plus the function pointers from the runtime.
+- `prompt_forge` lives in `engine/`, not `runtime/`. The skill calls it via the engine; it never imports it directly.
+- `mcp_bridge.py`, `schema.py`, `t2i_camera.py`, `i2i_camera.py`, `validators.py`, `runtime_cli.py` are deleted. If you see references to them, they are stale v1 leftovers — open a doc fix PR.
