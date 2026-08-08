@@ -159,7 +159,7 @@ def test_prepare_temporary_workflow_writes_temp_file_and_strips(tmp_path, monkey
     api_graph = {
         "35": {"class_type": "Image Saver Simple", "inputs": {"images": ["111", 0]}},
     }
-    mcp.strip_workflow.return_value = api_graph
+    mcp.get_workflow.return_value = api_graph
 
     captured: dict = {}
 
@@ -192,11 +192,11 @@ def test_prepare_temporary_workflow_writes_temp_file_and_strips(tmp_path, monkey
     assert isinstance(uploaded_ui, dict)
     assert "nodes" in uploaded_ui
 
-    # mcp.strip_workflow was called with the temp filename
-    mcp.strip_workflow.assert_called_once()
-    strip_kwargs = mcp.strip_workflow.call_args.kwargs
-    assert strip_kwargs["path"] == temp_filename
-    assert strip_kwargs["format"] == "api"
+    # mcp.get_workflow was called with the temp filename
+    mcp.get_workflow.assert_called_once()
+    gw_kwargs = mcp.get_workflow.call_args.kwargs
+    assert gw_kwargs["filename"] == temp_filename
+    assert gw_kwargs["format"] == "api"
 
     # the API graph was returned
     assert g is api_graph
