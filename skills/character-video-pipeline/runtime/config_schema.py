@@ -88,7 +88,6 @@ class RunConfig:
     evidence: dict
     draft: dict
     dialect_id: str = "anima"
-    strict_prompt: bool = False
     # existing tunables
     camera: CameraConfig | None = None
     camera_extra: dict | None = None

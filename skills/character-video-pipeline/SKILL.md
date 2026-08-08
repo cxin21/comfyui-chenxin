@@ -154,7 +154,7 @@ Prompt Forge is offline and side-effect free. It owns CreativeEvidence, model pr
 - **唯一入口**：`runtime.t2i_camera.run_t2i` / `runtime.i2i_camera.run_i2i`（CLI 对应 `run-t2i` / `run-i2i` 子命令）
 - 流程：Claude 准备 envelope（`{evidence, draft, dialect_id}`）→ 调 `run_t2i(evidence=..., draft=..., config=RunConfig(...))` → 函数内 prompt-forge `compile_envelope` 校验 → 通过后自动喂给 `patch_graph` 提交
 - 边界：evidence/draft 不得含 `camera / lora / sampler / cfg / steps / seed / denoise` 等执行字段；这些仍是 character-video-pipeline 的可配置项
-- bridge 实现：`runtime/prompt_forge_bridge.py`（`compile_envelope` 严格模式，`compile_or_minimal` 退路）
+- bridge 实现：`runtime/prompt_forge_bridge.py`（`compile_envelope` 严格模式，无静默退路）
 - **没有第二入口**：CLI 上唯一能产生图片的子命令就是 `run-t2i` / `run-i2i`，意图是"单入口，方便维护"——避免出现 prompt-forge 闸门可绕过的旁路
 
 ## 新增配置项（2026-08-07 起）

@@ -176,5 +176,4 @@ def test_main_run_t2i_dispatch_passes_runconfig(monkeypatch, tmp_path, capsys):
     assert config.lora == {"selections": ["add_detail", "masterpiece"]}
     assert config.draft == {"positive": "a cat", "negative": "blurry"}
     assert config.dialect_id == "anima"
-    assert config.strict_prompt is False
     assert captured["output_dir"] == tmp_path / "outputs" or str(captured["output_dir"]).endswith("outputs")

@@ -1,7 +1,7 @@
 """Character video pipeline runtime - camera image generation.
 
 Public API:
-- prompt_forge_bridge.compile_envelope / compile_or_minimal   -- prompt-forge gate
+- prompt_forge_bridge.compile_envelope                        -- prompt-forge gate
 - t2i_camera.run_t2i                                          -- text-to-image
 - i2i_camera.run_i2i                                          -- image-to-image
 - graph_patcher.patch_graph / describe_config                 -- workflow patch
@@ -25,6 +25,9 @@ must come through prompt_forge_bridge.compile_envelope. run_t2i and run_i2i
 are the only functions that produce images, and they enforce the gate as
 their first step. RunConfig is the only config object they accept (no
 backwards-compat kwargs).
+
+The prompt-forge gate is strict: there is no silent fallback. If prompt-forge
+rejects a draft or marks it not-ready, the run aborts loud.
 """
 
 from .attempt_state import record_attempt
@@ -55,7 +58,7 @@ from .lora_resolver import (
     render_stack_text,
 )
 from .mcp_client import McpClient, McpClientError
-from .prompt_forge_bridge import compile_envelope, compile_or_minimal
+from .prompt_forge_bridge import compile_envelope
 from .workflow_loader import list_group_titles, load_groups, load_workflow
 
 # Functions that produce images (the only paths to call sites in user code).
@@ -86,7 +89,6 @@ __all__ = [
     "apply_group_modes",
     "build_lora_patch",
     "compile_envelope",
-    "compile_or_minimal",
     "default_lora_plan",
     "describe_config",
     "filter_anima_loras",

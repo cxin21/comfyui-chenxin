@@ -153,7 +153,6 @@ def _kwargs_to_run_config(
     image_size: str = "",
     controlnet_image: str = "",
     reference: str = "",
-    strict: bool = False,
 ) -> RunConfig:
     """Build a RunConfig from CLI kwargs.
 
@@ -233,7 +232,6 @@ def _kwargs_to_run_config(
         evidence=evidence,
         draft=draft,
         dialect_id=dialect_id,
-        strict_prompt=strict,
         camera=camera_cfg,
         camera_extra=camera_extra_dict,
         lora=lora_dict,
@@ -289,10 +287,9 @@ def _build_run_config_kwargs(args, envelope_content: str) -> dict[str, Any]:
     config_kwargs: dict[str, Any] = {
         k: getattr(args, k)
         for k in accepted
-        if k not in ("envelope_json", "strict") and hasattr(args, k)
+        if k != "envelope_json" and hasattr(args, k)
     }
     config_kwargs["envelope_json"] = envelope_content
-    config_kwargs["strict"] = args.strict
     return config_kwargs
 
 
@@ -350,8 +347,6 @@ def main(argv=None):
         help="t2i-camera: prompt-forge + RunConfig + patch_graph (single entry, prompt-forge mandatory)",
     )
     p_t2i.add_argument("--output-dir", default="outputs")
-    p_t2i.add_argument("--strict", action="store_true",
-                       help="abort if prompt-forge marks prompt not ready_for_review")
     _add_flags_to_parser(p_t2i, STAGES.T2I)
     p_t2i.set_defaults(func=cmd_run_t2i)
 
@@ -360,8 +355,6 @@ def main(argv=None):
         help="i2i-camera: prompt-forge + RunConfig + patch_graph + reference upload",
     )
     p_i2i.add_argument("--output-dir", default="outputs")
-    p_i2i.add_argument("--strict", action="store_true",
-                       help="abort if prompt-forge marks prompt not ready_for_review")
     _add_flags_to_parser(p_i2i, STAGES.I2I)
     p_i2i.set_defaults(func=cmd_run_i2i)
 

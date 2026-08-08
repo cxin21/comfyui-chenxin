@@ -20,7 +20,7 @@ from .attempt_state import record_attempt
 from .config_schema import RunConfig, STAGES
 from .graph_patcher import patch_graph
 from .mcp_client import McpClient
-from .prompt_forge_bridge import compile_envelope, compile_or_minimal
+from .prompt_forge_bridge import compile_envelope
 
 
 def run_i2i(
@@ -41,6 +41,9 @@ def run_i2i(
     3. Calls patch_graph with stage=i2i-camera (auto-appends
        "加载图片（G1）" and forces node 27.denoise=0.6)
     4. Validates + submits + polls + downloads via McpClient
+
+    The prompt-forge gate is strict: if prompt-forge rejects the draft or
+    marks it not-ready, the run aborts loud. There is no silent fallback.
     """
     started = time.monotonic()
     run_dir = Path(run_dir) if run_dir else output_dir / "runs" / f"i2i-{int(time.time())}"
@@ -49,13 +52,12 @@ def run_i2i(
     if not config.reference_image:
         raise ValueError("RunConfig.reference_image is required for i2i-camera")
 
+    # Step 1: prompt-forge validation gate (strict; raises on reject).
+    package = compile_envelope(config.evidence, config.draft, config.dialect_id)
+
     uploaded_reference: str | None = None
     uploaded_controlnet: str | None = None
     try:
-        # Step 1: prompt-forge validation gate.
-        compile_fn = compile_envelope if config.strict_prompt else compile_or_minimal
-        package = compile_fn(config.evidence, config.draft, config.dialect_id)
-
         # Step 2: upload reference_image (required).
         ref_upload = mcp.upload_image(config.reference_image)
         if isinstance(ref_upload, dict):

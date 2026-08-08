@@ -15,7 +15,7 @@ config = RunConfig(
     evidence={...},        # CreativeEvidence ledger
     draft={...},            # caller-authored {"positive": "...", "negative": "..."}
     dialect_id="anima",      # 默认 anima
-    strict_prompt=False,    # True 时 ready_for_review==False 直接抛错
+    # ready_for_review==False 直接抛错（严格模式，无 strict_prompt 退路字段）
 
     # 可选 tunables (None = 用 workflow.json 静态值)
     camera=CameraConfig(direction="front", elevation="high", distance="cowboy_shot", roll=0.0),
@@ -36,7 +36,7 @@ config = RunConfig(
 run_t2i(mcp=mcp, output_dir=Path("outputs"), config=config)
 ```
 
-`run_t2i()` 第一行调用 `prompt_forge_bridge.compile_envelope`（或退路 `compile_or_minimal`），把 evidence/draft 喂给 `prompt-forge internals.prompt_compile`。校验通过的 PromptPackage.positive/negative 才进入 node 24/25 的 `wildcard_text` 和 `populated_text` 字段；空字符串会被 prompt-forge 拒绝。
+`run_t2i()` 第一行调用 `prompt_forge_bridge.compile_envelope`，把 evidence/draft 喂给 `prompt-forge internals.prompt_compile`。校验通过的 PromptPackage.positive/negative 才进入 node 24/25 的 `wildcard_text` 和 `populated_text` 字段；空字符串会被 prompt-forge 拒绝。闸门是严格的，无静默退路。
 
 evidence/draft 不得含 `camera / lora / sampler / cfg / steps / seed / denoise` 等执行字段（prompt-forge `_reject` 把关）。
 
