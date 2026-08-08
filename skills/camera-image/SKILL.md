@@ -146,6 +146,16 @@ Implementation lives under `skills/camera-image/runtime/`. The host injects a tr
 
 Prompt Forge is offline and side-effect free. It owns CreativeEvidence, model prompt dialects, visual-language styles, exact tag validation, PromptPackage authoring, and deterministic lint. This skill owns only the external production lifecycle. Model availability never changes what makes a prompt excellent; it only affects whether a separate production request can run.
 
+## Via MCP
+
+`comfyui-chenxin-mcp` server (sibling package) exposes:
+- `describe_camera_config(stage)`
+- `validate_camera_config(stage, config)`
+- `list_camera_loras`
+- `run_t2i_camera(envelope, ...)` / `run_i2i_camera(envelope, reference, ...)`
+
+See `skills/_mcp/README.md` for install + tool catalog.
+
 ## ⚠️ 提示词硬性规则（2026-08-07 起）
 
 **所有 stage 和场景的提示词（positive / negative）必须先经 prompt-forge 技能生成，再进入 camera-image。**
