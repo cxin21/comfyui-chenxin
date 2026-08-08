@@ -167,12 +167,31 @@ class McpClient:
         })
 
     def upload_image(self, source_path: str) -> Any:
-        # comfyui-mcp ≥ 0.49.0: upload_image requires action="image" (for a
-        # local file) plus source_path.
-        return self._call("upload_image", {
+        """Upload a local file to ComfyUI's input/ directory.
+
+        comfyui-mcp ≥ 0.49.0 returns the result as a text block of the shape
+        ``"Uploaded via HTTP.\\n\\nFilename: <filename>\\n\\nUse \\"<filename>\\" ..."``.
+        The engine's stage-image step consumes ``{"name": ..., "subfolder": ...}``,
+        so we parse the filename out of the text and return that dict directly.
+        Empty/non-text responses fall through as ``{"name": None}`` so the
+        caller can raise a structured error.
+        """
+        raw = self._call("upload_image", {
             "action": "image",
             "source_path": source_path,
         })
+        if isinstance(raw, dict):
+            # Forward-compat: if the server ever returns a structured dict, use it as-is.
+            return raw
+        if isinstance(raw, str):
+            filename: str | None = None
+            for line in raw.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("Filename:"):
+                    filename = stripped.split(":", 1)[1].strip()
+                    break
+            return {"name": filename, "subfolder": ""}
+        return {"name": None}
 
     def save_workflow(self, filename: str, workflow: dict) -> Any:
         """Upload a workflow JSON to the ComfyUI user library.
