@@ -101,6 +101,43 @@ class RunConfig:
     reference_image: str | None = None   # i2i only: local path (run_i2i uploads via mcp.upload_image)
     controlnet_image: str | None = None # t2i and i2i: local path (run_t2i/run_i2i uploads via mcp.upload_image)
 
+    @classmethod
+    def from_envelope(cls, envelope: dict, **tunables) -> "RunConfig":
+        """Build RunConfig from an envelope dict + tunable kwargs.
+
+        envelope must contain: evidence (dict), draft (dict).
+        Optional envelope key: dialect_id (str, default "anima").
+        tunables: camera (dict), camera_extra (dict), lora (dict),
+                  groups (dict), sampling (dict), seed (int),
+                  image_size (dict), reference_image (str), controlnet_image (str).
+        """
+        camera = tunables.get("camera")
+        if isinstance(camera, dict):
+            camera = CameraConfig(**camera)
+        sampling = tunables.get("sampling")
+        if isinstance(sampling, dict):
+            sampling = SamplingConfig(**sampling)
+        image_size = tunables.get("image_size")
+        if isinstance(image_size, dict):
+            image_size = ImageSizeConfig(**image_size)
+        groups = tunables.get("groups")
+        if isinstance(groups, dict):
+            groups = GroupsConfig(**groups)
+        return cls(
+            evidence=envelope.get("evidence", {}),
+            draft=envelope.get("draft", {}),
+            dialect_id=envelope.get("dialect_id", "anima"),
+            camera=camera,
+            camera_extra=tunables.get("camera_extra"),
+            lora=tunables.get("lora"),
+            groups=groups,
+            sampling=sampling,
+            seed=tunables.get("seed"),
+            image_size=image_size,
+            reference_image=tunables.get("reference_image"),
+            controlnet_image=tunables.get("controlnet_image"),
+        )
+
 
 class STAGES:
     T2I = "t2i-camera"
