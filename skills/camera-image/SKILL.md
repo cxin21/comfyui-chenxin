@@ -44,11 +44,11 @@ comfyui-chenxin-mcp server  (skills/_mcp)
     ▼
 camera-image entry-point   (skills/camera-image/skill_data.py)
     │   - get_skill_data() -> SkillData
-    │   - function pointers: describe_fn, apply_fn, prepare_fn, build_config_fn
+    │   - function pointers: describe_fn, prepare_fn, build_config_fn
     ▼
 camera_image.runtime       (skill-specific logic)
-    │   - source_workflow  (UI -> API strip)
-    │   - graph_patcher    (tunable writer)
+    │   - source_workflow  (UI patch + strip + upload)
+    │   - graph_patcher    (format-aware tunable writer; used by source_workflow)
     │   - prompt_forge     (gate; lives in engine, not runtime)
     ▼
 ComfyUI  (local @ http://127.0.0.1:8188)
@@ -64,12 +64,17 @@ Every `run_skill` call walks the same flow. The engine in `skills/_mcp/src/comfy
 1. compile_envelope    - prompt-forge gate; refuses if draft is not ready
 2. upload stage_images - reference_image (i2i only) and/or controlnet_image
 3. health              - mcp.health(); aborts if ComfyUI queue is not idle
-4. prepare_fn          - copy source workflow, apply G1/G2 mode toggles,
-                         upload to ComfyUI temp, get back an API graph
-5. apply_fn            - write tunables (prompts, camera, lora, sampling, ...) to the graph
-6. enqueue + wait      - submit prompt; poll /history/<id> for completion
-7. download            - pull first image from history entry; sha256 + bytes
+4. prepare_fn          - load source UI workflow, apply RunConfig tunables
+                         to widgets_values, apply G1/G2 mode toggles,
+                         upload fully-patched UI to ComfyUI, return the
+                         stripped API graph (config already baked in)
+5. enqueue + wait      - submit prompt; poll /history/<id> for completion
+6. download            - pull first image from history entry; sha256 + bytes
 ```
+
+The `prepare_fn` step is the single execution-side entry point. It owns the complete UI→API transformation: it writes tunables to the **complete UI workflow** (before upload) and applies mode toggles, then ComfyUI's strip step lifts every widget value into the API dict. The engine never patches the stripped API graph separately — the API graph returned by `prepare_fn` already carries every tunable.
+
+`apply_run_config` (in `runtime/graph_patcher.py`) is format-aware: it detects UI vs API by the shape of `graph[node_id]["inputs"]` (list = UI, dict = API) and writes to `widgets_values[index]` or `inputs[name]` accordingly. The UI→API mapping is hardcoded in `_UI_WIDGET_INDEX` against `workflow/source/文生图相机视角.json`.
 
 Failure at any step returns `{"accepted": false, "exit_code": 1}` with a structured error. The engine writes a `run-record.json` to `outputs/runs/<stage>_<timestamp>/` on success and a `record_attempt(...)` call to the local attempt log on any path.
 
@@ -251,10 +256,11 @@ The engine runs `compile_envelope(evidence, draft, "anima")` as step 1. If promp
 | `ComfyUI queue not idle` | exit_code=1, error mentions running/pending jobs | Wait for ComfyUI to drain; re-run |
 | `controlnet_image provided but group not enabled` | `validate_config` returns `ok=false` | Either add `ControlNet LLLite（G1）` to `groups.g1` or omit `controlnet_image` |
 | `reference_image is required for i2i-camera` | engine raises before enqueue | Pass `reference_image` as a local file path |
-| `node N missing from workflow` | engine raises during `apply_fn` | Source UI workflow is corrupt or modified; reinstall via `scripts/install.ps1` |
+| `node N missing from workflow` | engine raises during `prepare_fn` | Source UI workflow is corrupt or modified; reinstall via `scripts/install.ps1` |
+| `no UI widget index mapping for node N input M` | engine raises during `prepare_fn` | New tunable added but `_UI_WIDGET_INDEX` not updated; add the mapping in `runtime/graph_patcher.py` |
 | `execution failed: node N: ...` | exit_code=1, history shows `status.status_str=error` | Read the node error; fix config or workflow; re-run |
 | `no output images in history entry` | run completed but artifact not found | Workflow output node may have been bypassed by a group toggle; check `groups` |
-| `LoRA name X is ambiguous` | `apply_fn` raises | Use a more specific short name; substring matches must be unique |
+| `LoRA name X is ambiguous` | `prepare_fn` raises | Use a more specific short name; substring matches must be unique |
 
 ## MCP integration
 

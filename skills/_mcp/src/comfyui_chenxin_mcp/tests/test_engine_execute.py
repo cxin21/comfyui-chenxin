@@ -47,8 +47,7 @@ def _skill_data():
         },
         output_type="images",
         describe_fn=lambda stage: {},
-        apply_fn=lambda graph, stage, config, **kw: None,
-        prepare_fn=lambda mcp, stage, groups: {"nodes": [], "links": []},
+        prepare_fn=lambda mcp, stage, config=None, groups=None, **kw: {"nodes": [], "links": []},
         build_config_fn=lambda envelope, **kw: _config(),
     )
 
@@ -146,34 +145,38 @@ def test_run_skill_health_check_fails(mock_compile, tmp_path):
 
 @patch("comfyui_chenxin_mcp.engine.prompt_forge.compile_envelope",
        return_value={"quality": {}, "warnings": []})
-def test_run_skill_calls_prepare_and_apply(mock_compile, tmp_path):
+def test_run_skill_passes_config_to_prepare(mock_compile, tmp_path):
+    """prepare_fn is now the single execution entry point: receives config + groups.
+
+    The engine does NOT call a separate apply_fn — config is applied to
+    the UI workflow inside prepare_fn (config writes to widgets_values
+    before the strip step lifts them into API inputs).
+    """
     sd = _skill_data()
     config = _config()
     mcp = _mock_mcp()
     prepare_called = []
-    apply_called = []
 
-    def track_prepare(m, stage, groups):
-        prepare_called.append((stage, groups))
+    def track_prepare(m, stage, config=None, groups=None, **kw):
+        prepare_called.append((stage, config, groups))
         return {"nodes": [], "links": []}
-
-    def track_apply(graph, stage, config, **kw):
-        apply_called.append(stage)
 
     sd = SkillData(
         name=sd.name, stages=sd.stages, source_workflow_path=sd.source_workflow_path,
         groups_dir_pattern=sd.groups_dir_pattern, field_map=sd.field_map,
         dependency_rules=sd.dependency_rules, stage_images=sd.stage_images,
         output_type=sd.output_type, describe_fn=sd.describe_fn,
-        apply_fn=track_apply, prepare_fn=track_prepare,
+        prepare_fn=track_prepare,
         build_config_fn=sd.build_config_fn,
     )
     run_skill(mcp=mcp, skill_data=sd, stage="t2i-camera", config=config,
               output_dir=tmp_path, timeout=5.0, poll_interval=0.1)
     assert len(prepare_called) == 1
     assert prepare_called[0][0] == "t2i-camera"
-    assert prepare_called[0][1] is None  # groups=None when not provided
-    assert len(apply_called) == 1
+    # config is the same config the engine received (not stripped).
+    assert prepare_called[0][1] is config
+    # groups=None when not provided.
+    assert prepare_called[0][2] is None
 
 
 @patch("comfyui_chenxin_mcp.engine.prompt_forge.compile_envelope",
@@ -185,8 +188,8 @@ def test_run_skill_passes_groups_g2_none_to_prepare(mock_compile, tmp_path):
     mcp = _mock_mcp()
     prepare_called = []
 
-    def track_prepare(m, stage, groups):
-        prepare_called.append((stage, groups))
+    def track_prepare(m, stage, config=None, groups=None, **kw):
+        prepare_called.append((stage, config, groups))
         return {"nodes": [], "links": []}
 
     sd = SkillData(
@@ -194,11 +197,43 @@ def test_run_skill_passes_groups_g2_none_to_prepare(mock_compile, tmp_path):
         groups_dir_pattern=sd.groups_dir_pattern, field_map=sd.field_map,
         dependency_rules=sd.dependency_rules, stage_images=sd.stage_images,
         output_type=sd.output_type, describe_fn=sd.describe_fn,
-        apply_fn=sd.apply_fn, prepare_fn=track_prepare,
+        prepare_fn=track_prepare,
         build_config_fn=sd.build_config_fn,
     )
     payload, code = run_skill(mcp=mcp, skill_data=sd, stage="t2i-camera", config=config,
                               output_dir=tmp_path, timeout=5.0, poll_interval=0.1)
     assert code == 0
-    assert prepare_called[0][1].g1 == ["移除背景（G1）"]
-    assert prepare_called[0][1].g2 is None
+    assert prepare_called[0][2].g1 == ["移除背景（G1）"]
+    assert prepare_called[0][2].g2 is None
+
+
+@patch("comfyui_chenxin_mcp.engine.prompt_forge.compile_envelope",
+       return_value={"quality": {}, "warnings": []})
+def test_run_skill_no_separate_apply_fn(mock_compile, tmp_path):
+    """After the merge: prepare_fn is called once and apply_fn does not exist.
+
+    Verifies the SkillData contract no longer carries an apply_fn field.
+    """
+    sd = _skill_data()
+    config = _config()
+    mcp = _mock_mcp()
+    prepare_called = []
+
+    def track_prepare(m, stage, config=None, groups=None, **kw):
+        prepare_called.append(stage)
+        return {"nodes": [], "links": []}
+
+    sd = SkillData(
+        name=sd.name, stages=sd.stages, source_workflow_path=sd.source_workflow_path,
+        groups_dir_pattern=sd.groups_dir_pattern, field_map=sd.field_map,
+        dependency_rules=sd.dependency_rules, stage_images=sd.stage_images,
+        output_type=sd.output_type, describe_fn=sd.describe_fn,
+        prepare_fn=track_prepare,
+        build_config_fn=sd.build_config_fn,
+    )
+    # No apply_fn attribute on SkillData anymore.
+    assert not hasattr(sd, "apply_fn")
+    run_skill(mcp=mcp, skill_data=sd, stage="t2i-camera", config=config,
+              output_dir=tmp_path, timeout=5.0, poll_interval=0.1)
+    # prepare_fn called exactly once — config application is merged in.
+    assert len(prepare_called) == 1

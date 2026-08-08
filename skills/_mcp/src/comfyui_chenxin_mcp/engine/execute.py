@@ -1,7 +1,7 @@
 """Shared execution engine - one run_skill for all skills.
 
 Replaces t2i_camera.run_t2i + i2i_camera.run_i2i (80+ lines of duplicated code).
-Flow: prompt-forge gate -> upload images -> health -> prepare -> apply -> validate -> enqueue -> wait -> download.
+Flow: prompt-forge gate -> upload images -> health -> prepare (UI: config + modes + strip) -> validate -> enqueue -> wait -> download.
 """
 from __future__ import annotations
 
@@ -31,10 +31,10 @@ def run_skill(
     1. prompt-forge gate (compile_envelope)
     2. upload stage_images (reference, controlnet)
     3. health check (ComfyUI queue idle)
-    4. prepare temp workflow (copy source + patch groups + upload)
-    5. apply run config (write tunables to graph)
-    6. validate + check runtime
-    7. enqueue + wait + download
+    4. prepare temp workflow (apply config + G1/G2 modes to UI, upload,
+       return stripped API graph with config baked in)
+    5. validate + check runtime
+    6. enqueue + wait + download
     """
     started = time.monotonic()
     run_dir = output_dir / "runs" / f"{stage.replace('/', '-')}_{int(time.time())}"
@@ -71,17 +71,19 @@ def run_skill(
                 raise RuntimeError(f"ComfyUI queue not idle (running={len(q.get('running', []))}, pending={len(q.get('pending', []))})")
 
         # Step 4: prepare temp workflow.
-        graph = skill_data.prepare_fn(mcp, stage=stage, groups=patch_config.groups)
-
-        # Step 5: apply run config.
-        skill_data.apply_fn(
-            graph,
+        # prepare_fn loads UI, applies config + G1/G2 mode toggles,
+        # uploads to ComfyUI, and returns the stripped API graph with
+        # every config value baked in (config writes to UI pre-strip;
+        # strip lifts widget values into API inputs).
+        graph = skill_data.prepare_fn(
+            mcp,
             stage=stage,
             config=patch_config,
+            groups=patch_config.groups,
             mcp_list_loras=mcp.list_loras if patch_config.lora else None,
         )
 
-        # Step 6: check runtime.
+        # Step 5: check runtime.
         # mcp.enqueue is the real validation gate — if the graph is truly
         # broken, enqueue will fail. We deliberately do NOT pre-validate the
         # graph here: comfyui-mcp's wrapper returns a markdown summary
@@ -90,7 +92,7 @@ def run_skill(
         if isinstance(runtime_check, dict) and runtime_check.get("runtime") != "local":
             raise RuntimeError(f"workflow uses non-local runtime: {runtime_check}")
 
-        # Step 7: enqueue + wait + download.
+        # Step 6: enqueue + wait + download.
         result = mcp.enqueue(graph)
         prompt_id = None
         if isinstance(result, dict):

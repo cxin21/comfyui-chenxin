@@ -23,8 +23,7 @@ def _fake_skill_data(name="camera-image"):
         stage_images={},
         output_type="images",
         describe_fn=lambda stage: {},
-        apply_fn=lambda graph, stage, config, **kw: None,
-        prepare_fn=lambda mcp, stage, g1, g2: {},
+        prepare_fn=lambda mcp, stage, config=None, groups=None, **kw: {},
         build_config_fn=lambda envelope, **kw: {},
     )
 

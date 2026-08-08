@@ -48,6 +48,8 @@ def test_prepare_fn_is_callable():
     assert callable(sd.prepare_fn)
 
 
-def test_apply_fn_is_callable():
+def test_skill_data_has_no_apply_fn_field():
+    """The apply_fn contract is gone — config is now applied inside prepare_fn."""
     sd = get_skill_data()
-    assert callable(sd.apply_fn)
+    # SkillData no longer carries apply_fn (merged into prepare_fn).
+    assert not hasattr(sd, "apply_fn")

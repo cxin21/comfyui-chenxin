@@ -6,15 +6,20 @@ lists) drives which G1/G2 groups are enabled for the run.
 
 Every run performs:
 1.  Load source UI workflow from disk.
-2.  Compute enabled G1/G2 titles (DEFAULT + user + stage-mandatory).
-3.  Apply ``mode=0`` / ``mode=4`` to nodes in a temporary copy.
-4.  Write the copy to a unique ``temp_*.json`` file in the system temp
+2.  (Optional) Apply ``RunConfig`` tunables to the UI workflow by
+    writing into each node's ``widgets_values`` list (single source of
+    truth that ComfyUI's strip step consumes).
+3.  Compute enabled G1/G2 titles (DEFAULT + user + stage-mandatory).
+4.  Apply ``mode=0`` / ``mode=4`` to nodes in the in-memory copy.
+5.  Write the copy to a unique ``temp_*.json`` file in the system temp
     dir.
-5.  Hand the file to the ComfyUI server via MCP ``save_workflow``.
-6.  ``get_workflow(filename, format="api")`` returns the API graph.
-7.  Local temp file is deleted.
+6.  Hand the file to the ComfyUI server via MCP ``save_workflow``.
+7.  ``get_workflow(filename, format="api")`` returns the API graph.
+8.  Local temp file is deleted.
 
-The returned API dict has no ``mode`` fields — strip removed them.
+The returned API dict has no ``mode`` fields (strip removed them) and
+carries every tunable baked in (because config was written to the UI
+**before** strip).
 """
 
 from __future__ import annotations
@@ -147,27 +152,50 @@ def prepare_temporary_workflow(
     mcp: Any,
     *,
     stage: str = STAGES.T2I,
+    config: Any = None,
     groups: GroupsConfig | None = None,
+    mcp_list_loras: Any = None,
 ) -> dict[str, Any]:
     """Build an API graph for the run via temp file + MCP strip.
 
     Steps:
     1.  Load source UI workflow from disk.
-    2.  Compute enabled G1/G2 titles (DEFAULT + user + stage-mandatory).
-    3.  Apply ``mode`` field to nodes in an in-memory copy.
-    4.  Write the copy to a unique ``temp_*.json`` file in the system
+    2.  If ``config`` is provided, apply tunables (sampling, camera,
+        LoRA, prompts, image_size, seed, controlnet image, reference
+        image) to the UI workflow's ``widgets_values`` so the strip
+        step propagates them to the final API graph. Runs **before**
+        mode toggles so config and mode write to disjoint keys
+        (config -> widgets_values, mode -> mode).
+    3.  Compute enabled G1/G2 titles (DEFAULT + user + stage-mandatory).
+    4.  Apply ``mode`` field to nodes in an in-memory copy.
+    5.  Write the copy to a unique ``temp_*.json`` file in the system
         temp dir.
-    5.  Upload to ComfyUI via MCP ``save_workflow``.
-    6.  ``get_workflow(filename, format="api")`` returns the API graph.
-    7.  Local temp file is always deleted.
+    6.  Upload to ComfyUI via MCP ``save_workflow``.
+    7.  ``get_workflow(filename, format="api")`` returns the API graph.
+    8.  Local temp file is always deleted.
 
-    The returned dict has no ``mode`` fields (strip removed them) and
-    is ready for the patcher's tunables step.
+    The returned dict carries every tunable baked in (config was
+    applied to UI pre-strip) and has no ``mode`` fields (strip removed
+    them).
 
     Accepts ``GroupsConfig | None`` directly; passes it through to
     ``compute_enabled_groups`` which handles every None case.
     """
     ui = _load_source_ui()
+
+    if config is not None:
+        # Apply config BEFORE mode toggles: config writes to
+        # widgets_values, mode toggles write to mode. Both target the
+        # UI dict; ordering is irrelevant functionally but matches the
+        # documented flow (config first, then enable groups).
+        from .graph_patcher import apply_run_config
+        apply_run_config(
+            ui,
+            stage=stage,
+            config=config,
+            mcp_list_loras=mcp_list_loras,
+        )
+
     groups_meta = _load_groups(stage)
     enabled_g1, enabled_g2 = compute_enabled_groups(stage, groups)
     _apply_modes_to_ui(ui, enabled_g1, enabled_g2, groups_meta)

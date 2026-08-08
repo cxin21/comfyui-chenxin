@@ -30,7 +30,12 @@ class Rule:
 class SkillData:
     """Pure data + function pointers describing a skill.
 
-    The engine calls describe_fn/apply_fn/prepare_fn via these pointers.
+    The engine calls describe_fn/prepare_fn via these pointers.
+    prepare_fn loads the UI workflow, applies the RunConfig tunables
+    AND the G1/G2 mode toggles to the UI, uploads the fully-patched
+    UI to ComfyUI, and returns the stripped API graph (so every
+    config value is baked into the returned API dict).
+
     Skills provide this via entry-points; the MCP server never imports
     runtime.* directly.
     """
@@ -43,7 +48,6 @@ class SkillData:
     stage_images: dict[str, tuple[ImageSpec, ...]]
     output_type: str
     describe_fn: Callable[..., dict[str, Any]]
-    apply_fn: Callable[..., None]
     prepare_fn: Callable[..., dict[str, Any]]
     build_config_fn: Callable[..., Any]
     dialect_id: str = "anima"

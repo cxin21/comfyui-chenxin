@@ -1,28 +1,33 @@
-"""Declarative API graph patching for camera workflows.
+"""Declarative UI/API graph patching for camera workflows.
 
 Single signature ``apply_run_config(graph, *, config, mcp_list_loras=None)``
 accepts a ``RunConfig`` (defined in runtime.config_schema) and writes every
-tunable into the API graph produced by ``source_workflow.prepare_temporary_workflow``.
+tunable into the graph produced by ``source_workflow.prepare_temporary_workflow``.
 
-The caller (t2i_camera.run_t2i / i2i_camera.run_i2i) is responsible for:
-1.  Running the prompt-forge gate on ``config.draft``.
-2.  Uploading ``config.reference_image`` / ``config.controlnet_image``.
-3.  Calling ``source_workflow.prepare_temporary_workflow(mcp, stage=..., groups=...)``
-    to obtain a stripped API graph.
-4.  Calling ``apply_run_config(graph, config, mcp_list_loras=...)`` to
-    write the tunable values.
+Format-aware: the patcher detects UI vs API by the shape of
+``graph[node_id]["inputs"]`` and writes to the correct slot:
 
-Tunable surface (also enumerated by NODE_FIELD_MAP for the helper):
-- prompts (24/25)                              — from config.draft via prompt-forge gate
-- camera (583)                                 — from config.camera
-- camera_extra (585)                           — from config.camera_extra
-- lora (26/66)                                 — from config.lora
-- sampling (50/51)                             — from config.sampling
-- seed (65)                                    — from config.seed
-- image_size (68/71)                           — from config.image_size
-- controlnet_image (129)                       — from config.controlnet_image
-                                                only if group "ControlNet LLLite" enabled
-- reference_image (21)                         — from config.reference_image (i2i only)
+- API format (after strip): ``inputs`` is a dict; write to
+  ``graph[node_id]["inputs"][name] = value``.
+- UI format (source workflow, pre-strip): ``inputs`` is a list of
+  connection refs; literal values live in ``widgets_values`` (list).
+  Write to ``graph[node_id]["widgets_values"][_UI_INDEX[(node_id, name)]]``.
+
+Hardcoded UI widget index map (_UI_WIDGET_INDEX) is derived from
+``workflow/source/文生图相机视角.json`` structure. The strip step is
+the source of truth for converting widget values to API inputs; we
+only need to write the right index.
+
+Order:
+1.  Prompts (24/25) from ``config.draft`` (prompt-forge-validated).
+2.  Camera (583) + camera_extra (585).
+3.  LoRA (26/66).
+4.  Sampling (50/51), seed (65), image_size (68/71).
+5.  Cross-validate controlnet_image <-> ControlNet LLLite group.
+6.  ControlNet image (129).
+7.  WORKFLOW_CONVENTIONS per stage (e.g. i2i denoise=0.6).
+8.  i2i activation (after group validation so the upload path is
+    enforced).
 """
 
 from __future__ import annotations
@@ -70,21 +75,140 @@ NODE_FIELD_MAP: dict[str, tuple[str, str]] = {
 }
 
 
+# UI widget index map.
+#
+# Maps (node_id, input_name) -> position in the node's widgets_values
+# list. Derived by inspecting ``workflow/source/文生图相机视角.json``
+# (committed UI workflow). Used when the patcher is called against a
+# UI-format graph (pre-strip) so the value lands in the slot that
+# ComfyUI's strip will lift into the API dict.
+_UI_WIDGET_INDEX: dict[tuple[str, str], int] = {
+    # ImpactWildcardProcessor (24 / 25)
+    ("24", "wildcard_text"): 0,
+    ("24", "populated_text"): 1,
+    ("25", "wildcard_text"): 0,
+    ("25", "populated_text"): 1,
+    # Lora Loader (26)
+    ("26", "text"): 1,
+    # Input Parameters / Image Saver (50) — first-pass sampling
+    # widgets_values layout: [seed, control_after_generate, steps,
+    # cfg, sampler, scheduler, denoise]; widget input positions skip
+    # the hidden control_after_generate.
+    ("50", "seed"): 0,
+    ("50", "steps"): 2,
+    ("50", "cfg"): 3,
+    ("50", "sampler"): 4,
+    ("50", "scheduler"): 5,
+    ("50", "denoise"): 6,
+    # KSampler (51) — refine pass; same widget layout as node 50.
+    ("51", "seed"): 0,
+    ("51", "steps"): 2,
+    ("51", "cfg"): 3,
+    ("51", "sampler_name"): 4,
+    ("51", "scheduler"): 5,
+    ("51", "denoise"): 6,
+    # Seed (rgthree) (65) — all implicit widgets.
+    ("65", "seed"): 0,
+    # easy int (68 / 71) — single value widget.
+    ("68", "value"): 0,
+    ("71", "value"): 0,
+    # LoadImage (129) — controlnet image.
+    ("129", "image"): 0,
+    # CameraAngleNode (583) — pos_x/y/z/roll at front of widgets_values.
+    ("583", "pos_x"): 0,
+    ("583", "pos_y"): 1,
+    ("583", "pos_z"): 2,
+    ("583", "roll"): 3,
+    # CameraExtraConfigNode (585) — 1:1 with widget input positions.
+    ("585", "extreme_type"): 0,
+    ("585", "extreme_weight"): 1,
+    ("585", "lens_enabled"): 2,
+    ("585", "lens_value"): 3,
+    ("585", "dof_enabled"): 4,
+    ("585", "dof_value"): 5,
+    ("585", "dof_weight"): 6,
+    ("585", "movement_enabled"): 7,
+    ("585", "movement_value"): 8,
+    ("585", "composition_enabled"): 9,
+    ("585", "composition_value"): 10,
+    ("585", "style_enabled"): 11,
+    ("585", "style_value"): 12,
+}
+
+
+def _is_api_graph(graph: dict[str, Any]) -> bool:
+    """True if graph uses API format (top-level keys are node IDs as strings).
+
+    UI format keeps nodes inside a ``nodes`` list; API format is keyed by
+    node id. This distinction drives whether writes go to
+    ``widgets_values`` (UI) or ``inputs[name]`` (API).
+    """
+    if "nodes" in graph and isinstance(graph["nodes"], list):
+        return False
+    sample = next(iter(graph.values()), None)
+    if not isinstance(sample, dict):
+        return False
+    return isinstance(sample.get("inputs"), dict)
+
+
+def _get_node(graph: dict[str, Any], node_id: str) -> dict[str, Any] | None:
+    """Fetch a node from either UI (nodes=list) or API (keyed by id) graph."""
+    if _is_api_graph(graph):
+        return graph.get(node_id)
+    for node in graph.get("nodes", []):
+        if isinstance(node, dict) and str(node.get("id")) == str(node_id):
+            return node
+    return None
+
+
+def _set_value(graph: dict[str, Any], node_id: str, name: str, value: Any) -> None:
+    """Write one literal value into either UI or API graph.
+
+    API: ``graph[node_id]["inputs"][name] = value``.
+    UI:  ``graph[<nodes-entry-for-node_id>]["widgets_values"][idx] = value``
+         where ``idx`` is looked up in ``_UI_WIDGET_INDEX``.
+    """
+    node = _get_node(graph, node_id)
+    if node is None:
+        raise KeyError(f"node {node_id} missing from workflow")
+    inputs = node.get("inputs")
+    if isinstance(inputs, dict):
+        # API format.
+        inputs[name] = value
+        return
+    if isinstance(inputs, list):
+        # UI format — write to widgets_values.
+        key = (node_id, name)
+        if key not in _UI_WIDGET_INDEX:
+            raise KeyError(
+                f"no UI widget index mapping for node {node_id} input {name!r}; "
+                "add an entry to _UI_WIDGET_INDEX in graph_patcher.py"
+            )
+        idx = _UI_WIDGET_INDEX[key]
+        widgets = node.get("widgets_values")
+        if not isinstance(widgets, list) or idx >= len(widgets):
+            raise KeyError(
+                f"node {node_id} widgets_values missing or too short for input {name!r} "
+                f"(expected index {idx}, got length {len(widgets) if isinstance(widgets, list) else 0})"
+            )
+        widgets[idx] = value
+        return
+    raise ValueError(
+        f"node {node_id} inputs field has unexpected type {type(inputs).__name__}; "
+        "expected dict (API) or list (UI)"
+    )
+
+
 def _set_prompt(graph: dict, node_id: str, text: str) -> None:
-    if node_id not in graph:
-        raise KeyError(f"prompt node {node_id} missing from workflow")
-    graph[node_id]["inputs"]["wildcard_text"] = text
-    graph[node_id]["inputs"]["populated_text"] = text
+    _set_value(graph, node_id, "wildcard_text", text)
+    _set_value(graph, node_id, "populated_text", text)
 
 
 def _set_camera(graph: dict, coords: CameraCoords) -> None:
-    node = graph.get("583")
-    if not node:
-        raise KeyError("node 583 (CameraAngleNode) missing from workflow")
-    node["inputs"]["pos_x"] = coords.pos_x
-    node["inputs"]["pos_y"] = coords.pos_y
-    node["inputs"]["pos_z"] = coords.pos_z
-    node["inputs"]["roll"] = coords.roll
+    _set_value(graph, "583", "pos_x", coords.pos_x)
+    _set_value(graph, "583", "pos_y", coords.pos_y)
+    _set_value(graph, "583", "pos_z", coords.pos_z)
+    _set_value(graph, "583", "roll", coords.roll)
 
 
 def _set_camera_partial(
@@ -97,62 +221,63 @@ def _set_camera_partial(
 ) -> None:
     """Write only the camera fields the caller provided.
 
-    None means "keep source UI workflow's static value for node 583"
-    (carried over by the strip step).
+    None means "keep source UI workflow's static value for node 583".
     """
-    node = graph.get("583")
-    if not node:
-        raise KeyError("node 583 (CameraAngleNode) missing from workflow")
     if direction is not None:
-        node["inputs"]["pos_x"] = map_camera(direction=direction).pos_x
+        _set_value(graph, "583", "pos_x", map_camera(direction=direction).pos_x)
     if elevation is not None:
-        node["inputs"]["pos_y"] = map_camera(elevation=elevation).pos_y
+        _set_value(graph, "583", "pos_y", map_camera(elevation=elevation).pos_y)
     if distance is not None:
-        node["inputs"]["pos_z"] = map_camera(distance=distance).pos_z
+        _set_value(graph, "583", "pos_z", map_camera(distance=distance).pos_z)
     if roll is not None:
-        node["inputs"]["roll"] = float(roll)
+        _set_value(graph, "583", "roll", float(roll))
 
 
 def _set_camera_extra(graph: dict, extra: dict) -> None:
-    node = graph.get("585")
-    if not node:
-        raise KeyError("node 585 (CameraExtraConfigNode) missing from workflow")
     for field in CAMERA_EXTRA_FIELDS:
         if field in extra:
-            node["inputs"][field] = extra[field]
+            _set_value(graph, "585", field, extra[field])
 
 
 def _set_lora(graph: dict, lora_patch: dict) -> None:
     if "26" in graph:
-        graph["26"]["inputs"]["text"] = lora_patch["node_26"]["text"]
+        # node 26 writes the LoRA stack text.
+        _set_value(graph, "26", "text", lora_patch["node_26"]["text"])
     if "66" in graph:
-        for key, value in lora_patch["node_66"].items():
-            graph["66"]["inputs"][key] = value
+        # node 66 (TriggerWord Toggle) — only API writes supported;
+        # trigger_words is a connection, not a widget. UI workflow uses
+        # widgets_values for trigger_phrase text, but LoRA trigger words
+        # only flow through the connected string. Skip in UI mode if
+        # the source graph has no API-format inputs dict.
+        node_66 = graph["66"]
+        if isinstance(node_66.get("inputs"), dict):
+            for key, value in lora_patch["node_66"].items():
+                node_66["inputs"][key] = value
 
 
 def _apply_sampling(graph: dict, s: SamplingConfig) -> None:
-    if s.steps_first is not None:    graph["50"]["inputs"]["steps"]    = s.steps_first
-    if s.cfg is not None:            graph["50"]["inputs"]["cfg"]      = s.cfg
-    if s.sampler is not None:        graph["50"]["inputs"]["sampler"]  = s.sampler
-    if s.scheduler is not None:      graph["50"]["inputs"]["scheduler"] = s.scheduler
-    if s.denoise_first is not None:  graph["50"]["inputs"]["denoise"]  = s.denoise_first
-    if s.steps_refine is not None:   graph["51"]["inputs"]["steps"]    = s.steps_refine
-    if s.denoise_refine is not None: graph["51"]["inputs"]["denoise"]  = s.denoise_refine
+    if s.steps_first is not None:    _set_value(graph, "50", "steps",    s.steps_first)
+    if s.cfg is not None:            _set_value(graph, "50", "cfg",      s.cfg)
+    if s.sampler is not None:        _set_value(graph, "50", "sampler",  s.sampler)
+    if s.scheduler is not None:      _set_value(graph, "50", "scheduler", s.scheduler)
+    if s.denoise_first is not None:  _set_value(graph, "50", "denoise",  s.denoise_first)
+    if s.steps_refine is not None:   _set_value(graph, "51", "steps",    s.steps_refine)
+    if s.denoise_refine is not None: _set_value(graph, "51", "denoise",  s.denoise_refine)
 
 
 def _apply_seed(graph: dict, seed: int) -> None:
-    graph["65"]["inputs"]["seed"] = seed
+    _set_value(graph, "65", "seed", seed)
 
 
 def _apply_image_size(graph: dict, size: ImageSizeConfig) -> None:
     if size.width is not None:
-        graph["68"]["inputs"]["value"] = size.width
+        _set_value(graph, "68", "value", size.width)
     if size.height is not None:
-        graph["71"]["inputs"]["value"] = size.height
+        _set_value(graph, "71", "value", size.height)
 
 
 def _apply_controlnet_image(graph: dict, image_name: str) -> None:
-    graph["129"]["inputs"]["image"] = image_name
+    _set_value(graph, "129", "image", image_name)
 
 
 def _activate_img2img(graph: dict, image_name: str) -> None:
@@ -176,19 +301,6 @@ def _activate_img2img(graph: dict, image_name: str) -> None:
     graph[n.KSAMPLER]["inputs"]["denoise"] = 0.6
 
 
-def _node_static_default(graph: dict, node_id: str, field: str) -> Any:
-    """Read the workflow's static value for (node, input). Returns None if missing.
-
-    After the strip step the API graph carries the source UI workflow's
-    literal values for every node input — this is how describe_config
-    surfaces the defaults.
-    """
-    node = graph.get(node_id)
-    if not node:
-        return None
-    return node.get("inputs", {}).get(field)
-
-
 def apply_run_config(
     graph: dict[str, Any],
     *,
@@ -196,13 +308,15 @@ def apply_run_config(
     config: RunConfig,
     mcp_list_loras: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
-    """Write every tunable into the stripped API graph.
+    """Write every tunable into the graph (UI or API format).
 
     Caller supplies a RunConfig (with evidence + draft + tunables) and
-    an API graph already produced by
-    ``source_workflow.prepare_temporary_workflow``. Group enablement is
-    already baked into the graph (mode fields were applied before strip
-    removed them); this function only writes the *values*.
+    a graph produced by ``source_workflow.prepare_temporary_workflow``.
+    Format is detected automatically: UI (pre-strip, inputs=list) writes
+    to ``widgets_values``; API (post-strip, inputs=dict) writes to
+    ``inputs[name]``. Group enablement is already baked into the graph
+    (mode fields were applied before strip removed them); this function
+    only writes the *values*.
 
     Order:
     1.  Prompts (24/25) from ``config.draft`` (prompt-forge-validated).

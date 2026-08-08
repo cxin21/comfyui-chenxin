@@ -26,8 +26,7 @@ def test_rule_forward():
 
 def test_skill_data_construction():
     def fake_describe(stage): return {"stage": stage}
-    def fake_apply(graph, stage, config, **kw): pass
-    def fake_prepare(mcp, stage, g1, g2): return {}
+    def fake_prepare(mcp, stage, config=None, groups=None, **kw): return {}
 
     sd = SkillData(
         name="camera-image",
@@ -43,7 +42,6 @@ def test_skill_data_construction():
         },
         output_type="images",
         describe_fn=fake_describe,
-        apply_fn=fake_apply,
         prepare_fn=fake_prepare,
         build_config_fn=lambda envelope, **kw: {},
     )
