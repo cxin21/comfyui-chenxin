@@ -160,7 +160,7 @@ class McpBridge:
         calls = copy.deepcopy(self._calls)
         receipt = {
             "schema_version": "1.0",
-            "receipt_type": "character-video-pipeline-mcp-bridge",
+            "receipt_type": "camera-image-mcp-bridge",
             "host": copy.deepcopy(self._host),
             "tool_names": dict(sorted(self._tool_names.items())),
             "calls": calls,

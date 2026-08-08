@@ -194,7 +194,7 @@ def _make_stdio_caller(proc: subprocess.Popen, timeout: float) -> Callable[..., 
             init_id = _send("initialize", {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {},
-                "clientInfo": {"name": "character-video-pipeline", "version": "1.0"},
+                "clientInfo": {"name": "camera-image", "version": "1.0"},
             })
             _recv(init_id, deadline)
             _send("notifications/initialized", is_notification=True)

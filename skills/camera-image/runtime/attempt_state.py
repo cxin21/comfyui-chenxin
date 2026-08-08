@@ -88,7 +88,7 @@ def emit(payload: dict[str, Any] | None) -> None:
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(prog="character-video-pipeline-attempt-state")
+    parser = argparse.ArgumentParser(prog="camera-image-attempt-state")
     sub = parser.add_subparsers(dest="command", required=True)
     read = sub.add_parser("read-last", help="print the most recent attempt record")
     rec = sub.add_parser(
