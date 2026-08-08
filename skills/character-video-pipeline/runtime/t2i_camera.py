@@ -5,7 +5,7 @@ Mandatory entry point for character-video-pipeline t2i-camera. All prompt text
 ComfyUI; this module owns the prompt-forge gate as part of the run_t2i flow.
 
 Steps: prompt-forge validate -> upload controlnet_image -> health check
-       -> patch workflow -> validate -> submit -> wait -> download -> record.
+       -> source strip -> apply_run_config -> submit -> wait -> download.
 """
 
 from __future__ import annotations
@@ -20,9 +20,10 @@ from typing import Any
 
 from .attempt_state import record_attempt
 from .config_schema import RunConfig, STAGES
-from .graph_patcher import patch_graph
+from .graph_patcher import apply_run_config
 from .mcp_client import McpClient
 from .prompt_forge_bridge import compile_envelope
+from .source_workflow import prepare_temporary_workflow
 
 
 def run_t2i(
@@ -40,8 +41,7 @@ def run_t2i(
     tunables). This function:
     1. Validates prompt-forge envelope (config.evidence + config.draft)
     2. Uploads config.controlnet_image if provided (and group enabled)
-    3. Calls patch_graph to build the graph
-    4. Validates + submits + polls + downloads via McpClient
+    3. Source-strip -> apply_run_config -> validate -> submit -> wait -> download
 
     The prompt-forge gate is strict: if prompt-forge rejects the draft or
     marks it not-ready, the run aborts loud. There is no silent fallback.
@@ -66,7 +66,7 @@ def run_t2i(
             if not uploaded_controlnet:
                 raise RuntimeError(f"controlnet image upload failed: {upload_result}")
 
-        # Step 3: health + patch + validate + submit + wait + download.
+        # Step 3: health + source-strip + apply_run_config + validate + submit.
         health = mcp.health()
         if isinstance(health, dict) and isinstance(health.get("queue"), dict):
             q = health["queue"]
@@ -75,13 +75,19 @@ def run_t2i(
             if running or pending:
                 raise RuntimeError(f"ComfyUI queue not idle (running={running}, pending={pending})")
 
-        # If controlnet was uploaded, override the config's controlnet_image
-        # with the post-upload filename.
         patch_config = config
         if uploaded_controlnet and uploaded_controlnet != config.controlnet_image:
             patch_config = replace(config, controlnet_image=uploaded_controlnet)
 
-        graph = patch_graph(
+        graph = prepare_temporary_workflow(
+            mcp,
+            stage=STAGES.T2I,
+            user_g1=list(patch_config.groups.g1) if patch_config.groups else None,
+            user_g2=list(patch_config.groups.g2) if patch_config.groups else None,
+        )
+
+        apply_run_config(
+            graph,
             stage=STAGES.T2I,
             config=patch_config,
             mcp_list_loras=mcp.list_loras if patch_config.lora else None,
@@ -145,12 +151,7 @@ def run_t2i(
 
 
 def _wait_for_completion(mcp: McpClient, prompt_id: str, timeout: float, poll: float) -> dict:
-    """Poll get_history until the prompt succeeds or fails.
-
-    Supports both response formats:
-    - dict (raw ComfyUI /history payload, when JSON-parseable)
-    - text (formatted markdown, when get_history returns text)
-    """
+    """Poll get_history until the prompt succeeds or fails."""
     import re
     deadline = time.monotonic() + timeout
     while True:
@@ -166,15 +167,6 @@ def _wait_for_completion(mcp: McpClient, prompt_id: str, timeout: float, poll: f
 
 
 def _parse_history(history: object, prompt_id: str) -> tuple[dict | None, str | None, str]:
-    """Extract (entry, status_str, error_detail) from dict or text history.
-
-    Accepts three shapes from McpClient.get_history:
-    1. dict keyed by prompt_id (raw ComfyUI /history payload)
-    2. dict keyed by a markdown heading like '## Execution: <prompt_id>'
-       whose value is a list of text lines — joined into the text path
-    3. str — already-formatted markdown
-    """
-    import re
     if isinstance(history, dict):
         if prompt_id in history:
             entry = history[prompt_id]
@@ -188,8 +180,6 @@ def _parse_history(history: object, prompt_id: str) -> tuple[dict | None, str | 
                         info = m[1] if isinstance(m[1], dict) else {}
                         error_detail = f"node {info.get('node_id')}: {info.get('exception_message')}"
             return entry, status_str, error_detail
-        # Fallback: dict whose key carries the prompt_id (e.g. "## Execution: <id>")
-        # and whose value is a list of text lines.
         for key, value in history.items():
             if isinstance(key, str) and key.endswith(prompt_id) and isinstance(value, list):
                 joined = "\n".join(str(line) for line in value)
@@ -204,8 +194,6 @@ def _parse_history(history: object, prompt_id: str) -> tuple[dict | None, str | 
 
 
 def _parse_history_text(text: str, prompt_id: str) -> tuple[dict | None, str | None, str]:
-    """Parse the markdown text format used by ComfyUI /history dumps."""
-    import re
     if "No history found" in text:
         return None, None, ""
     m = re.search(r"\*\*Status\*\*:\s*(\w+)", text)

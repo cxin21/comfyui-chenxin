@@ -111,6 +111,26 @@ class McpClient:
     def upload_image(self, source_path: str) -> Any:
         return self._call("upload_image", {"source_path": source_path})
 
+    def save_workflow(self, filename: str, workflow: dict) -> Any:
+        """Upload a workflow JSON to the ComfyUI user library.
+
+        Used by ``source_workflow.prepare_temporary_workflow`` to hand a
+        UI workflow (with G1/G2 mode adjustments) to the ComfyUI server
+        so ``strip_workflow`` can read it server-side.
+        """
+        return self._call("save_workflow", {
+            "filename": filename,
+            "workflow": workflow,
+        })
+
+    def strip_workflow(self, *, path: str, format: str = "api") -> Any:
+        """Convert a server-side workflow file to API format.
+
+        Path is server-side (ComfyUI user library). Returned value is the
+        API-format workflow dict ready for further patching or enqueue.
+        """
+        return self._call("strip_workflow", {"path": path, "format": format})
+
     def health(self) -> Any:
         return self._call("health_check", {})
 

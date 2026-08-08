@@ -4,8 +4,9 @@ Public API:
 - prompt_forge_bridge.compile_envelope                        -- prompt-forge gate
 - t2i_camera.run_t2i                                          -- text-to-image
 - i2i_camera.run_i2i                                          -- image-to-image
-- graph_patcher.patch_graph / describe_config                 -- workflow patch
-- graph_patcher.NODE_FIELD_MAP                                 -- single source
+- source_workflow.prepare_temporary_workflow                  -- source UI -> API strip
+- graph_patcher.apply_run_config / describe_config            -- tunables
+- graph_patcher.NODE_FIELD_MAP                                -- single source
 - config_schema                                               -- dataclasses + constants
     RunConfig, SamplingConfig, ImageSizeConfig, GroupsConfig, CameraConfig
     STAGES, GROUPS, MANDATORY_GROUPS_BY_STAGE, WORKFLOW_CONVENTIONS
@@ -15,8 +16,6 @@ Public API:
   default_lora_plan / render_stack_text / build_lora_patch   -- LoRA discovery
 - camera_mapper.map_camera / validate_camera_extra /
   CAMERA_EXTRA_FIELDS                                         -- camera coords
-- group_controller.apply_group_modes / MODE_ACTIVE / MODE_BYPASS -- group control
-- workflow_loader.load_workflow / load_groups / list_group_titles
 - mcp_client.McpClient / McpClient.from_subprocess            -- MCP bridge
 - attempt_state.record_attempt                                -- attempt log
 
@@ -28,6 +27,10 @@ backwards-compat kwargs).
 
 The prompt-forge gate is strict: there is no silent fallback. If prompt-forge
 rejects a draft or marks it not-ready, the run aborts loud.
+
+Workflow assembly (2026-08-08): the source UI workflow at
+workflow/source/文生图相机视角.json is the single source of truth. Every
+run strips a fresh copy via MCP after applying G1/G2 mode changes.
 """
 
 from .attempt_state import record_attempt
@@ -48,8 +51,7 @@ from .config_schema import (
     RunConfig,
     SamplingConfig,
 )
-from .graph_patcher import NODE_FIELD_MAP, describe_config, patch_graph
-from .group_controller import MODE_ACTIVE, MODE_BYPASS, apply_group_modes
+from .graph_patcher import NODE_FIELD_MAP, apply_run_config, describe_config
 from .lora_resolver import (
     build_lora_patch,
     default_lora_plan,
@@ -59,7 +61,11 @@ from .lora_resolver import (
 )
 from .mcp_client import McpClient, McpClientError
 from .prompt_forge_bridge import compile_envelope
-from .workflow_loader import list_group_titles, load_groups, load_workflow
+from .source_workflow import (
+    SOURCE_WORKFLOW_PATH,
+    compute_enabled_groups,
+    prepare_temporary_workflow,
+)
 
 # Functions that produce images (the only paths to call sites in user code).
 from .t2i_camera import run_t2i
@@ -76,28 +82,25 @@ __all__ = [
     "I2I_NODES",
     "ImageSizeConfig",
     "MANDATORY_GROUPS_BY_STAGE",
-    "MODE_ACTIVE",
-    "MODE_BYPASS",
     "McpClient",
     "McpClientError",
     "NODE_FIELD_MAP",
     "REFERENCE_IMAGE_NODE",
     "RunConfig",
+    "SOURCE_WORKFLOW_PATH",
     "STAGES",
     "SamplingConfig",
     "WORKFLOW_CONVENTIONS",
-    "apply_group_modes",
+    "apply_run_config",
     "build_lora_patch",
     "compile_envelope",
+    "compute_enabled_groups",
     "default_lora_plan",
     "describe_config",
     "filter_anima_loras",
-    "list_group_titles",
-    "load_groups",
-    "load_workflow",
     "map_camera",
     "parse_lora_inventory",
-    "patch_graph",
+    "prepare_temporary_workflow",
     "record_attempt",
     "render_stack_text",
     "run_i2i",
