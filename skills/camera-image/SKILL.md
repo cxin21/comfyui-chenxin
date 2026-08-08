@@ -76,6 +76,18 @@ Every `run_skill` call walks the same flow. The engine in `skills/_mcp/src/comfy
 6. download            - pull first image from history entry; sha256 + bytes
 ```
 
+**Which steps are user-facing MCP tools?** Only three of the four unified MCP tools touch this flow directly:
+
+| MCP tool | What it covers |
+|----------|----------------|
+| `describe_config(skill, stage)` | returns the schema for a stage (slot names, enums, defaults) |
+| `validate_config(skill, stage, config)` | dry-run the dependency rules + envelope shape check before committing a render |
+| `run_skill(skill, stage, envelope, config, output_dir?)` | encapsulates steps 4-6 (`prepare_fn` + enqueue + wait + download) plus the engine's preflight (steps 1-3) |
+
+Steps 1 (`compile_envelope`) and 4 (`prepare_fn`) are **engine internals** that `run_skill` invokes; they are not separate user-facing tools. The diagram above is the engine's internal call order, not a recipe the user follows manually.
+
+**`validate_config` vs `build_config_fn` shape mismatch.** `validate_config` takes the **dict** shape a user passes to `run_skill` (i.e. `{"evidence": ..., "draft": ..., "groups": ..., "camera": ..., ...}`). It does NOT accept a `RunConfig` dataclass. The engine's `build_config_fn` (the `SkillData.build_config_fn` function pointer) converts `(envelope, **config_dict)` into a `RunConfig` object internally; that conversion happens inside `run_skill` (see `skills/_mcp/src/comfyui_chenxin_mcp/server.py:run`). A user who wants to `validate_config` a config must pass the same dict they would pass to `run_skill` — NOT the `RunConfig` produced by `build_config_fn`.
+
 The `prepare_fn` step is the single execution-side entry point. It owns the complete UI→API transformation: it writes tunables to the **complete UI workflow** (before upload) and applies mode toggles, then ComfyUI's strip step lifts every widget value into the API dict. The engine never patches the stripped API graph separately — the API graph returned by `prepare_fn` already carries every tunable.
 
 `apply_run_config` (in `runtime/graph_patcher.py`) is format-aware: it detects UI vs API by the shape of `graph[node_id]["inputs"]` (list = UI, dict = API) and writes to `widgets_values[index]` or `inputs[name]` accordingly. The UI→API mapping is hardcoded in `_UI_WIDGET_INDEX` against `workflow/source/文生图相机视角.json`.
