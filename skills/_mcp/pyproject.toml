@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "comfyui-chenxin-mcp"
+version = "0.1.0"
+description = "MCP server exposing comfyui-chenxin plugin skills (camera-image, camera-multiview, camera-video, etc.)"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+comfyui-chenxin-mcp-server = "comfyui_chenxin_mcp.server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
