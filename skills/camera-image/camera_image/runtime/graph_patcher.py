@@ -7,7 +7,7 @@ tunable into the API graph produced by ``source_workflow.prepare_temporary_workf
 The caller (t2i_camera.run_t2i / i2i_camera.run_i2i) is responsible for:
 1.  Running the prompt-forge gate on ``config.draft``.
 2.  Uploading ``config.reference_image`` / ``config.controlnet_image``.
-3.  Calling ``source_workflow.prepare_temporary_workflow(mcp, stage=..., user_g1=..., user_g2=...)``
+3.  Calling ``source_workflow.prepare_temporary_workflow(mcp, stage=..., groups=...)``
     to obtain a stripped API graph.
 4.  Calling ``apply_run_config(graph, config, mcp_list_loras=...)`` to
     write the tunable values.
@@ -217,11 +217,7 @@ def apply_run_config(
     8.  i2i activation (after group validation so the upload path is
         enforced).
     """
-    enabled_g1, _ = compute_enabled_groups(
-        stage,
-        list(config.groups.g1) if config.groups and config.groups.g1 else None,
-        list(config.groups.g2) if config.groups and config.groups.g2 else None,
-    )
+    enabled_g1, _ = compute_enabled_groups(stage, config.groups)
 
     # 1. Prompts.
     _set_prompt(graph, "24", config.draft["positive"].strip())

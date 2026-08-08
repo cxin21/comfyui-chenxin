@@ -71,12 +71,7 @@ def run_skill(
                 raise RuntimeError(f"ComfyUI queue not idle (running={len(q.get('running', []))}, pending={len(q.get('pending', []))})")
 
         # Step 4: prepare temp workflow.
-        graph = skill_data.prepare_fn(
-            mcp,
-            stage=stage,
-            user_g1=list(patch_config.groups.g1) if patch_config.groups and patch_config.groups.g1 else None,
-            user_g2=list(patch_config.groups.g2) if patch_config.groups and patch_config.groups.g2 else None,
-        )
+        graph = skill_data.prepare_fn(mcp, stage=stage, groups=patch_config.groups)
 
         # Step 5: apply run config.
         skill_data.apply_fn(

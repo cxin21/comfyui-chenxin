@@ -179,7 +179,31 @@ See `skills/_mcp/README.md` for install + tool catalog.
 | `seed` | `RunConfig.seed` | node 65 |
 | `image_size.width` / `image_size.height` | `ImageSizeConfig` | node 68 / 71 |
 | `controlnet_image` | `RunConfig.controlnet_image` | node 129（仅 ControlNet LLLite 组启用时） |
+| `groups.g1` / `groups.g2` | `GroupsConfig | None` | passed through to `prepare_temporary_workflow` |
 
-CLI 入口通过 `runtime_cli.py` 的 `CONFIG_FLAGS` 表 + `_add_flags_to_parser` 自动生成（`--sampling-steps-first`、`--seed`、`--image-size`、`--controlnet-image` 等）。
+CLI 入口 (`runtime_cli.py`) 在 v2 重构中已删除。配置入口由 `comfyui-chenxin-mcp` 的 4 个统一工具统一接管。
 
 `describe-config` helper 输出 workflow-bound 配置表（含 default），与 `NODE_FIELD_MAP` 单源同步。
+
+## 调用方式（v2）
+
+通过 `comfyui-chenxin-mcp` 暴露的 4 个统一工具调用本 skill（详见 `skills/_mcp/README.md`）：
+
+- `list_skills()` → 列出所有已安装 skill（含 `camera-image`）
+- `describe_config(skill="camera-image", stage="t2i-camera")` → 返回该 stage 的完整配置 schema
+- `validate_config(skill, stage, config)` → 校验配置合法性
+- `run_skill(skill, stage, envelope, config)` → 执行；envelope 含 evidence/draft，config 是 RunConfig 字段
+
+`config.groups` 是 `GroupsConfig | None`（`g1`/`g2` 都是可选列表字段）。
+直接传 `config.groups` 给 `prepare_temporary_workflow` / `compute_enabled_groups` —— 函数内部统一处理 None，调用方无需 `list()` 防御。
+
+## Runtime 边界（v2 重构后）
+
+v2 删除了以下文件，统一由 `comfyui_chenxin_mcp.engine` 接管：
+- `runtime/schema.py`（被 `engine/describe.py` + `engine/validate.py` 替代）
+- `runtime/mcp_bridge.py`（每个 skill 不再注册自己的工具）
+- `runtime/t2i_camera.py` + `runtime/i2i_camera.py`（执行逻辑合并到 `engine/execute.py`）
+- `runtime/validators.py`（被 `engine/validate.py` 声明式 Rule 替代）
+- `runtime/runtime_cli.py`（CLI 入口删除，统一通过 MCP 工具调用）
+
+skill 通过 setuptools entry-point（`comfyui_chenxin_mcp.skills`）提供 `skill_data.get_skill_data()` 返回 `SkillData` 数据契约（含 `prepare_fn` / `apply_fn` / `describe_fn` / `build_config_fn` 函数指针）。

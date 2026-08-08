@@ -28,6 +28,7 @@ from typing import Any
 from .config_schema import (
     DEFAULT_ENABLED_G1,
     DEFAULT_ENABLED_G2,
+    GroupsConfig,
     MANDATORY_GROUPS_BY_STAGE,
     STAGES,
 )
@@ -82,16 +83,19 @@ def _load_groups(stage: str) -> dict[str, Any]:
 
 def compute_enabled_groups(
     stage: str,
-    user_g1: list[str] | None,
-    user_g2: list[str] | None,
+    groups: GroupsConfig | None = None,
 ) -> tuple[set[str], set[str]]:
     """Compute the final enabled G1/G2 titles for this run.
 
     Union: defaults + user + stage-mandatory. User cannot disable
-    defaults (per spec).
+    defaults (per spec). Accepts ``GroupsConfig | None`` directly and
+    handles every None case internally so callers do not need
+    defensive ``list()`` conversions.
     """
-    final_g1: set[str] = set(user_g1 or []) | set(DEFAULT_ENABLED_G1)
-    final_g2: set[str] = set(user_g2 or []) | set(DEFAULT_ENABLED_G2)
+    user_g1 = list(groups.g1) if groups and groups.g1 else []
+    user_g2 = list(groups.g2) if groups and groups.g2 else []
+    final_g1: set[str] = set(user_g1) | set(DEFAULT_ENABLED_G1)
+    final_g2: set[str] = set(user_g2) | set(DEFAULT_ENABLED_G2)
     for mandatory in MANDATORY_GROUPS_BY_STAGE.get(stage, []):
         final_g1.add(mandatory)
     return final_g1, final_g2
@@ -143,8 +147,7 @@ def prepare_temporary_workflow(
     mcp: Any,
     *,
     stage: str = STAGES.T2I,
-    user_g1: list[str] | None = None,
-    user_g2: list[str] | None = None,
+    groups: GroupsConfig | None = None,
 ) -> dict[str, Any]:
     """Build an API graph for the run via temp file + MCP strip.
 
@@ -160,10 +163,13 @@ def prepare_temporary_workflow(
 
     The returned dict has no ``mode`` fields (strip removed them) and
     is ready for the patcher's tunables step.
+
+    Accepts ``GroupsConfig | None`` directly; passes it through to
+    ``compute_enabled_groups`` which handles every None case.
     """
     ui = _load_source_ui()
     groups_meta = _load_groups(stage)
-    enabled_g1, enabled_g2 = compute_enabled_groups(stage, user_g1, user_g2)
+    enabled_g1, enabled_g2 = compute_enabled_groups(stage, groups)
     _apply_modes_to_ui(ui, enabled_g1, enabled_g2, groups_meta)
 
     fd, temp_path = tempfile.mkstemp(prefix="temp_", suffix=".json")

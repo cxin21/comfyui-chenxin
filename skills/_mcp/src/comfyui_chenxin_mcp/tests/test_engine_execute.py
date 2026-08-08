@@ -48,7 +48,7 @@ def _skill_data():
         output_type="images",
         describe_fn=lambda stage: {},
         apply_fn=lambda graph, stage, config, **kw: None,
-        prepare_fn=lambda mcp, stage, user_g1, user_g2: {"nodes": [], "links": []},
+        prepare_fn=lambda mcp, stage, groups: {"nodes": [], "links": []},
         build_config_fn=lambda envelope, **kw: _config(),
     )
 
@@ -62,13 +62,14 @@ def _config(stage="t2i-camera", **overrides):
     for k in ("evidence", "draft", "dialect_id"):
         if k in overrides:
             envelope[k] = overrides.pop(k)
+    groups_override = overrides.get("groups")
     return _TestConfig(
         evidence=envelope["evidence"],
         draft=envelope["draft"],
         dialect_id=envelope["dialect_id"],
         reference_image=overrides.get("reference_image"),
         controlnet_image=overrides.get("controlnet_image"),
-        groups=_TestGroups() if overrides.get("groups") else None,
+        groups=_TestGroups(**groups_override) if isinstance(groups_override, dict) else (groups_override if groups_override else None),
         lora=overrides.get("lora"),
     )
 
@@ -153,8 +154,8 @@ def test_run_skill_calls_prepare_and_apply(mock_compile, tmp_path):
     prepare_called = []
     apply_called = []
 
-    def track_prepare(m, stage, user_g1, user_g2):
-        prepare_called.append((stage, user_g1, user_g2))
+    def track_prepare(m, stage, groups):
+        prepare_called.append((stage, groups))
         return {"nodes": [], "links": []}
 
     def track_apply(graph, stage, config, **kw):
@@ -172,4 +173,33 @@ def test_run_skill_calls_prepare_and_apply(mock_compile, tmp_path):
               output_dir=tmp_path, timeout=5.0, poll_interval=0.1)
     assert len(prepare_called) == 1
     assert prepare_called[0][0] == "t2i-camera"
+    assert prepare_called[0][1] is None  # groups=None when not provided
     assert len(apply_called) == 1
+
+
+@patch("comfyui_chenxin_mcp.engine.prompt_forge.compile_envelope",
+       return_value={"quality": {}, "warnings": []})
+def test_run_skill_passes_groups_g2_none_to_prepare(mock_compile, tmp_path):
+    """Regression: previously crashed at list(None) when groups.g1 set but g2=None."""
+    sd = _skill_data()
+    config = _config(groups={"g1": ["移除背景（G1）"], "g2": None})
+    mcp = _mock_mcp()
+    prepare_called = []
+
+    def track_prepare(m, stage, groups):
+        prepare_called.append((stage, groups))
+        return {"nodes": [], "links": []}
+
+    sd = SkillData(
+        name=sd.name, stages=sd.stages, source_workflow_path=sd.source_workflow_path,
+        groups_dir_pattern=sd.groups_dir_pattern, field_map=sd.field_map,
+        dependency_rules=sd.dependency_rules, stage_images=sd.stage_images,
+        output_type=sd.output_type, describe_fn=sd.describe_fn,
+        apply_fn=sd.apply_fn, prepare_fn=track_prepare,
+        build_config_fn=sd.build_config_fn,
+    )
+    payload, code = run_skill(mcp=mcp, skill_data=sd, stage="t2i-camera", config=config,
+                              output_dir=tmp_path, timeout=5.0, poll_interval=0.1)
+    assert code == 0
+    assert prepare_called[0][1].g1 == ["移除背景（G1）"]
+    assert prepare_called[0][1].g2 is None

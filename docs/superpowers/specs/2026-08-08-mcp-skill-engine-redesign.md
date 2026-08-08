@@ -96,7 +96,7 @@ class SkillData:
     output_type: str                   # "images" | "videos"
     describe_fn: Callable[..., dict]   # skill's own describe_config(stage) -> dict
     apply_fn: Callable[..., None]      # skill's own apply_run_config(graph, stage, config, **kwargs)
-    prepare_fn: Callable[..., dict]    # skill's own prepare_temporary_workflow(mcp, stage, user_g1, user_g2) -> graph
+    prepare_fn: Callable[..., dict]    # skill's own prepare_temporary_workflow(mcp, stage, groups) -> graph
     dialect_id: str = "anima"          # prompt-forge dialect
 ```
 
@@ -115,7 +115,7 @@ The extracted + unified version of `t2i_camera.run_t2i` / `i2i_camera.run_i2i`. 
 1. `compile_envelope(config.evidence, config.draft, skill_data.dialect_id)` -- prompt-forge gate
 2. Upload `stage_images[stage]` images (required first, optional if provided)
 3. `mcp.health()` -- check ComfyUI queue is idle
-4. `skill_data.prepare_fn(mcp, stage, user_g1, user_g2)` -- copy source + patch groups + upload temp + get API graph
+4. `skill_data.prepare_fn(mcp, stage, groups)` -- copy source + patch groups + upload temp + get API graph
 5. `skill_data.apply_fn(graph, stage, config, ...)` -- write tunables to graph nodes
 6. `mcp.validate_workflow(graph)` + `mcp.check_runtime(graph)`
 7. `mcp.enqueue(graph)` -- submit to ComfyUI
@@ -173,7 +173,7 @@ LLM host
         1. compile_envelope(evidence, draft, dialect_id)
         2. upload stage_images (reference, controlnet)
         3. mcp.health()
-        4. skill_data.prepare_fn(mcp, stage, g1, g2)
+        4. skill_data.prepare_fn(mcp, stage, groups)
         5. skill_data.apply_fn(graph, stage, config)
         6. mcp.validate_workflow + check_runtime
         7. mcp.enqueue(graph)
@@ -241,3 +241,22 @@ The plan sequences work so tests pass at each step, but each step writes clean n
 8. Are tests specified? Yes -- engine unit tests + skill data tests + smoke test.
 9. Is error handling complete? Yes -- unknown skill/stage, validation, execution, prompt-forge, queue, download.
 10. Is the scope bounded? Yes -- multiview/video implementation is out of scope.
+
+## Post-merge fix: groups handling accepts `GroupsConfig | None`
+
+**Date:** 2026-08-08 (post-v2-merge)
+
+Initial v2 callers did `list(patch_config.groups.g1) if patch_config.groups and patch_config.groups.g1 else None`. When `groups` was set but `g2=None`, the `list(None)` raised `TypeError`. Two defensive patches were added to `engine/execute.py:77-78` and `graph_patcher.py:222-223`.
+
+Virgin rewrite removed both patches by changing the function signatures:
+
+- `compute_enabled_groups(stage, groups: GroupsConfig | None = None)` -- extracts `user_g1`/`user_g2` internally.
+- `prepare_temporary_workflow(mcp, *, stage, groups: GroupsConfig | None = None)` -- passes through.
+
+Callers now just pass `config.groups` (or `patch_config.groups`). Single source of None handling.
+
+Tests added:
+- `test_compute_enabled_groups_with_none_groups` -- groups=None → defaults only.
+- `test_compute_enabled_groups_with_groups_g2_none` -- regression test for the `list(None)` crash.
+- `test_compute_enabled_groups_with_full_groups` -- both g1 and g2 set.
+- `test_run_skill_passes_groups_g2_none_to_prepare` -- engine-level regression.

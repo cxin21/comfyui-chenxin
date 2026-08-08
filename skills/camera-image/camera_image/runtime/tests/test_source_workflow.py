@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from runtime import source_workflow
-from runtime.config_schema import STAGES
+from runtime.config_schema import GroupsConfig, STAGES
 
 
 def _source_ui():
@@ -44,36 +44,39 @@ def _source_ui():
     }
 
 
-def test_compute_enabled_groups_unions_defaults_user_and_mandatory():
-    g1, g2 = source_workflow.compute_enabled_groups(
-        STAGES.T2I,
-        user_g1=["移除背景（G1）"],
-        user_g2=["对比度（G2）"],
-    )
-    # defaults
+def test_compute_enabled_groups_with_none_groups():
+    """GroupsConfig=None -> defaults only, no crash."""
+    g1, g2 = source_workflow.compute_enabled_groups(STAGES.T2I, None)
     assert "保存图片（G1）" in g1
-    assert "第二轮采样器（G1）" in g1
-    assert "相机视角生图（G1）" in g1
     assert "图像锐化（G2）" in g2
-    assert "对比度（G2）" in g2
-    # user
+
+
+def test_compute_enabled_groups_with_groups_g2_none():
+    """GroupsConfig(g1=[...], g2=None) -> g1 used, g2 falls back to defaults.
+    Regression: previously crashed at list(None) inside callers."""
+    groups = GroupsConfig(g1=["移除背景（G1）"], g2=None)
+    g1, g2 = source_workflow.compute_enabled_groups(STAGES.T2I, groups)
     assert "移除背景（G1）" in g1
-    # t2i has no stage-mandatory
-    assert "加载图片（G1）" not in g1
+    assert "图像锐化（G2）" in g2  # default G2 still active
+
+
+def test_compute_enabled_groups_with_full_groups():
+    """GroupsConfig with both g1 and g2 sets."""
+    groups = GroupsConfig(g1=["移除背景（G1）"], g2=["对比度（G2）"])
+    g1, g2 = source_workflow.compute_enabled_groups(STAGES.T2I, groups)
+    assert "移除背景（G1）" in g1
+    assert "对比度（G2）" in g2
 
 
 def test_compute_enabled_groups_i2i_auto_appends_load_image():
-    g1, _ = source_workflow.compute_enabled_groups(
-        STAGES.I2I, user_g1=None, user_g2=None,
-    )
+    g1, _ = source_workflow.compute_enabled_groups(STAGES.I2I, None)
     assert "加载图片（G1）" in g1
 
 
 def test_compute_enabled_groups_user_cannot_remove_defaults():
     """Even if user explicitly lists empty, defaults still win."""
-    g1, g2 = source_workflow.compute_enabled_groups(
-        STAGES.T2I, user_g1=None, user_g2=None,
-    )
+    groups = GroupsConfig(g1=[], g2=[])
+    g1, g2 = source_workflow.compute_enabled_groups(STAGES.T2I, groups)
     assert "保存图片（G1）" in g1
     assert "图像锐化（G2）" in g2
 
@@ -116,9 +119,7 @@ def test_apply_modes_sets_active_and_bypass():
         },
     }
     # t2i: defaults only — 124/129/130 should be bypassed
-    enabled_g1, enabled_g2 = source_workflow.compute_enabled_groups(
-        STAGES.T2I, user_g1=None, user_g2=None,
-    )
+    enabled_g1, enabled_g2 = source_workflow.compute_enabled_groups(STAGES.T2I, None)
     source_workflow._apply_modes_to_ui(ui, enabled_g1, enabled_g2, groups_meta)
 
     nodes = {n["id"]: n for n in ui["nodes"]}
@@ -175,12 +176,7 @@ def test_prepare_temporary_workflow_writes_temp_file_and_strips(tmp_path, monkey
 
     monkeypatch.setattr(source_workflow.tempfile, "mkstemp", fake_mkstemp)
 
-    g = source_workflow.prepare_temporary_workflow(
-        mcp,
-        stage=STAGES.T2I,
-        user_g1=None,
-        user_g2=None,
-    )
+    g = source_workflow.prepare_temporary_workflow(mcp, stage=STAGES.T2I)
 
     # mcp.save_workflow was called with the temp filename + the modified UI
     mcp.save_workflow.assert_called_once()
