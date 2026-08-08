@@ -1,13 +1,7 @@
-"""Tests for skill discovery via Python entry-points.
-
-Adaptation note: The plan template set ``m.select = fake_eps`` directly on the
-mock, but ``patch`` replaces the ``entry_points`` *function* — the impl calls
-``entry_points()`` first (returning ``m.return_value``), then
-``.select(group=...)`` on that.  We therefore set ``m.return_value.select``
-and use ``group`` as the parameter name to match the real call signature.
-"""
+"""Registry tests - entry-point discovery returns SkillData."""
 from unittest.mock import patch
-from comfyui_chenxin_mcp.registry import discover, SkillRegistration
+from comfyui_chenxin_mcp.registry import discover_skills
+from comfyui_chenxin_mcp.engine.skill_data import SkillData
 
 
 class FakeEntryPoint:
@@ -18,29 +12,35 @@ class FakeEntryPoint:
         return self._fn
 
 
-def fake_eps(group=None):
-    def register(mcp): pass
-    register.SKILL_INFO = SkillRegistration(
-        name="camera-image", label="X", description="t2i/i2i",
-        stages=("t2i-camera", "i2i-camera"), register_fn=register,
+def _fake_skill_data(name="camera-image"):
+    return SkillData(
+        name=name,
+        stages=("t2i-camera", "i2i-camera"),
+        source_workflow_path="workflow/source/test.json",
+        groups_dir_pattern="workflow/{stage}/groups.json",
+        field_map={},
+        dependency_rules=(),
+        stage_images={},
+        output_type="images",
+        describe_fn=lambda stage: {},
+        apply_fn=lambda graph, stage, config, **kw: None,
+        prepare_fn=lambda mcp, stage, g1, g2: {},
     )
-    return [FakeEntryPoint("camera-image", register)]
 
 
-def test_discover_picks_up_entry_points():
+def test_discover_returns_skill_data_list():
+    def get_skill_data():
+        return _fake_skill_data()
     with patch("comfyui_chenxin_mcp.registry.importlib.metadata.entry_points") as m:
-        m.return_value.select = fake_eps
-        regs = discover()
-    assert any(r.name == "camera-image" for r in regs)
+        m.return_value.select = lambda group: [FakeEntryPoint("camera-image", get_skill_data)]
+        skills = discover_skills()
+    assert len(skills) == 1
+    assert isinstance(skills[0], SkillData)
+    assert skills[0].name == "camera-image"
 
 
-def test_discover_auto_derives_metadata_when_skill_info_missing():
-    def register(mcp):
-        """t2i-camera and i2i-camera skill bridge."""
-        pass
+def test_discover_empty_when_no_skills():
     with patch("comfyui_chenxin_mcp.registry.importlib.metadata.entry_points") as m:
-        m.return_value.select = lambda group=None: [FakeEntryPoint("auto-skill", register)]
-        regs = discover()
-    assert regs[0].name == "auto-skill"
-    assert "t2i-camera" in regs[0].description  # derived from docstring first line
-    assert regs[0].stages == ()
+        m.return_value.select = lambda group: []
+        skills = discover_skills()
+    assert skills == []
