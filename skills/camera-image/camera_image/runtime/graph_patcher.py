@@ -219,8 +219,8 @@ def apply_run_config(
     """
     enabled_g1, _ = compute_enabled_groups(
         stage,
-        list(config.groups.g1) if config.groups else None,
-        list(config.groups.g2) if config.groups else None,
+        list(config.groups.g1) if config.groups and config.groups.g1 else None,
+        list(config.groups.g2) if config.groups and config.groups.g2 else None,
     )
 
     # 1. Prompts.
