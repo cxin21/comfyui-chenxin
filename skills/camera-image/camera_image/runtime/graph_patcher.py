@@ -240,19 +240,43 @@ def _set_camera_extra(graph: dict, extra: dict) -> None:
 
 
 def _set_lora(graph: dict, lora_patch: dict) -> None:
-    if "26" in graph:
-        # node 26 writes the LoRA stack text.
+    # Use _get_node (format-aware) instead of "26" in graph —
+    # UI format has nodes in a list, not keyed by id.
+    node_26 = _get_node(graph, "26")
+    if node_26 is not None:
+        # 1. Stack text (widgets_values[1] in UI; inputs["text"] in API).
         _set_value(graph, "26", "text", lora_patch["node_26"]["text"])
-    if "66" in graph:
-        # node 66 (TriggerWord Toggle) — only API writes supported;
-        # trigger_words is a connection, not a widget. UI workflow uses
-        # widgets_values for trigger_phrase text, but LoRA trigger words
-        # only flow through the connected string. Skip in UI mode if
-        # the source graph has no API-format inputs dict.
-        node_66 = graph["66"]
-        if isinstance(node_66.get("inputs"), dict):
-            for key, value in lora_patch["node_66"].items():
-                node_66["inputs"][key] = value
+        # 2. LoRA list (widgets_values[2] in UI). ComfyUI's strip step reads
+        # widget slot 2 to populate the API graph; the text-only write above
+        # leaves the default 3-LoRA list in place and the strip falls back
+        # to the source literal. Write the per-LoRA objects that LoraManager
+        # expects so the strip lifts the custom selection.
+        widgets = node_26.get("widgets_values")
+        if isinstance(widgets, list) and len(widgets) >= 3:
+            widgets[2] = [_lora_widget_object(sel) for sel in lora_patch.get("selections", [])]
+    node_66 = _get_node(graph, "66")
+    if node_66 is not None and isinstance(node_66.get("inputs"), dict):
+        for key, value in lora_patch["node_66"].items():
+            node_66["inputs"][key] = value
+
+
+def _lora_widget_object(sel: dict) -> dict:
+    """Map a RunConfig lora selection dict to the LoraManager widget object.
+
+    Required keys (LoraManager reads these on widget deserialize):
+    name, strength, active, expanded, clipStrength, selected, locked.
+    Defaults match the source workflow's literal entries in
+    `workflow/source/文生图相机视角.json`.
+    """
+    return {
+        "name": sel["name"],
+        "strength": sel.get("strength_model", 1.0),
+        "active": sel.get("active", True),
+        "expanded": False,
+        "clipStrength": sel.get("strength_clip", 1.0),
+        "selected": False,
+        "locked": False,
+    }
 
 
 def _apply_sampling(graph: dict, s: SamplingConfig) -> None:
@@ -349,13 +373,16 @@ def apply_run_config(
     if config.camera_extra:
         _set_camera_extra(graph, validate_camera_extra(config.camera_extra))
 
-    # 3. LoRA.
-    if config.lora is not None:
-        lora_patch = build_lora_patch(
-            run_config_lora=config.lora,
-            mcp_list_loras=mcp_list_loras,
-        )
-        _set_lora(graph, lora_patch)
+    # 3. LoRA. Always patch — even when no custom selection is provided,
+    # the source workflow's literal widgets_values[2] may differ from the
+    # resolver's default plan. The strip step reads widgets_values[2] (the
+    # list, not the text), so we write the resolver's selection explicitly
+    # to keep the lifted API graph in sync with the patcher's intent.
+    lora_patch = build_lora_patch(
+        run_config_lora=config.lora,
+        mcp_list_loras=mcp_list_loras,
+    )
+    _set_lora(graph, lora_patch)
 
     # 4. Sampling / seed / image_size.
     if config.sampling:
