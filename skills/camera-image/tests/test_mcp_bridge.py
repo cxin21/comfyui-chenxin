@@ -5,8 +5,6 @@ are thin glue: they marshal arguments, call the appropriate ``runtime.*``
 function, and return the result. External dependencies (McpClient subprocess,
 runtime execution) are mocked; assertions target the bridge's dispatch logic.
 """
-import json
-
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -89,8 +87,6 @@ async def test_run_t2i_camera_calls_runtime_run_t2i():
     assert out["exit_code"] == 0
     assert out["payload"]["accepted"] is True
     rt.assert_called_once()
-    # Verify the patched _spawn_mcp was used as context manager.
-    fake_mcp.list_loras  # touch - ensure no error
 
 
 @pytest.mark.asyncio

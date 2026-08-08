@@ -67,3 +67,23 @@ async def test_unknown_method_raises():
     s = Server(name="t", version="0")
     with pytest.raises(ProtocolError):
         await s._dispatch({"method": "nope", "params": {}})
+
+
+@pytest.mark.asyncio
+async def test_non_dict_json_returns_32600_error():
+    """Non-dict JSON (e.g. 42) returns -32600 instead of crashing with AttributeError."""
+    from unittest.mock import patch, MagicMock
+
+    s = Server(name="t", version="0")
+
+    lines = iter(["42\n", ""])
+    fake_stdin = MagicMock()
+    fake_stdin.readline = MagicMock(side_effect=lambda: next(lines))
+    fake_stdout = MagicMock()
+
+    with patch("sys.stdin", fake_stdin), patch("sys.stdout", fake_stdout):
+        await s.serve_stdio()
+
+    written = "".join(call.args[0] for call in fake_stdout.write.call_args_list)
+    assert "-32600" in written
+    assert "expected JSON object" in written

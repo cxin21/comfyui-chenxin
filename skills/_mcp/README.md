@@ -91,7 +91,7 @@ Run image-to-image camera generation.
 
 Skills are discovered via Python setuptools entry-points. Adding a new skill only requires:
 1. Installing the skill package
-2. Declaring the `comfyui_chenxin_mcp.skills` entry-point in `setup.py`
+2. Declaring the `comfyui_chenxin_mcp.skills` entry-point in `pyproject.toml`
 
 No changes to the core MCP server code are needed.
 

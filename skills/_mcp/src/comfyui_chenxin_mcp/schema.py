@@ -27,6 +27,8 @@ def _load_validator(skill: str):
         return _VALIDATORS[skill]
     # Discover via entry-points; each skill exposes validate_config(skill, stage, config).
     for reg in _discover_skills():
+        if reg.name != skill:
+            continue
         ep_module = reg.register_fn.__module__  # e.g. "camera_image.mcp_bridge"
         mod = importlib.import_module(ep_module)
         validator = getattr(mod, "validate_config", None)

@@ -118,6 +118,10 @@ class Server:
         """
         loop = asyncio.get_running_loop()
 
+        # Ensure stdout uses UTF-8 even on Chinese Windows (cp936 default).
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8")
+
         def _emit(data: dict) -> None:
             """Write one JSON-RPC message line to stdout."""
             sys.stdout.write(json.dumps(data, ensure_ascii=False) + "\n")
@@ -139,6 +143,13 @@ class Server:
                     "jsonrpc": "2.0",
                     "id": None,
                     "error": {"code": -32700, "message": f"parse error: {exc}"},
+                })
+                continue
+            if not isinstance(msg, dict):
+                _emit({
+                    "jsonrpc": "2.0",
+                    "id": None,
+                    "error": {"code": -32600, "message": "invalid request: expected JSON object"},
                 })
                 continue
             msg_id = msg.get("id")
