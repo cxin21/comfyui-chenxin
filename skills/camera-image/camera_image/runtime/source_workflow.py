@@ -238,18 +238,4 @@ def prepare_temporary_workflow(
         from .graph_patcher import _activate_img2img
         _activate_img2img(api_graph, config.reference_image)
 
-    # Belt-and-braces: ensure node 26's text input is present post-strip.
-    # ComfyUI's server-side strip occasionally drops the ``text`` widget on
-    # the Lora Loader (LoraManager) because of the custom AUTOCOMPLETE_TEXT_LORAS
-    # type declaration. We resolve the stack text from the resolver (same
-    # logic as the pre-strip patcher; falls back to DEFAULT_LORA_STACK_TEXT
-    # when config.lora is None) and write it directly into the API dict so
-    # the run never fails on "Required input is missing (text)".
-    from .graph_patcher import _ensure_lora_text, build_lora_patch
-    lora_patch = build_lora_patch(
-        run_config_lora=getattr(config, "lora", None) if config is not None else None,
-        mcp_list_loras=getattr(mcp, "list_loras", None) if hasattr(mcp, "list_loras") else None,
-    )
-    _ensure_lora_text(api_graph, lora_patch["node_26"]["text"])
-
     return api_graph
