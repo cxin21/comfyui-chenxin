@@ -67,10 +67,6 @@ from .source_workflow import (
     prepare_temporary_workflow,
 )
 
-# Functions that produce images (the only paths to call sites in user code).
-from .t2i_camera import run_t2i
-from .i2i_camera import run_i2i
-
 __all__ = [
     "CAMERA_EXTRA_FIELDS",
     "CONTROLNET_IMAGE_NODE",
@@ -103,7 +99,5 @@ __all__ = [
     "prepare_temporary_workflow",
     "record_attempt",
     "render_stack_text",
-    "run_i2i",
-    "run_t2i",
     "validate_camera_extra",
 ]
