@@ -1,16 +1,21 @@
-# 03-patch：与 t2i-camera 共享同一 patch_graph 流程
+# 03-patch：与 t2i-camera 共享 prepare_temporary_workflow + apply_run_config
 
-i2i-camera 复用 `patch_graph(stage=STAGES.I2I, config: RunConfig)` —— 完整流程见 [`../t2i-camera/03-patch.md`](../t2i-camera/03-patch.md)。
+i2i-camera 复用 t2i-camera 的两步 patch 流程，差异在第二阶段。
 
-i2i 独有的 patch_graph 步骤（在通用 11 步之后追加）：
+完整两步流程见 [`../t2i-camera/03-patch.md`](../t2i-camera/03-patch.md)。
 
-- **步骤 11 (i2i only)**：require `config.reference_image` 非空；调用 `_activate_img2img(graph, reference_image)` 重连：
-    - 节点 21 (LoadImage) `image` ← 上传后的 filename
-    - 节点 59 (VAEEncode) `pixels` ← `[21, 0]`
-    - 节点 27 (KSampler) `latent_image` ← `[59, 0]`
-    - 节点 27 (KSampler) `denoise` ← 0.6
-    - 节点 21/57/58/59 mode ← 0 (active)
+## i2i 独有阶段（在 apply_run_config 内追加）
 
-  以上节点 ID 来自 `I2I_NODES` 常量表（不是硬编码字面量）。
+`apply_run_config(graph, stage=STAGES.I2I, config)` 末尾会：
 
-- **i2i 硬约定**：`WORKFLOW_CONVENTIONS[STAGES.I2I]` 强制 `node 27.denoise = 0.6`（与 `_activate_img2img` 内部赋值是同一约束的两次应用；先于 group activation 应用，确保即使 i2i 链路被中途截断也保持参考图语义）。
+1. **校验** `config.reference_image` 非空，否则抛 `ValueError`。
+2. **重连**（节点 id 来自 `I2I_NODES`）：
+   - 节点 21 (LoadImage) `image` ← 上传后的 filename
+   - 节点 59 (VAEEncode) `pixels` ← `[21, 0]`
+   - 节点 27 (KSampler) `latent_image` ← `[59, 0]`
+   - 节点 27 (KSampler) `denoise` ← 0.6
+3. **i2i 硬约定**：`WORKFLOW_CONVENTIONS[STAGES.I2I]` 在写入 controlnet_image 后再次强制 `node 27.denoise = 0.6`（双保险）。
+
+## 加载图片（G1） 来源
+
+`MANDATORY_GROUPS_BY_STAGE[STAGES.I2I] = [GROUPS.LOAD_IMAGE]` 在 `compute_enabled_groups` 阶段加入最终 G1 启用集。运行时把节点 21/57/58/59 的 mode 写为 0（启用），再 strip 出 API graph——所以这些节点必然出现在 strip 后的 API 图里，`_activate_img2img` 才能安全地重连它们。

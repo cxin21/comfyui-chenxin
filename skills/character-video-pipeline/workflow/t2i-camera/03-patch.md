@@ -1,113 +1,41 @@
-# 03-patch：patch_graph() 写入固定 API 图
+# 03-patch：source UI workflow -> temp strip -> apply_run_config
 
-`graph_patcher.patch_graph(*, stage, config: RunConfig, mcp_list_loras=None)` 加载 `workflow.json` 并原地修改节点输入。不经过 strip，不经过 UI-to-API 转换。
+`run_t2i` 和 `run_i2i` 在 MCP 提交前分两步构建可执行 API 图：
 
-## 加载固定资产
+1. **`source_workflow.prepare_temporary_workflow(mcp, stage, user_g1, user_g2)`**
+   - 加载 `workflow/source/文生图相机视角.json`（UI workflow，141 节点 / 44 组）。
+   - 计算最终启用的 G1/G2 组标题（DEFAULT + user + stage-mandatory）。
+   - 在内存拷贝上对节点写 `mode=0`（启用）/ `mode=4`（禁用）。
+   - 写入 `temp_*.json` 临时文件（系统 temp 目录）。
+   - 调 `mcp.save_workflow(temp_filename, ui)` 上传到 ComfyUI user library。
+   - 调 `mcp.strip_workflow(path=temp_filename, format="api")` 产出 API 图。
+   - 删除本地临时文件。
+   - 返回 API 图 dict（不含 `mode` 字段）。
 
-```python
-graph = load_workflow(stage)        # workflow/<stage>/workflow.json
-groups_meta = load_groups(stage)    # workflow/<stage>/groups.json
-```
+2. **`graph_patcher.apply_run_config(graph, stage, config, mcp_list_loras)`**
+   - 把 RunConfig 的 tunables 写入已 strip 的 API 图：
+     - prompts (24/25) from `config.draft`（prompt-forge 校验后）
+     - camera (583) + camera_extra (585) if set
+     - lora (26/66) via `build_lora_patch` if set
+     - sampling (50/51), seed (65), image_size (68/71)
+     - controlnet_image (129) — 仅 ControlNet LLLite 组启用时
+     - WORKFLOW_CONVENTIONS per stage（i2i 强制 `node 27.denoise=0.6`）
+     - i2i 激活：node 21/27/59 latent rewire（节点 id 来自 `I2I_NODES`）
 
-`workflow_loader.py` 直接读取 JSON 文件，返回 dict。文件是已验证的 API 格式图。
+## 两步分离的关键设计
 
-## patch 步骤
+| 步骤 | 关注点 | 失败模式 |
+|------|--------|----------|
+| prepare_temporary_workflow | 节点启/禁（哪条 path 走） | 启错节点 → 渲染空图/渲染错图 |
+| apply_run_config | 节点值（值是多少） | 值错 → 渲染错值，但 path 还在 |
 
-### 1. 提示词（node 24/25）
+任何一步失败都 `RuntimeError`，不静默降级。
 
-```python
-_set_prompt(graph, "24", config.draft["positive"].strip())
-_set_prompt(graph, "25", config.draft["negative"].strip())
-```
+## 为什么不用 cached workflow.json
 
-写入 `wildcard_text` 和 `populated_text` 两个字段。
+旧实现缓存一份 API 图到 `workflow/<stage>/workflow.json`（42 节点），但：
+- 该资产是 `commit 06c1739` revert 后的 stale 残留。
+- API 图不携带 G1/G2 mode 信息；通过 patch_graph 在 API JSON 上改 `mode` 字段。
+- strip_workflow 会丢弃 bypassed 节点——意味着旧 API JSON 已经被 strip 过了，再改 mode 字段没有意义。
 
-> `config.draft` 由 `run_t2i()` 内 `prompt_forge_bridge.compile_envelope` 校验通过后传入 patch_graph；evidence/draft 不得含 `camera / lora / sampler / cfg / steps / seed / denoise` 等执行字段（prompt-forge `_reject` 把关）。
-
-### 2. 相机坐标（node 583）
-
-```python
-coords = map_camera(config.camera.direction or "front",
-                    config.camera.elevation or "eye-level",
-                    config.camera.distance or "full_body",
-                    float(config.camera.roll or 0.0))
-_set_camera(graph, coords)  # node 583: CameraAngleNode
-```
-
-写入 `pos_x`、`pos_y`、`pos_z`、`roll` 四个 FLOAT 字段。
-
-### 3. 相机额外配置（node 585）
-
-```python
-extra = validate_camera_extra(config.camera_extra)
-_set_camera_extra(graph, extra)  # node 585: CameraExtraConfigNode
-```
-
-写入 13 个字段（extreme_type, extreme_weight, lens_*, dof_*, movement_*, composition_*, style_*）。
-
-### 4. LoRA 栈（node 26/66）
-
-```python
-lora_patch = build_lora_patch(run_config_lora=config.lora,
-                              mcp_list_loras=mcp_list_loras)
-_set_lora(graph, lora_patch)
-```
-
-- node 26（Lora Loader）：写入 `text` 字段，值为 `<lora:name:strength>` 格式的栈文本
-- node 66（TriggerWord Toggle）：写入 `trigger_words`（连接引用 `["26", 2]`）和 `orinalMessage`
-
-### 5. sampling / seed / image_size（node 50/51/65/68/71）
-
-```python
-if config.sampling:    _apply_sampling(graph, config.sampling)   # node 50/51
-if config.seed is not None: _apply_seed(graph, config.seed)       # node 65
-if config.image_size:  _apply_image_size(graph, config.image_size) # node 68/71
-```
-
-`_apply_*` 辅助函数按字段写入；`None` 字段落回 workflow.json 静态值（默认 40 / 25 steps、1.0 / 0.2 denoise、dpmpp_2m / karras、1216 × 832）。
-
-### 6. G1/G2 组模式
-
-```python
-final_g1 = list(set(user_g1) | DEFAULT_ENABLED_G1 | MANDATORY_GROUPS_BY_STAGE[stage])
-final_g2 = list(set(user_g2) | DEFAULT_ENABLED_G2)
-graph = apply_group_modes(graph, groups_meta, final_g1, final_g2)
-```
-
-`group_controller.apply_group_modes()` 遍历 groups.json 中的组标题：
-- 在启用集中的组 -> 成员节点 mode=0（active）
-- 不在启用集中的组 -> 成员节点 mode=4（bypass）
-- **受保护节点**（sampler/saver/camera/prompts/LoRA/VAE 等 30 个节点）永远 mode=0
-
-### 7. controlnet_image 校验 + 写入（node 129）
-
-启用 ControlNet LLLite 组必须提供 `config.controlnet_image`，否则抛 `ValueError`；提供后通过 `_apply_controlnet_image(graph, uploaded_filename)` 写入 node 129。
-
-### 8. WORKFLOW_CONVENTIONS 应用
-
-例如 i2i 强制 `node 27.denoise = 0.6`（来自 `WORKFLOW_CONVENTIONS[STAGES.I2I]`），保证即使 i2i 链路被中途截断也保持参考图语义。
-
-### 9. i2i-camera 流程
-
-i2i-camera 流程详见 `../i2i-camera/03-patch.md`，此处不再重复。
-
-## 输出
-
-返回完整的 patched API 图 dict，传入 04-validate 步骤。
-
-### patch_graph flow (2026-08-07)
-
-`patch_graph(*, stage, config: RunConfig, mcp_list_loras=None)` 内部按以下顺序处理 RunConfig 字段：
-
-1. load_workflow(stage) + load_groups(stage)
-2. 写 prompts (24/25) from `config.draft` (prompt-forge 校验后)
-3. 写 camera (583) + camera_extra (585) if set
-4. 写 lora (26/66) via `build_lora_patch` if set
-5. 写 sampling (50/51), seed (65), image_size (68/71) via `_apply_*` helpers
-6. 合并 groups: `final_g1 = set(user_g1) | DEFAULT_ENABLED_G1 | MANDATORY_GROUPS_BY_STAGE[stage]`
-7. cross-validate controlnet_image <-> ControlNet LLLite 组
-8. `apply_group_modes(graph, groups_meta, final_g1, final_g2)`
-9. 写 controlnet_image (129) if enabled
-10. apply WORKFLOW_CONVENTIONS (e.g. i2i forces node 27.denoise=0.6)
-
-NODE_FIELD_MAP（11 项）是 patcher 与 describe_config helper 的单源真相；workflow.json 静态值通过 `_node_static_default` 读取。
+正确路径：**完整 UI workflow**（保留所有节点和 mode 字段）→ 运行时改 mode → strip 出新 API JSON。
