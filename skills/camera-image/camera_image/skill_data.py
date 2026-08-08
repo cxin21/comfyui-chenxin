@@ -33,8 +33,28 @@ def get_skill_data() -> SkillData:
                 implies=f"group_auto:{GROUPS.LOAD_IMAGE}",
                 direction="forward",
             ),
-            # 区域提示词（G1） requires 3 text prompts (one per channel).
-            # Forward only — text alone does not force the group on.
+            # 加载图片（G1） <-> reference_image (bidirectional)
+            Rule(
+                condition=f"group:{GROUPS.LOAD_IMAGE}",
+                implies="config:reference_image",
+            ),
+            # 区域提示词（G1） -> 3 images (forward)
+            Rule(
+                condition=f"group:{GROUPS.AREA_PROMPT}",
+                implies="config:red_image",
+                direction="forward",
+            ),
+            Rule(
+                condition=f"group:{GROUPS.AREA_PROMPT}",
+                implies="config:green_image",
+                direction="forward",
+            ),
+            Rule(
+                condition=f"group:{GROUPS.AREA_PROMPT}",
+                implies="config:blue_image",
+                direction="forward",
+            ),
+            # 区域提示词（G1） -> 3 text prompts (forward)
             Rule(
                 condition=f"group:{GROUPS.AREA_PROMPT}",
                 implies="config:red_prompt",
@@ -50,14 +70,28 @@ def get_skill_data() -> SkillData:
                 implies="config:blue_prompt",
                 direction="forward",
             ),
+            # 添加签名（G1） <-> signature_image (bidirectional)
+            Rule(
+                condition=f"group:{GROUPS.ADD_SIGNATURE}",
+                implies="config:signature_image",
+            ),
         ),
         stage_images={
             STAGES.T2I: (
                 ImageSpec("controlnet_image", required=False, requires_group=GROUPS.CONTROLNET_LLLITE),
+                ImageSpec("reference_image", required=False, requires_group=GROUPS.LOAD_IMAGE),
+                ImageSpec("red_image", required=False, requires_group=GROUPS.AREA_PROMPT),
+                ImageSpec("green_image", required=False, requires_group=GROUPS.AREA_PROMPT),
+                ImageSpec("blue_image", required=False, requires_group=GROUPS.AREA_PROMPT),
+                ImageSpec("signature_image", required=False, requires_group=GROUPS.ADD_SIGNATURE),
             ),
             STAGES.I2I: (
                 ImageSpec("reference_image", required=True),
                 ImageSpec("controlnet_image", required=False, requires_group=GROUPS.CONTROLNET_LLLITE),
+                ImageSpec("red_image", required=False, requires_group=GROUPS.AREA_PROMPT),
+                ImageSpec("green_image", required=False, requires_group=GROUPS.AREA_PROMPT),
+                ImageSpec("blue_image", required=False, requires_group=GROUPS.AREA_PROMPT),
+                ImageSpec("signature_image", required=False, requires_group=GROUPS.ADD_SIGNATURE),
             ),
         },
         output_type="images",

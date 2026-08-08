@@ -158,6 +158,7 @@ class GroupTitle:
     LOAD_IMAGE: str = "加载图片（G1）"
     CONTROLNET_LLLITE: str = "ControlNet LLLite（G1）"
     AREA_PROMPT: str = "区域提示词（G1）"
+    ADD_SIGNATURE: str = "添加签名（G1）"
 
 
 GROUPS = GroupTitle()

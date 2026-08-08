@@ -56,9 +56,8 @@ def test_skill_data_has_no_apply_fn_field():
 
 
 def test_dependency_rules_cover_region_prompts():
-    """区域提示词（G1） implies 3 config text fields (forward direction)."""
+    """区域提示词（G1） implies 3 images + 3 text prompts (forward direction)."""
     from camera_image.runtime.config_schema import GROUPS
-    from comfyui_chenxin_mcp.engine.skill_data import Rule
 
     sd = get_skill_data()
     region_rules = [
@@ -66,11 +65,14 @@ def test_dependency_rules_cover_region_prompts():
         if r.condition == f"group:{GROUPS.AREA_PROMPT}"
         and r.direction == "forward"
     ]
-    assert len(region_rules) == 3, (
-        f"expected 3 forward rules for 区域提示词, got {len(region_rules)}"
+    assert len(region_rules) == 6, (
+        f"expected 6 forward rules for 区域提示词 (3 images + 3 prompts), got {len(region_rules)}"
     )
     implied = {r.implies for r in region_rules}
     assert implied == {
+        "config:red_image",
+        "config:green_image",
+        "config:blue_image",
         "config:red_prompt",
         "config:green_prompt",
         "config:blue_prompt",
