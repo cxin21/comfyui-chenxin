@@ -16,5 +16,5 @@ camera-image = "camera_image.skill_data:get_skill_data"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["camera_image*", "runtime*"]
+include = ["camera_image*"]
 exclude = ["workflow*", "tests*", "test*", "*.tests", "*.tests.*"]

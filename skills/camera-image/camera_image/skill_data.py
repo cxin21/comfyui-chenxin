@@ -6,9 +6,9 @@ and function pointers to runtime.graph_patcher + runtime.source_workflow.
 from __future__ import annotations
 
 from comfyui_chenxin_mcp.engine.skill_data import SkillData, Rule, ImageSpec
-from runtime.config_schema import GROUPS, STAGES, RunConfig
-from runtime.graph_patcher import NODE_FIELD_MAP, apply_run_config, describe_config
-from runtime.source_workflow import prepare_temporary_workflow
+from camera_image.runtime.config_schema import GROUPS, STAGES, RunConfig
+from camera_image.runtime.graph_patcher import NODE_FIELD_MAP, apply_run_config, describe_config
+from camera_image.runtime.source_workflow import prepare_temporary_workflow
 
 
 def get_skill_data() -> SkillData:

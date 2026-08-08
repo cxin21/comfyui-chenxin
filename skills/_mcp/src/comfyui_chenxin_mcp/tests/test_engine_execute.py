@@ -1,10 +1,33 @@
 """Engine run_skill tests - mock McpClient, verify call sequence."""
+from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 from pathlib import Path
 
 from comfyui_chenxin_mcp.engine.skill_data import SkillData, Rule, ImageSpec
 from comfyui_chenxin_mcp.engine.execute import run_skill
-from runtime.config_schema import RunConfig
+
+
+@dataclass(frozen=True)
+class _TestGroups:
+    g1: list = None
+    g2: list = None
+
+
+@dataclass(frozen=True)
+class _TestConfig:
+    """Minimal config stand-in for engine tests (no runtime import needed)."""
+    evidence: dict
+    draft: dict
+    dialect_id: str = "anima"
+    camera: object = None
+    camera_extra: dict = None
+    lora: dict = None
+    groups: _TestGroups = None
+    sampling: object = None
+    seed: int = None
+    image_size: object = None
+    reference_image: str = None
+    controlnet_image: str = None
 
 
 def _skill_data():
@@ -36,13 +59,18 @@ def _config(stage="t2i-camera", **overrides):
         "draft": {"positive": "1girl", "negative": "lowres"},
         "dialect_id": "anima",
     }
-    tunables = {}
-    for k, v in overrides.items():
-        if k in ("evidence", "draft", "dialect_id"):
-            envelope[k] = v
-        else:
-            tunables[k] = v
-    return RunConfig.from_envelope(envelope, **tunables)
+    for k in ("evidence", "draft", "dialect_id"):
+        if k in overrides:
+            envelope[k] = overrides.pop(k)
+    return _TestConfig(
+        evidence=envelope["evidence"],
+        draft=envelope["draft"],
+        dialect_id=envelope["dialect_id"],
+        reference_image=overrides.get("reference_image"),
+        controlnet_image=overrides.get("controlnet_image"),
+        groups=_TestGroups() if overrides.get("groups") else None,
+        lora=overrides.get("lora"),
+    )
 
 
 def _mock_mcp():

@@ -34,7 +34,7 @@ from .config_schema import (
 
 
 SOURCE_WORKFLOW_PATH: Path = (
-    Path(__file__).resolve().parent.parent
+    Path(__file__).resolve().parent.parent.parent
     / "workflow"
     / "source"
     / "文生图相机视角.json"
@@ -66,7 +66,7 @@ def _load_groups(stage: str) -> dict[str, Any]:
     if stage not in (STAGES.T2I, STAGES.I2I):
         raise ValueError(f"unsupported camera stage: {stage}")
     groups_path = (
-        Path(__file__).resolve().parent.parent
+        Path(__file__).resolve().parent.parent.parent
         / "workflow"
         / stage
         / "groups.json"
