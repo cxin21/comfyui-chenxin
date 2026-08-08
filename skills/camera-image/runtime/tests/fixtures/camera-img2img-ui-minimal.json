@@ -1,0 +1,15 @@
+{
+  "nodes": [
+    {"id": 24, "type": "ImpactWildcardProcessor", "title": "POSITIVE", "mode": 0, "widgets_values": ["original prompt"], "inputs": [], "outputs": []},
+    {"id": 25, "type": "ImpactWildcardProcessor", "title": "NEGATIVE", "mode": 0, "widgets_values": ["original negative"], "inputs": [], "outputs": []},
+    {"id": 26, "type": "Lora Loader (LoraManager)", "title": "LoRA", "mode": 0, "widgets_values": [{"version": 1}, "<lora:anima:1.0>"], "inputs": [], "outputs": []},
+    {"id": 21, "type": "LoadImage", "title": "Load Image", "mode": 4, "group_id": 3, "widgets_values": ["empty.png"], "inputs": [], "outputs": []},
+    {"id": 58, "type": "PrimitiveInt", "title": "Primitive Int", "mode": 4, "group_id": 3, "widgets_values": [0], "inputs": [], "outputs": []},
+    {"id": 57, "type": "ImageResizeKJv2", "title": "Image Resize", "mode": 4, "group_id": 3, "widgets_values": [512, 512], "inputs": [], "outputs": []},
+    {"id": 59, "type": "VAEEncode", "title": "VAE Encode", "mode": 4, "group_id": 3, "widgets_values": [], "inputs": [], "outputs": []},
+    {"id": 27, "type": "KSampler", "title": "Sampler", "mode": 0, "widgets_values": [], "inputs": [], "outputs": []},
+    {"id": 90, "type": "Note", "title": "Unrelated", "mode": 4, "group_id": 9, "widgets_values": ["unchanged"], "inputs": [], "outputs": []}
+  ],
+  "groups": [{"id": 3, "title": "G1 image-to-image"}, {"id": 9, "title": "Other"}],
+  "links": []
+}

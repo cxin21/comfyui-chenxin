@@ -1,0 +1,137 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "camera-anima-v1",
+  "fixed_workflow_asset": "camera-anima.json",
+  "fixed_workflow_fingerprint": "7fa7a85e005182c6be42a3f3193add3fb41531ef0fae28e1cbd54a791e72e20a",
+  "workflow_name": "文生图相机视角.json",
+  "workflow_fingerprint": "7fa7a85e005182c6be42a3f3193add3fb41531ef0fae28e1cbd54a791e72e20a",
+  "generation_modes": [
+    "text-to-image",
+    "image-to-image"
+  ],
+  "runtime_classification": "local",
+  "slots": {
+    "positive_prompt": {
+      "id": 24,
+      "type": "ImpactWildcardProcessor",
+      "title": "POSITIVE"
+    },
+    "negative_prompt": {
+      "id": 25,
+      "type": "ImpactWildcardProcessor",
+      "title": "NEGATIVE"
+    },
+    "camera_angle": {
+      "id": 583,
+      "type": "CameraAngleNode"
+    },
+    "camera_extra": {
+      "id": 585,
+      "type": "CameraExtraConfigNode"
+    }
+  },
+  "img2img": {
+    "group_id": 3,
+    "node_ids": [
+      21,
+      58,
+      57,
+      59
+    ],
+    "load_image_node_id": 21,
+    "vae_encode_node_id": 59,
+    "latent_switch_node_id": 75,
+    "sampler_node_id": 27,
+    "expected_path_node_ids": [
+      27,
+      75,
+      59
+    ]
+  },
+  "api_normalization": {
+    "schema_version": "1.0",
+    "literal_inputs": [
+      {
+        "node_id": 26,
+        "input_name": "text",
+        "ui_node_id": 26,
+        "widget_index": 1
+      }
+    ],
+    "output_fallbacks": [
+      {
+        "source_node_id": 111,
+        "output_index": 0,
+        "target_node_id": 35,
+        "target_input": "images"
+      },
+      {
+        "source_node_id": 111,
+        "output_index": 0,
+        "target_node_id": 490,
+        "target_input": "images"
+      }
+    ],
+    "remove_nodes": [
+      28,
+      41,
+      52,
+      62,
+      67,
+      70,
+      77
+    ]
+  },
+  "allowed_mutations": [
+    "positive_prompt.wildcard_text",
+    "positive_prompt.populated_text",
+    "negative_prompt.wildcard_text",
+    "negative_prompt.populated_text",
+    "camera_angle",
+    "camera_extra",
+    "img2img.group_3.mode",
+    "img2img.load_image.image"
+  ],
+  "expected_outputs": [
+    "image/png"
+  ],
+  "config_surface": {
+    "schema_version": "1.0",
+    "prompts": {
+      "nodes": [24, 25],
+      "fields": ["wildcard_text", "populated_text"]
+    },
+    "camera": {
+      "angle_node": 583,
+      "extra_node": 585
+    },
+    "group_controllers": {
+      "g1": {
+        "node_id": 23,
+        "match_title": "\uff08G1\uff09"
+      },
+      "g2": {
+        "node_id": 90,
+        "match_title": "\uff08G2\uff09"
+      }
+    },
+    "pinned_groups": {
+      "g1": [
+        "\u52a0\u8f7d\u56fe\u7247\uff08G1\uff09",
+        "\u7b2c\u4e8c\u8f6e\u91c7\u6837\u5668\uff08G1\uff09",
+        "\u76f8\u673a\u89c6\u89d2\u751f\u56fe\uff08G1\uff09"
+      ],
+      "g2": []
+    },
+    "lora_unit": {
+      "loader_node": 26,
+      "stack_widget_index": 1,
+      "list_widget_index": 2,
+      "trigger_toggle_node": 66,
+      "binding": "atomic",
+      "inventory_source": "mcp:list_local_models",
+      "metadata_source": "mcp:model_metadata",
+      "policy": "recommend-then-approve"
+    }
+  }
+}

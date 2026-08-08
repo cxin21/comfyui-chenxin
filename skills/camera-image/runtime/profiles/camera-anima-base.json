@@ -1,0 +1,102 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "camera-anima-base-v1",
+  "source_profile_id": "camera-anima-v1",
+  "execution_profile_id": "camera-anima-v1",
+  "workflow_fingerprint": "7fa7a85e005182c6be42a3f3193add3fb41531ef0fae28e1cbd54a791e72e20a",
+  "runtime_classification": "local",
+  "slots": {
+    "positive_prompt": {"id": 24, "type": "ImpactWildcardProcessor", "title": "POSITIVE"},
+    "negative_prompt": {"id": 25, "type": "ImpactWildcardProcessor", "title": "NEGATIVE"},
+    "camera_angle": {"id": 583, "type": "CameraAngleNode"},
+    "camera_extra": {"id": 585, "type": "CameraExtraConfigNode"}
+  },
+  "img2img": {
+    "group_id": 3,
+    "node_ids": [21, 58, 57, 59],
+    "load_image_node_id": 21,
+    "vae_encode_node_id": 59,
+    "latent_switch_node_id": 75,
+    "sampler_node_id": 27,
+    "expected_path_node_ids": [27, 75, 59]
+  },
+  "api_normalization": {
+    "schema_version": "1.0",
+    "literal_inputs": [
+      {"node_id": 26, "input_name": "text", "ui_node_id": 26, "widget_index": 1}
+    ],
+    "output_fallbacks": [
+      {"source_node_id": 111, "output_index": 0, "target_node_id": 35, "target_input": "images"},
+      {"source_node_id": 111, "output_index": 0, "target_node_id": 490, "target_input": "images"}
+    ],
+    "remove_nodes": [28, 41, 52, 62, 67, 70, 77]
+  },
+  "camera_angle_allowlist": ["pos_x", "pos_y", "pos_z", "roll"],
+  "camera_extra_allowlist": [
+    "extreme_type",
+    "extreme_weight",
+    "lens_enabled",
+    "lens_value",
+    "dof_enabled",
+    "dof_value",
+    "dof_weight",
+    "movement_enabled",
+    "movement_value",
+    "composition_enabled",
+    "composition_value",
+    "style_enabled",
+    "style_value"
+  ],
+  "output_topology": [
+    {"id": 35, "type": "Image Saver Simple"},
+    {"id": 490, "type": "PreviewImage"}
+  ],
+  "camera_defaults": {
+    "direction": "front",
+    "elevation": "eye-level",
+    "distance": "full_body",
+    "roll": 0.0
+  },
+  "camera_extra_defaults": {
+    "extreme_type": "none",
+    "extreme_weight": 0.0,
+    "lens_enabled": false,
+    "lens_value": "",
+    "dof_enabled": false,
+    "dof_value": "",
+    "dof_weight": 0.0,
+    "movement_enabled": false,
+    "movement_value": "",
+    "composition_enabled": false,
+    "composition_value": "",
+    "style_enabled": false,
+    "style_value": ""
+  },
+  "enabled_groups": [],
+  "enabled_optional_branches": [],
+  "allowed_mutations": [
+    "positive_prompt.wildcard_text",
+    "positive_prompt.populated_text",
+    "negative_prompt.wildcard_text",
+    "negative_prompt.populated_text",
+    "camera_angle.pos_x",
+    "camera_angle.pos_y",
+    "camera_angle.pos_z",
+    "camera_angle.roll",
+    "camera_extra.extreme_type",
+    "camera_extra.extreme_weight",
+    "camera_extra.lens_enabled",
+    "camera_extra.lens_value",
+    "camera_extra.dof_enabled",
+    "camera_extra.dof_value",
+    "camera_extra.dof_weight",
+    "camera_extra.movement_enabled",
+    "camera_extra.movement_value",
+    "camera_extra.composition_enabled",
+    "camera_extra.composition_value",
+    "camera_extra.style_enabled",
+    "camera_extra.style_value"
+  ],
+  "expected_artifact_type": "CharacterBaseImage",
+  "expected_outputs": ["image/png"]
+}
