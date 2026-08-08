@@ -1,0 +1,1 @@
+{"error": "camera config compilation failed: camera config is invalid: camera distance must be one of ['medium', 'full_body'], got 'cowboy_shot'", "phase": "config", "profile_id": "camera-anima-v1", "recorded_at": "2026-08-06T21:15:14.555155Z", "schema_version": "1.0", "stage": "character-base", "status": "failed"}

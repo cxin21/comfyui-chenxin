@@ -1,0 +1,6 @@
+{
+    "schema_version":  "2.0",
+    "dialect":  "anima",
+    "positive":  "score_9, score_8_up, score_7_up, source_anime, masterpiece, best quality, very aesthetic, absurdres, 1girl, solo, long black hair, red eyes, beautiful detailed eyes, medium breasts, seductive smile, looking at viewer, miniskirt, holding sword, katana, black fire, dark background, standing, dynamic pose, cinematic lighting, dramatic lighting, glowing flames, anime style, illustration, detailed, sharp focus",
+    "negative":  "lowres, bad anatomy, bad hands, worst quality, low quality, jpeg artifacts, watermark, text, signature, blurry, deformed, ugly, mutated, extra limbs, missing fingers, extra fingers, loli, child"
+}

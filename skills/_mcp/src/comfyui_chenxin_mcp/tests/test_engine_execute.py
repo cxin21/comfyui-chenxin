@@ -26,6 +26,7 @@ def _skill_data():
         describe_fn=lambda stage: {},
         apply_fn=lambda graph, stage, config, **kw: None,
         prepare_fn=lambda mcp, stage, user_g1, user_g2: {"nodes": [], "links": []},
+        build_config_fn=lambda envelope, **kw: _config(),
     )
 
 
@@ -62,7 +63,7 @@ def _mock_mcp():
     return mcp
 
 
-@patch("runtime.prompt_forge_bridge.compile_envelope",
+@patch("comfyui_chenxin_mcp.engine.prompt_forge.compile_envelope",
        return_value={"quality": {}, "warnings": []})
 def test_run_skill_t2i_success(mock_compile, tmp_path):
     sd = _skill_data()
@@ -77,7 +78,7 @@ def test_run_skill_t2i_success(mock_compile, tmp_path):
     assert (tmp_path / "out.png").exists()
 
 
-@patch("runtime.prompt_forge_bridge.compile_envelope",
+@patch("comfyui_chenxin_mcp.engine.prompt_forge.compile_envelope",
        return_value={"quality": {}, "warnings": []})
 def test_run_skill_i2i_requires_reference(mock_compile, tmp_path):
     sd = _skill_data()
@@ -89,7 +90,7 @@ def test_run_skill_i2i_requires_reference(mock_compile, tmp_path):
     assert "reference_image" in payload.get("error", "")
 
 
-@patch("runtime.prompt_forge_bridge.compile_envelope",
+@patch("comfyui_chenxin_mcp.engine.prompt_forge.compile_envelope",
        return_value={"quality": {}, "warnings": []})
 def test_run_skill_i2i_uploads_reference(mock_compile, tmp_path):
     sd = _skill_data()
@@ -102,7 +103,7 @@ def test_run_skill_i2i_uploads_reference(mock_compile, tmp_path):
     mcp.upload_image.assert_any_call("/fake/path.png")
 
 
-@patch("runtime.prompt_forge_bridge.compile_envelope",
+@patch("comfyui_chenxin_mcp.engine.prompt_forge.compile_envelope",
        return_value={"quality": {}, "warnings": []})
 def test_run_skill_health_check_fails(mock_compile, tmp_path):
     sd = _skill_data()
@@ -115,7 +116,7 @@ def test_run_skill_health_check_fails(mock_compile, tmp_path):
     assert "queue" in payload["error"].lower()
 
 
-@patch("runtime.prompt_forge_bridge.compile_envelope",
+@patch("comfyui_chenxin_mcp.engine.prompt_forge.compile_envelope",
        return_value={"quality": {}, "warnings": []})
 def test_run_skill_calls_prepare_and_apply(mock_compile, tmp_path):
     sd = _skill_data()
@@ -137,6 +138,7 @@ def test_run_skill_calls_prepare_and_apply(mock_compile, tmp_path):
         dependency_rules=sd.dependency_rules, stage_images=sd.stage_images,
         output_type=sd.output_type, describe_fn=sd.describe_fn,
         apply_fn=track_apply, prepare_fn=track_prepare,
+        build_config_fn=sd.build_config_fn,
     )
     run_skill(mcp=mcp, skill_data=sd, stage="t2i-camera", config=config,
               output_dir=tmp_path, timeout=5.0, poll_interval=0.1)

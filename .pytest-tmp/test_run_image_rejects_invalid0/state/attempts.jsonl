@@ -1,0 +1,2 @@
+{"error": "package requires a non-empty string field: positive", "phase": "package", "profile_id": "camera-anima-v1", "recorded_at": "2026-08-06T21:15:13.403503Z", "schema_version": "1.0", "stage": "unknown", "status": "failed"}
+{"error": "run-image only accepts the anima dialect, got: 'flux'", "phase": "package", "profile_id": "camera-anima-v1", "recorded_at": "2026-08-06T21:15:13.407201Z", "schema_version": "1.0", "stage": "unknown", "status": "failed"}

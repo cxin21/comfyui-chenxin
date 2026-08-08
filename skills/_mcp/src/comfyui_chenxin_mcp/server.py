@@ -20,7 +20,7 @@ from .engine.skill_data import SkillData
 
 def _spawn_mcp():
     """Spawn comfyui-mcp subprocess for ComfyUI communication."""
-    from runtime.mcp_client import McpClient
+    from .engine.mcp_client import McpClient
     npx = shutil.which("npx.cmd") or shutil.which("npx")
     if not npx:
         raise RuntimeError("npx not found on PATH")
@@ -109,8 +109,7 @@ def main() -> None:
     async def run(skill: str, stage: str, envelope: dict, config: dict,
                   output_dir: str = "outputs") -> dict:
         sd = _find_skill(skills, skill)
-        from runtime.config_schema import RunConfig
-        run_config = RunConfig.from_envelope(envelope, **config)
+        run_config = sd.build_config_fn(envelope, **config)
         with _spawn_mcp() as mcp:
             payload, code = run_skill(
                 mcp=mcp, skill_data=sd, stage=stage, config=run_config,

@@ -42,7 +42,7 @@ def run_skill(
 
     try:
         # Step 1: prompt-forge gate.
-        from runtime.prompt_forge_bridge import compile_envelope
+        from .prompt_forge import compile_envelope
         package = compile_envelope(config.evidence, config.draft, skill_data.dialect_id)
 
         # Step 2: upload stage_images.
@@ -107,7 +107,7 @@ def run_skill(
         artifact = _download_artifact(mcp, entry, output_dir, skill_data.output_type)
 
     except Exception as exc:
-        from runtime.attempt_state import record_attempt
+        from .state import record_attempt
         record_attempt({"stage": stage, "status": "failed", "error": str(exc)})
         return {"accepted": False, "stage": stage, "error": str(exc)}, 1
 
@@ -128,7 +128,7 @@ def run_skill(
         json.dumps(run_record, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
-    from runtime.attempt_state import record_attempt
+    from .state import record_attempt
     record_attempt({"stage": stage, "status": "success", "prompt_id": prompt_id,
                      "artifact": artifact.get("path")})
 

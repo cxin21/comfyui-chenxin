@@ -45,4 +45,5 @@ class SkillData:
     describe_fn: Callable[..., dict[str, Any]]
     apply_fn: Callable[..., None]
     prepare_fn: Callable[..., dict[str, Any]]
+    build_config_fn: Callable[..., Any]
     dialect_id: str = "anima"

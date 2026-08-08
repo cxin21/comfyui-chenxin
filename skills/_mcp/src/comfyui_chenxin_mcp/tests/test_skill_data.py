@@ -45,6 +45,7 @@ def test_skill_data_construction():
         describe_fn=fake_describe,
         apply_fn=fake_apply,
         prepare_fn=fake_prepare,
+        build_config_fn=lambda envelope, **kw: {},
     )
     assert sd.name == "camera-image"
     assert sd.stages == ("t2i-camera", "i2i-camera")

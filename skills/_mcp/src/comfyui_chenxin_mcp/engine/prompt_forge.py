@@ -25,7 +25,7 @@ import sys
 from pathlib import Path
 
 # Path to prompt-forge skill root (sibling skill directory).
-PROMPT_FORGE_ROOT = Path(__file__).resolve().parent.parent.parent / "prompt-forge"
+PROMPT_FORGE_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent / "prompt-forge"
 
 # Fields forbidden inside prompt-forge envelopes (mirrors prompt_package._BAD).
 # Belt-and-suspenders: enforce here too so we don't ship evidence that would

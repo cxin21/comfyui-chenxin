@@ -1,0 +1,125 @@
+{
+  "schema_version": "1.0",
+  "stage": "character-base",
+  "profile_id": "camera-anima-v1",
+  "workflow_fingerprint": "7fa7a85e005182c6be42a3f3193add3fb41531ef0fae28e1cbd54a791e72e20a",
+  "prompt_id": "6e1d5d1a-6cb7-489d-aeff-91bb1edcd8b5",
+  "artifact": {
+    "filename": "2026-08-06-210922__0.png",
+    "path": "..\\..\\outputs\\2026-08-06-210922__0.png",
+    "bytes": 1197746,
+    "sha256": "25471bdbea9319f448da9db1e653c78ad4821f66a3728e7157c8fd3707d466a7"
+  },
+  "result_manifest": {
+    "config": {
+      "prompts": {
+        "positive": "score_9, score_8_up, score_7_up, source_anime, masterpiece, best quality, very aesthetic, absurdres, 1girl, solo, long black hair, red eyes, beautiful detailed eyes, medium breasts, seductive smile, looking at viewer, miniskirt, holding sword, katana, black fire, dark background, standing, dynamic pose, cinematic lighting, dramatic lighting, glowing flames, anime style, illustration, detailed, sharp focus",
+        "negative": "lowres, bad anatomy, bad hands, worst quality, low quality, jpeg artifacts, watermark, text, signature, blurry, deformed, ugly, mutated, extra limbs, missing fingers, extra fingers, loli, child"
+      },
+      "camera_angle": {
+        "pos_x": 0.0,
+        "pos_y": -0.27,
+        "pos_z": -0.85,
+        "roll": 0.0,
+        "_tags_json": "{\"azimuth\":{\"directions\":{\"front\":{\"tag\":\"from front\"},\"back\":{\"tag\":\"from behind\"},\"left\":{\"tag\":\"facing right\"},\"right\":{\"tag\":\"facing left\"}},\"enabled\":true,\"weight\":10,\"extra\":0,\"deadzone_ratio\":0.05},\"elevation\":{\"extra\":0,\"enabled\":true,\"weight_max\":0,\"categories\":{\"high\":{\"tag\":\"high angle\"},\"eye\":{\"tag\":\"eye-level\"},\"low\":{\"tag\":\"low angle\"}}},\"distance\":{\"categories\":{\"ecu\":{\"tag\":\"extreme close-up\"},\"cu\":{\"tag\":\"close-up\"},\"medium\":{\"tag\":\"medium shot\"},\"cowboy_shot\":{\"tag\":\"cowboy shot\"},\"full\":{\"tag\":\"full body\"},\"wide\":{\"tag\":\"wide shot\"}},\"enabled\":true,\"extra\":0},\"tilt\":{\"dutch_tag\":\"dutch angle\",\"enabled\":true,\"extra\":0,\"deadzone\":0.15},\"extra_master\":1,\"weight_max\":10,\"weight_min\":0.1,\"xy_mult_enabled\":true,\"xy_mult\":10}",
+        "extra_config": [
+          "585",
+          0
+        ]
+      },
+      "camera_extra": {
+        "extreme_type": "无",
+        "extreme_weight": 10.0,
+        "lens_enabled": true,
+        "lens_value": "85mm lens",
+        "dof_enabled": false,
+        "dof_value": "shallow depth of field",
+        "dof_weight": 1.3,
+        "movement_enabled": false,
+        "movement_value": "handheld camera",
+        "composition_enabled": true,
+        "composition_value": "rule of thirds",
+        "style_enabled": false,
+        "style_value": "cinematic"
+      },
+      "groups": {
+        "enabled_g1": [
+          "保存图片（G1）",
+          "手部 ADetailer（G1）",
+          "敏感内容 ADetailer（G1）",
+          "面部 ADetailer（G1）",
+          "眼部 ADetailer（G1）",
+          "启用 SAM 加载器（G1）",
+          "Detailer（瑕疵修复）（G1）",
+          "高清 PreDetailer（G1）",
+          "高清 PostDetailer（G1）",
+          "添加签名（G1）",
+          "移除背景（G1）",
+          "Ultimate SD 放大器（G1）",
+          "色彩匹配（G1）",
+          "CFGZeroStar（零 CFG）（G1）",
+          "蒙版 Detailer（G1）",
+          "Any Detailer（SAM 3.1）（G1）",
+          "区域提示词（G1）",
+          "ControlNet LLLite（G1）",
+          "CLIP NegPip（多层负向）（G1）"
+        ],
+        "enabled_g2": [
+          "图像色阶（G2）",
+          "图像形态学（G2）",
+          "边缘保留模糊（G2）",
+          "图像量化（G2）",
+          "色差（G2）",
+          "图像锐化（G2）",
+          "胶片颗粒（G2）",
+          "VHS 电视效果（G2）",
+          "像素化（G2）",
+          "数字故障（G2）",
+          "夜视（G2）",
+          "蓝图（G2）",
+          "磨砂玻璃（G2）",
+          "Gameboy（游戏机风）（G2）",
+          "对比度（G2）"
+        ]
+      }
+    },
+    "lora": {
+      "stack_text": "<lora:anima-base-1-masterpiece-v51:1.00><lora:细节调整:1.00><lora:gpt-image-2_anima-base1_v1-1:1.00:1.00><lora:Anima_in_real_epoch_10:1.00>",
+      "loader": {
+        "__lm_autocomplete_meta_text": {
+          "version": 1,
+          "textWidgetName": "text"
+        },
+        "text": "<lora:anima-base-1-masterpiece-v51:1.00><lora:细节调整:1.00><lora:gpt-image-2_anima-base1_v1-1:1.00:1.00><lora:Anima_in_real_epoch_10:1.00>",
+        "loras": {
+          "__value__": []
+        },
+        "model": [
+          "22",
+          0
+        ],
+        "clip": [
+          "40",
+          0
+        ]
+      },
+      "trigger_word_toggle": {
+        "group_mode": true,
+        "default_active": true,
+        "allow_strength_adjustment": false,
+        "toggle_trigger_words": "",
+        "orinalMessage": "masterpiece,, very aesthetic,, @gpt-image-2,",
+        "trigger_words": ""
+      }
+    },
+    "config_hash": "a21e3d015a67a7ac9881fdc3b611445aeb13bf0d7971f0bd1527c8efc6a9fce9",
+    "artifact": {
+      "filename": "2026-08-06-210922__0.png",
+      "path": "..\\..\\outputs\\2026-08-06-210922__0.png",
+      "bytes": 1197746,
+      "sha256": "25471bdbea9319f448da9db1e653c78ad4821f66a3728e7157c8fd3707d466a7"
+    }
+  },
+  "duration_ms": 2172,
+  "recorded_at": "2026-08-06T14:55:45.289355Z"
+}

@@ -6,7 +6,7 @@ and function pointers to runtime.graph_patcher + runtime.source_workflow.
 from __future__ import annotations
 
 from comfyui_chenxin_mcp.engine.skill_data import SkillData, Rule, ImageSpec
-from runtime.config_schema import GROUPS, STAGES
+from runtime.config_schema import GROUPS, STAGES, RunConfig
 from runtime.graph_patcher import NODE_FIELD_MAP, apply_run_config, describe_config
 from runtime.source_workflow import prepare_temporary_workflow
 
@@ -42,5 +42,6 @@ def get_skill_data() -> SkillData:
         describe_fn=describe_config,
         apply_fn=apply_run_config,
         prepare_fn=prepare_temporary_workflow,
+        build_config_fn=RunConfig.from_envelope,
         dialect_id="anima",
     )

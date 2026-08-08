@@ -1,0 +1,1 @@
+{"error": "ComfyUI execution failed: node 88 (WidgetToString): boom", "phase": "wait", "profile_id": "camera-anima-v1", "recorded_at": "2026-08-06T21:15:13.395594Z", "schema_version": "1.0", "stage": "character-base", "status": "failed"}

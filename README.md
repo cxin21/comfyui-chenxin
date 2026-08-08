@@ -7,7 +7,7 @@
 | 技能 | 责任 | 副作用 |
 | --- | --- | --- |
 | `skills/prompt-forge/SKILL.md` | CreativeEvidence、模型提示词方言、视觉风格、精确 tag 校验、PromptPackage 质量审查 | 无 |
-| `skills/character-video-pipeline/SKILL.md` | 四阶段工作流发现、审批、提交、历史与资产证据 | 仅 approval-gated local ComfyUI/MCP |
+| `skills/camera-image/SKILL.md` | 四阶段工作流发现、审批、提交、历史与资产证据 | 仅 approval-gated local ComfyUI/MCP |
 
 Prompt Forge 不检查模型是否安装，也不读取或执行工作流；模型资料只描述提示词语言。生产技能只消费已审查的 PromptPackage，不重新创作或静默改写提示词。
 
@@ -59,7 +59,7 @@ Prompt Forge 的验证不需要 ComfyUI；live 生产测试必须显式 opt-in�
 - [MCP Bridge](docs/MCP_BRIDGE.md)
 - [故障排查](docs/TROUBLESHOOTING.md)
 - [Prompt Forge 规范](skills/prompt-forge/SPEC.md)
-- [角色到视频技能](skills/character-video-pipeline/SKILL.md)
+- [相机图像技能](skills/camera-image/SKILL.md)
 
 ## 明确边界
 

@@ -31,7 +31,6 @@ from .config_schema import (
     MANDATORY_GROUPS_BY_STAGE,
     STAGES,
 )
-from .mcp_client import McpClient
 
 
 SOURCE_WORKFLOW_PATH: Path = (
@@ -141,7 +140,7 @@ def _apply_modes_to_ui(
 
 
 def prepare_temporary_workflow(
-    mcp: McpClient,
+    mcp: Any,
     *,
     stage: str = STAGES.T2I,
     user_g1: list[str] | None = None,

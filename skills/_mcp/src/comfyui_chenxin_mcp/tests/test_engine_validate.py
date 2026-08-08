@@ -16,6 +16,7 @@ def _skill_data(rules=()):
         describe_fn=lambda stage: {},
         apply_fn=lambda graph, stage, config, **kw: None,
         prepare_fn=lambda mcp, stage, g1, g2: {},
+        build_config_fn=lambda envelope, **kw: {},
     )
 
 
