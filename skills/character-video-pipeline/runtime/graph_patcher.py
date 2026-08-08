@@ -82,6 +82,31 @@ def _set_camera(graph: dict, coords: CameraCoords) -> None:
     node["inputs"]["roll"] = coords.roll
 
 
+def _set_camera_partial(
+    graph: dict,
+    *,
+    direction=None,
+    elevation=None,
+    distance=None,
+    roll=None,
+) -> None:
+    """Write only the camera fields the caller provided.
+
+    None means "keep workflow.json's static value for node 583".
+    """
+    node = graph.get("583")
+    if not node:
+        raise KeyError("node 583 (CameraAngleNode) missing from workflow")
+    if direction is not None:
+        node["inputs"]["pos_x"] = map_camera(direction=direction).pos_x
+    if elevation is not None:
+        node["inputs"]["pos_y"] = map_camera(elevation=elevation).pos_y
+    if distance is not None:
+        node["inputs"]["pos_z"] = map_camera(distance=distance).pos_z
+    if roll is not None:
+        node["inputs"]["roll"] = float(roll)
+
+
 def _set_camera_extra(graph: dict, extra: dict) -> None:
     node = graph.get("585")
     if not node:
@@ -178,13 +203,13 @@ def patch_graph(
 
     # 2. Camera coords (583) + extra (585).
     if config.camera:
-        coords = map_camera(
-            direction=config.camera.direction or "front",
-            elevation=config.camera.elevation or "eye-level",
-            distance=config.camera.distance or "full_body",
-            roll=float(config.camera.roll or 0.0),
+        _set_camera_partial(
+            graph,
+            direction=config.camera.direction,
+            elevation=config.camera.elevation,
+            distance=config.camera.distance,
+            roll=config.camera.roll,
         )
-        _set_camera(graph, coords)
     if config.camera_extra:
         _set_camera_extra(graph, validate_camera_extra(config.camera_extra))
 
