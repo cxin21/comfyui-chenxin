@@ -1,24 +1,20 @@
 ---
-name: character-video-pipeline
-description: Approval-gated four-stage ComfyUI production consumer for PromptPackage outputs
+name: camera-image
+description: Approval-gated text-to-image and image-to-image ComfyUI consumer for PromptPackage outputs (Anima camera workflow, t2i-camera + i2i-camera stages)
 status: active
 side_effects: approval-gated-local-comfyui
-owner: character-video-pipeline
+owner: camera-image
 ---
 
-# Character Video Pipeline
+# Camera Image (was character-video-pipeline, t2i/i2i stages only)
 
-This is the only skill allowed to cross the local ComfyUI and MCP boundary. It consumes a validated PromptPackage from Prompt Forge and turns approved prompt packages and user-approved assets into production artifacts.
+This skill crosses the local ComfyUI and MCP boundary to execute the Anima camera workflow for **image** generation (t2i-camera and i2i-camera stages). Multiview character sheets and video generation are separate skills (`camera-multiview`, `camera-video`). Prompt text always comes from Prompt Forge.
 
 ## Quick start (mandatory first action)
 
 Before any prompt authoring, file write, or capability probe, run the zero-dependency environment checker:
 
-    powershell -ExecutionPolicy Bypass -File skills/character-video-pipeline/preflight-env.ps1
-
-This checks cache integrity, Python availability, ComfyUI reachability, and delegates to the runtime preflight. A blocker means STOP -- do not attempt workarounds, do not rewrite tools in another language, do not bypass the gate.
-
-If `preflight-env.ps1` itself is missing, the plugin cache is severely stale. Re-run `scripts/install.ps1` to sync.
+    powershell -ExecutionPolicy Bypass -File skills/camera-image/preflight-env.ps1
 
 ## Environment prerequisites
 
@@ -43,14 +39,17 @@ If `preflight-env.ps1` itself is missing, the plugin cache is severely stale. Re
 4. **Code is implementation detail, not an operating manual.** Read function signatures when needed, not entire files.
 5. **Run from the skill root.** Do not operate on arbitrary filesystem paths or search for workflows on disk.
 
-## Four-stage production flow
+## Two-stage production flow
 
 1. Consume an image PromptPackage for the camera-view text-to-image base image.
-2. Consume the accepted base image for the Flux2-Klein multiview character sheet.
-3. Consume the accepted reference plus a new shot PromptPackage for camera-view G1 image-to-image.
-4. Consume the accepted shot image plus a bilingual video PromptPackage for the LTX Yusu Director stage.
+2. Consume the accepted reference plus a new shot PromptPackage for camera-view G1 image-to-image.
 
 Prompt Forge writes each prompt package. This skill never silently rewrites prompt prose; it may only map approved fields to a pinned workflow slot after approval.
+
+## Out of scope (separate skills)
+
+- **Multiview character sheets** (`Flux2-Klein multiview`): see `skills/camera-multiview/`.
+- **Video generation** (`LTX Yusu Director`): see `skills/camera-video/`.
 
 ## Fixed workflow and helper contract
 
@@ -90,9 +89,9 @@ preflight below. If `preflight-env.ps1` is missing, the cache is severely stale
 
 Commands (one is enough):
 
-    powershell -ExecutionPolicy Bypass -File skills/character-video-pipeline/preflight-env.ps1
+    powershell -ExecutionPolicy Bypass -File skills/camera-image/preflight-env.ps1
     python -m runtime.preflight
-    character-video-pipeline-runtime preflight --comfy-url http://127.0.0.1:8188
+    camera-image-runtime preflight --comfy-url http://127.0.0.1:8188
 
 Output contract (excerpt):
 
@@ -128,12 +127,12 @@ re-running the same 16 minutes of authoring.
 Commands:
 
     python -m runtime.attempt_state read-last
-    character-video-pipeline-runtime attempt-state read-last
+    camera-image-runtime attempt-state read-last
 
 After Step 0 / Step 0b / Step 1 run-stage character-base, the host agent
 records the outcome so the next attempt inherits context:
 
-    character-video-pipeline-runtime attempt-state record < attempts.json
+    camera-image-runtime attempt-state record < attempts.json
 
 ## Ownership
 
@@ -141,7 +140,7 @@ This skill owns workflow discovery and profile pinning, model and node capabilit
 
 ## Runtime boundary
 
-Implementation lives under `skills/character-video-pipeline/runtime/`. The host injects a trusted `host_call_tool(tool_name, arguments)` callable for MCP operations. The runtime does not import a host SDK, invent a conversion receipt, or bypass the approval and consumption gates.
+Implementation lives under `skills/camera-image/runtime/`. The host injects a trusted `host_call_tool(tool_name, arguments)` callable for MCP operations. The runtime does not import a host SDK, invent a conversion receipt, or bypass the approval and consumption gates.
 
 ## Prompt boundary
 
@@ -149,11 +148,11 @@ Prompt Forge is offline and side-effect free. It owns CreativeEvidence, model pr
 
 ## ⚠️ 提示词硬性规则（2026-08-07 起）
 
-**所有 stage 和场景的提示词（positive / negative）必须先经 prompt-forge 技能生成，再进入 character-video-pipeline。**
+**所有 stage 和场景的提示词（positive / negative）必须先经 prompt-forge 技能生成，再进入 camera-image。**
 
 - **唯一入口**：`runtime.t2i_camera.run_t2i` / `runtime.i2i_camera.run_i2i`（CLI 对应 `run-t2i` / `run-i2i` 子命令）
 - 流程：Claude 准备 envelope（`{evidence, draft, dialect_id}`）→ 调 `run_t2i(evidence=..., draft=..., config=RunConfig(...))` → 函数内 prompt-forge `compile_envelope` 校验 → 通过后自动喂给 `patch_graph` 提交
-- 边界：evidence/draft 不得含 `camera / lora / sampler / cfg / steps / seed / denoise` 等执行字段；这些仍是 character-video-pipeline 的可配置项
+- 边界：evidence/draft 不得含 `camera / lora / sampler / cfg / steps / seed / denoise` 等执行字段；这些仍是 camera-image 的可配置项
 - bridge 实现：`runtime/prompt_forge_bridge.py`（`compile_envelope` 严格模式，无静默退路）
 - **没有第二入口**：CLI 上唯一能产生图片的子命令就是 `run-t2i` / `run-i2i`，意图是"单入口，方便维护"——避免出现 prompt-forge 闸门可绕过的旁路
 
