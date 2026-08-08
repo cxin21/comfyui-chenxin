@@ -265,7 +265,10 @@ def _download_artifact(mcp: McpClient, entry: dict, output_dir: Path) -> dict:
                     break
 
     if data is None:
-        return {"filename": filename, "subfolder": subfolder, "bytes": 0, "sha256": ""}
+        raise RuntimeError(
+            f"artifact download returned no image data for {filename} "
+            f"(mcp.get_image returned no decodable image block)"
+        )
 
     out_path = output_dir / filename
     out_path.write_bytes(data)
