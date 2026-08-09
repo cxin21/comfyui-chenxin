@@ -1,21 +1,17 @@
 """Runtime source UI workflow -> API workflow pipeline.
 
-Single source of truth: ``workflow/source/文生图相机视角.json`` (UI workflow).
+Single source of truth: the bundled fixed UI asset ``camera-anima.json``.
 Per-stage ``groups.json`` (committed mapping of group titles to node id
 lists) drives which G1/G2 groups are enabled for the run.
 
 Every run performs:
-1.  Load source UI workflow from disk.
+1.  Load the fixed UI workflow asset and verify its digest/fingerprint.
 2.  (Optional) Apply ``RunConfig`` tunables to the UI workflow by
     writing into each node's ``widgets_values`` list (single source of
     truth that ComfyUI's strip step consumes).
 3.  Compute enabled G1/G2 titles (DEFAULT + user + stage-mandatory).
 4.  Apply ``mode=0`` / ``mode=4`` to nodes in the in-memory copy.
-5.  Write the copy to a unique ``temp_*.json`` file in the system temp
-    dir.
-6.  Hand the file to the ComfyUI server via MCP ``save_workflow``.
-7.  ``get_workflow(filename, format="api")`` returns the API graph.
-8.  Local temp file is deleted.
+5.  Convert the in-memory UI graph with MCP ``strip_workflow(graph)``.
 
 The returned API dict has no ``mode`` fields (strip removed them) and
 carries every tunable baked in (because config was written to the UI
@@ -25,8 +21,6 @@ carries every tunable baked in (because config was written to the UI
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -37,24 +31,23 @@ from .config_schema import (
     MANDATORY_GROUPS_BY_STAGE,
     STAGES,
 )
+from .contracts import validate_api_graph
 
 
 SOURCE_WORKFLOW_PATH: Path = (
     Path(__file__).resolve().parent.parent.parent
-    / "workflow"
-    / "source"
-    / "文生图相机视角.json"
+    / "camera_image"
+    / "runtime"
+    / "workflow_assets"
+    / "camera-anima.json"
 )
 
 
 def _load_source_ui() -> dict[str, Any]:
     """Load the committed source UI workflow from disk."""
-    if not SOURCE_WORKFLOW_PATH.is_file():
-        raise FileNotFoundError(
-            f"source UI workflow missing: {SOURCE_WORKFLOW_PATH}"
-        )
-    with SOURCE_WORKFLOW_PATH.open("r", encoding="utf-8") as f:
-        ui = json.load(f)
+    from .workflow_assets import load_fixed_workflow
+
+    ui = load_fixed_workflow("camera-anima.json")
     if not isinstance(ui, dict) or "nodes" not in ui or "groups" not in ui:
         raise ValueError(
             f"source UI workflow is not a UI-format workflow: {SOURCE_WORKFLOW_PATH}"
@@ -97,13 +90,50 @@ def compute_enabled_groups(
     handles every None case internally so callers do not need
     defensive ``list()`` conversions.
     """
+    groups_meta = _load_groups(stage)
+    known_g1 = set(groups_meta.get("g1", {}))
+    known_g2 = set(groups_meta.get("g2", {}))
     user_g1 = list(groups.g1) if groups and groups.g1 else []
     user_g2 = list(groups.g2) if groups and groups.g2 else []
+    unknown_g1 = set(user_g1) - known_g1
+    unknown_g2 = set(user_g2) - known_g2
+    if unknown_g1 or unknown_g2:
+        unknown = sorted(unknown_g1 | unknown_g2)
+        raise ValueError(f"unknown group title(s) for {stage}: {unknown}")
     final_g1: set[str] = set(user_g1) | set(DEFAULT_ENABLED_G1)
     final_g2: set[str] = set(user_g2) | set(DEFAULT_ENABLED_G2)
     for mandatory in MANDATORY_GROUPS_BY_STAGE.get(stage, []):
         final_g1.add(mandatory)
+    missing_g1 = final_g1 - known_g1
+    missing_g2 = final_g2 - known_g2
+    if missing_g1 or missing_g2:
+        missing = sorted(missing_g1 | missing_g2)
+        raise ValueError(f"configured default group title(s) missing from {stage}: {missing}")
     return final_g1, final_g2
+
+
+def _validate_group_metadata(
+    ui: dict[str, Any],
+    groups_meta: dict[str, Any],
+) -> None:
+    """Ensure group membership is a valid projection of the fixed UI graph."""
+    node_ids = {str(node.get("id")) for node in ui.get("nodes", []) if isinstance(node, dict)}
+    for bucket in ("g1", "g2"):
+        mapping = groups_meta.get(bucket)
+        if not isinstance(mapping, dict):
+            raise ValueError(f"groups metadata {bucket!r} must be an object")
+        for title, members in mapping.items():
+            if not isinstance(title, str) or not title:
+                raise ValueError(f"groups metadata {bucket!r} has an invalid title")
+            if not isinstance(members, list):
+                raise ValueError(f"group {title!r} members must be a list")
+            missing = sorted(
+                str(member) for member in members if str(member) not in node_ids
+            )
+            if missing:
+                raise ValueError(
+                    f"group {title!r} references missing source node(s): {missing}"
+                )
 
 
 def _apply_modes_to_ui(
@@ -116,6 +146,7 @@ def _apply_modes_to_ui(
 
     Mutates the UI dict in place; returns it for chaining.
     """
+    _validate_group_metadata(ui, groups_meta)
     g1_groups = groups_meta.get("g1", {})
     g2_groups = groups_meta.get("g2", {})
 
@@ -156,27 +187,17 @@ def prepare_temporary_workflow(
     groups: GroupsConfig | None = None,
     mcp_list_loras: Any = None,
 ) -> dict[str, Any]:
-    """Build an API graph for the run via temp file + MCP strip.
+    """Build an API graph from the fixed UI asset via MCP strip.
 
     Steps:
-    1.  Load source UI workflow from disk.
-    2.  If ``config`` is provided, apply tunables (sampling, camera,
-        LoRA, prompts, image_size, seed, controlnet image, reference
-        image) to the UI workflow's ``widgets_values`` so the strip
-        step propagates them to the final API graph. Runs **before**
-        mode toggles so config and mode write to disjoint keys
-        (config -> widgets_values, mode -> mode).
-    3.  Compute enabled G1/G2 titles (DEFAULT + user + stage-mandatory).
-    4.  Apply ``mode`` field to nodes in an in-memory copy.
-    5.  Write the copy to a unique ``temp_*.json`` file in the system
-        temp dir.
-    6.  Upload to ComfyUI via MCP ``save_workflow``.
-    7.  ``get_workflow(filename, format="api")`` returns the API graph.
-    8.  Local temp file is always deleted.
+    1.  Load the pinned UI workflow asset.
+    2.  Apply every config value to the UI widget surface.
+    3.  Compute enabled G1/G2 titles and apply node modes.
+    4.  Convert the patched UI graph with MCP ``strip_workflow(graph)``.
 
-    The returned dict carries every tunable baked in (config was
-    applied to UI pre-strip) and has no ``mode`` fields (strip removed
-    them).
+    The returned dict is the graph produced by the maintained converter.
+    No saved-workflow round trip or post-conversion graph mutation is
+    allowed: the UI asset and the strip result are the two authorities.
 
     Accepts ``GroupsConfig | None`` directly; passes it through to
     ``compute_enabled_groups`` which handles every None case.
@@ -197,45 +218,12 @@ def prepare_temporary_workflow(
         )
 
     groups_meta = _load_groups(stage)
+    _validate_group_metadata(ui, groups_meta)
     enabled_g1, enabled_g2 = compute_enabled_groups(stage, groups)
     _apply_modes_to_ui(ui, enabled_g1, enabled_g2, groups_meta)
 
-    fd, temp_path = tempfile.mkstemp(prefix="temp_", suffix=".json")
-    os.close(fd)
-    try:
-        with open(temp_path, "w", encoding="utf-8") as f:
-            json.dump(ui, f, ensure_ascii=False)
-
-        temp_filename = os.path.basename(temp_path)
-        mcp.save_workflow(temp_filename, ui)
-        # get_workflow(format="api") returns the API JSON dict; strip_workflow
-        # via subprocess MCP returns only a markdown summary, so we use
-        # get_workflow instead. Both code paths (subprocess MCP and host-injected
-        # MCP) return the same 42-node dict.
-        api_graph = mcp.get_workflow(filename=temp_filename, format="api")
-    finally:
-        try:
-            os.unlink(temp_path)
-        except OSError:
-            pass
-
-    # i2i latent-rewire activation + per-stage WORKFLOW_CONVENTIONS run
-    # HERE — after the strip, on the API graph. Doing them on the UI
-    # graph (pre-strip) KeyErrors because UI nodes live in
-    # graph["nodes"], not keyed by id.
-    #
-    # 1. Apply per-stage denoise_override (e.g. i2i denoise=0.6 on node 27).
-    # 2. For i2i: rewire KSampler latent from EmptyLatentImage to
-    #    VAEEncode of the uploaded reference_image.
-    from .config_schema import WORKFLOW_CONVENTIONS
-    if stage in WORKFLOW_CONVENTIONS:
-        for nid, value in WORKFLOW_CONVENTIONS[stage].get("denoise_override", {}).items():
-            api_graph[nid]["inputs"]["denoise"] = value
-
-    if stage == STAGES.I2I:
-        if config is None or not getattr(config, "reference_image", None):
-            raise ValueError("reference_image is required for i2i-camera")
-        from .graph_patcher import _activate_img2img
-        _activate_img2img(api_graph, config.reference_image)
-
+    api_graph = mcp.strip_workflow(ui)
+    if not isinstance(api_graph, dict) or not api_graph:
+        raise ValueError("strip_workflow returned an empty API graph")
+    validate_api_graph(api_graph)
     return api_graph

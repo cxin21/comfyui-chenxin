@@ -20,7 +20,7 @@ def get_skill_data() -> SkillData:
     return SkillData(
         name="camera-image",
         stages=(STAGES.T2I, STAGES.I2I),
-        source_workflow_path="workflow/source/文生图相机视角.json",
+        source_workflow_path="camera_image/runtime/workflow_assets/camera-anima.json",
         groups_dir_pattern="workflow/{stage}/groups.json",
         field_map=NODE_FIELD_MAP,
         dependency_rules=(

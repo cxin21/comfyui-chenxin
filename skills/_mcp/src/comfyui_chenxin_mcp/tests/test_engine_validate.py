@@ -1,4 +1,8 @@
-"""Engine validate_config tests - declarative dependency rules."""
+"""Engine validate_config tests - declarative dependency rules.
+
+Validates the engine.validate_config(skill_data, stage, envelope, config)
+shape (envelope + config, matching run_skill).
+"""
 from comfyui_chenxin_mcp.engine.skill_data import SkillData, Rule, ImageSpec
 from comfyui_chenxin_mcp.engine.validate import validate_config
 
@@ -19,34 +23,48 @@ def _skill_data(rules=()):
     )
 
 
+def _split(env_cfg):
+    """Adapter: split a single test dict into (envelope, config).
+
+    Test bodies keep the legacy compact shape `{draft, ...tunables, groups}`.
+    The new engine signature wants envelope + config separated.
+    """
+    if "draft" in env_cfg:
+        envelope = {"draft": env_cfg["draft"]}
+    else:
+        envelope = {}
+    config = {k: v for k, v in env_cfg.items() if k != "draft"}
+    return envelope, config
+
+
 def test_valid_config_no_errors():
     sd = _skill_data()
-    config = {"draft": {"positive": "1girl", "negative": "lowres"}}
-    result = validate_config(sd, "t2i-camera", config)
+    env, cfg = _split({"draft": {"positive": "1girl", "negative": "lowres"}})
+    result = validate_config(sd, "t2i-camera", env, cfg)
     assert result["ok"] is True
     assert result["errors"] == []
 
 
 def test_missing_draft_positive():
     sd = _skill_data()
-    config = {"draft": {"positive": "", "negative": "lowres"}}
-    result = validate_config(sd, "t2i-camera", config)
+    env, cfg = _split({"draft": {"positive": "", "negative": "lowres"}})
+    result = validate_config(sd, "t2i-camera", env, cfg)
     assert result["ok"] is False
     assert any("positive" in e for e in result["errors"])
 
 
 def test_missing_draft_negative():
     sd = _skill_data()
-    config = {"draft": {"positive": "1girl", "negative": ""}}
-    result = validate_config(sd, "t2i-camera", config)
+    env, cfg = _split({"draft": {"positive": "1girl", "negative": ""}})
+    result = validate_config(sd, "t2i-camera", env, cfg)
     assert result["ok"] is False
     assert any("negative" in e for e in result["errors"])
 
 
 def test_missing_draft_entirely():
     sd = _skill_data()
-    config = {}
-    result = validate_config(sd, "t2i-camera", config)
+    env, cfg = _split({})
+    result = validate_config(sd, "t2i-camera", env, cfg)
     assert result["ok"] is False
     assert any("draft" in e for e in result["errors"])
 
@@ -56,12 +74,12 @@ def test_config_implies_group_violation():
     sd = _skill_data(rules=(
         Rule(condition="config:controlnet_image", implies="group:ControlNet LLLite（G1）"),
     ))
-    config = {
+    env, cfg = _split({
         "draft": {"positive": "1girl", "negative": "lowres"},
         "controlnet_image": "/path/to/img.png",
         "groups": {"g1": []},
-    }
-    result = validate_config(sd, "t2i-camera", config)
+    })
+    result = validate_config(sd, "t2i-camera", env, cfg)
     assert result["ok"] is False
     assert any("ControlNet LLLite" in e for e in result["errors"])
 
@@ -71,12 +89,12 @@ def test_config_implies_group_satisfied():
     sd = _skill_data(rules=(
         Rule(condition="config:controlnet_image", implies="group:ControlNet LLLite（G1）"),
     ))
-    config = {
+    env, cfg = _split({
         "draft": {"positive": "1girl", "negative": "lowres"},
         "controlnet_image": "/path/to/img.png",
         "groups": {"g1": ["ControlNet LLLite（G1）"]},
-    }
-    result = validate_config(sd, "t2i-camera", config)
+    })
+    result = validate_config(sd, "t2i-camera", env, cfg)
     assert result["ok"] is True
 
 
@@ -85,11 +103,11 @@ def test_group_implies_config_violation():
     sd = _skill_data(rules=(
         Rule(condition="config:controlnet_image", implies="group:ControlNet LLLite（G1）"),
     ))
-    config = {
+    env, cfg = _split({
         "draft": {"positive": "1girl", "negative": "lowres"},
         "groups": {"g1": ["ControlNet LLLite（G1）"]},
-    }
-    result = validate_config(sd, "t2i-camera", config)
+    })
+    result = validate_config(sd, "t2i-camera", env, cfg)
     assert result["ok"] is False
     assert any("controlnet_image" in e for e in result["errors"])
 
@@ -99,8 +117,8 @@ def test_stage_implies_group_auto_forward_only():
     sd = _skill_data(rules=(
         Rule(condition="stage:i2i-camera", implies="group_auto:加载图片（G1）", direction="forward"),
     ))
-    config = {"draft": {"positive": "1girl", "negative": "lowres"}}
-    result = validate_config(sd, "i2i-camera", config)
+    env, cfg = _split({"draft": {"positive": "1girl", "negative": "lowres"}})
+    result = validate_config(sd, "i2i-camera", env, cfg)
     # forward rule: stage->group_auto is informational, not a validation error
     assert result["ok"] is True
 
@@ -119,52 +137,52 @@ _REGION_PROMPT_RULES = (
 
 def test_region_prompt_group_enabled_all_provided_ok():
     sd = _skill_data(rules=_REGION_PROMPT_RULES)
-    config = {
+    env, cfg = _split({
         "draft": {"positive": "1girl", "negative": "lowres"},
         "red_prompt": "red dress",
         "green_prompt": "green hair",
         "blue_prompt": "blue eyes",
         "groups": {"g1": ["区域提示词（G1）"]},
-    }
-    result = validate_config(sd, "t2i-camera", config)
+    })
+    result = validate_config(sd, "t2i-camera", env, cfg)
     assert result["ok"] is True, result["errors"]
 
 
 def test_region_prompt_group_enabled_missing_red():
     sd = _skill_data(rules=_REGION_PROMPT_RULES)
-    config = {
+    env, cfg = _split({
         "draft": {"positive": "1girl", "negative": "lowres"},
         "green_prompt": "green hair",
         "blue_prompt": "blue eyes",
         "groups": {"g1": ["区域提示词（G1）"]},
-    }
-    result = validate_config(sd, "t2i-camera", config)
+    })
+    result = validate_config(sd, "t2i-camera", env, cfg)
     assert result["ok"] is False
     assert any("red_prompt" in e for e in result["errors"])
 
 
 def test_region_prompt_group_enabled_missing_green():
     sd = _skill_data(rules=_REGION_PROMPT_RULES)
-    config = {
+    env, cfg = _split({
         "draft": {"positive": "1girl", "negative": "lowres"},
         "red_prompt": "red dress",
         "blue_prompt": "blue eyes",
         "groups": {"g1": ["区域提示词（G1）"]},
-    }
-    result = validate_config(sd, "t2i-camera", config)
+    })
+    result = validate_config(sd, "t2i-camera", env, cfg)
     assert result["ok"] is False
     assert any("green_prompt" in e for e in result["errors"])
 
 
 def test_region_prompt_group_enabled_missing_blue():
     sd = _skill_data(rules=_REGION_PROMPT_RULES)
-    config = {
+    env, cfg = _split({
         "draft": {"positive": "1girl", "negative": "lowres"},
         "red_prompt": "red dress",
         "green_prompt": "green hair",
         "groups": {"g1": ["区域提示词（G1）"]},
-    }
-    result = validate_config(sd, "t2i-camera", config)
+    })
+    result = validate_config(sd, "t2i-camera", env, cfg)
     assert result["ok"] is False
     assert any("blue_prompt" in e for e in result["errors"])
 
@@ -172,30 +190,31 @@ def test_region_prompt_group_enabled_missing_blue():
 def test_region_prompt_group_disabled_none_provided_ok():
     """Forward-only: providing text does NOT force the group on."""
     sd = _skill_data(rules=_REGION_PROMPT_RULES)
-    config = {
+    env, cfg = _split({
         "draft": {"positive": "1girl", "negative": "lowres"},
         "groups": {"g1": []},
-    }
-    result = validate_config(sd, "t2i-camera", config)
+    })
+    result = validate_config(sd, "t2i-camera", env, cfg)
     assert result["ok"] is True
 
 
 def test_region_prompt_text_alone_no_group_ok():
     """Forward-only: providing text alone (without group) is fine."""
     sd = _skill_data(rules=_REGION_PROMPT_RULES)
-    config = {
+    env, cfg = _split({
         "draft": {"positive": "1girl", "negative": "lowres"},
         "red_prompt": "red dress",
         "green_prompt": "green hair",
         "blue_prompt": "blue eyes",
         "groups": {"g1": []},
-    }
-    result = validate_config(sd, "t2i-camera", config)
+    })
+    result = validate_config(sd, "t2i-camera", env, cfg)
     assert result["ok"] is True
 
 
 def test_config_not_dict():
     sd = _skill_data()
-    result = validate_config(sd, "t2i-camera", "not a dict")
+    env = {"draft": {"positive": "1girl", "negative": "lowres"}}
+    result = validate_config(sd, "t2i-camera", env, "not a dict")
     assert result["ok"] is False
     assert any("object" in e for e in result["errors"])

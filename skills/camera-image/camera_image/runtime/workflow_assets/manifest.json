@@ -7,13 +7,22 @@
       "workflow_name": "闂備礁鎼崐绋棵洪妸鈺佹瀬闁规崘顕ч悙濠囨煕閹炬瀚妶鏌ユ⒑閸濆嫮澧︾紓鍌涘哺閿濈偟鈧綆鍓氶崰?json",
       "source": "comfyui://userdata/workflows/闂備礁鎼崐绋棵洪妸鈺佹瀬闁规崘顕ч悙濠囨煕閹炬瀚妶鏌ユ⒑閸濆嫮澧︾紓鍌涘哺閿濈偟鈧綆鍓氶崰?json",
       "profile_id": "camera-anima-v1",
-      "asset_sha256": "bfd1d3f2ebbb2216380ccc23c19656956ad36c33f5cf208513a4d04a140b2009",
+      "asset_sha256": "ddd76f945b836a61e9d933f653437de0471aa7b6131c7f22bd48230f84fc167e",
       "api_asset": "camera-anima.api.json",
-      "api_asset_sha256": "f911f8b1ac918efdab2e870ea099286bdd93f3265817320390498d4b0d45f34c",
-      "api_assets": {"character-base": {"name": "camera-anima.api.json", "sha256": "f911f8b1ac918efdab2e870ea099286bdd93f3265817320390498d4b0d45f34c"}, "shot-image": {"name": "camera-anima-shot-image.api.json", "sha256": "7ec5447203a9eb47d2f4faf7556f4ea0fbd6113e9c70c36634be89a7459928c7"}},
+      "api_asset_sha256": "7774dd92703d6607045c54a8be04ae2d88c48e7cf5807220a1359d7736cc68a7",
+      "api_assets": {
+        "character-base": {
+          "name": "camera-anima.api.json",
+          "sha256": "7774dd92703d6607045c54a8be04ae2d88c48e7cf5807220a1359d7736cc68a7"
+        },
+        "shot-image": {
+          "name": "camera-anima-shot-image.api.json",
+          "sha256": "a4b35fdd51483a1b3c90e4271a38308f81af4dbab22c735b23194e66d2e0eb30"
+        }
+      },
       "workflow_id": "camera-anima-v1",
       "workflow_schema_version": "comfyui-ui-v1",
-      "workflow_fingerprint": "7fa7a85e005182c6be42a3f3193add3fb41531ef0fae28e1cbd54a791e72e20a",
+      "workflow_fingerprint": "0a95cebc01f862f66751588cf8d0d6b20681c32b7b5101bd6adf3e99a4885bd0",
       "config_surface_stages": [
         "character-base",
         "shot-image"
@@ -121,7 +130,9 @@
               "input": "extreme_weight",
               "type": "number",
               "default": 0.0,
-              "allowed_values": {"kind": "number"},
+              "allowed_values": {
+                "kind": "number"
+              },
               "validation": "isinstance(value, (int, float)) and not isinstance(value, bool)",
               "class_type": "CameraExtraConfigNode"
             },
@@ -130,7 +141,10 @@
               "input": "lens_enabled",
               "type": "boolean",
               "default": false,
-              "allowed_values": [false, true],
+              "allowed_values": [
+                false,
+                true
+              ],
               "validation": "isinstance(value, bool)",
               "class_type": "CameraExtraConfigNode"
             },
@@ -148,7 +162,10 @@
               "input": "dof_enabled",
               "type": "boolean",
               "default": false,
-              "allowed_values": [false, true],
+              "allowed_values": [
+                false,
+                true
+              ],
               "validation": "isinstance(value, bool)",
               "class_type": "CameraExtraConfigNode"
             },
@@ -166,7 +183,9 @@
               "input": "dof_weight",
               "type": "number",
               "default": 0.0,
-              "allowed_values": {"kind": "number"},
+              "allowed_values": {
+                "kind": "number"
+              },
               "validation": "isinstance(value, (int, float)) and not isinstance(value, bool)",
               "class_type": "CameraExtraConfigNode"
             },
@@ -175,7 +194,10 @@
               "input": "movement_enabled",
               "type": "boolean",
               "default": false,
-              "allowed_values": [false, true],
+              "allowed_values": [
+                false,
+                true
+              ],
               "validation": "isinstance(value, bool)",
               "class_type": "CameraExtraConfigNode"
             },
@@ -193,7 +215,10 @@
               "input": "composition_enabled",
               "type": "boolean",
               "default": false,
-              "allowed_values": [false, true],
+              "allowed_values": [
+                false,
+                true
+              ],
               "validation": "isinstance(value, bool)",
               "class_type": "CameraExtraConfigNode"
             },
@@ -211,7 +236,10 @@
               "input": "style_enabled",
               "type": "boolean",
               "default": false,
-              "allowed_values": [false, true],
+              "allowed_values": [
+                false,
+                true
+              ],
               "validation": "isinstance(value, bool)",
               "class_type": "CameraExtraConfigNode"
             },
@@ -383,7 +411,9 @@
               "input": "extreme_weight",
               "type": "number",
               "default": 0.0,
-              "allowed_values": {"kind": "number"},
+              "allowed_values": {
+                "kind": "number"
+              },
               "validation": "isinstance(value, (int, float)) and not isinstance(value, bool)",
               "class_type": "CameraExtraConfigNode"
             },
@@ -392,7 +422,10 @@
               "input": "lens_enabled",
               "type": "boolean",
               "default": false,
-              "allowed_values": [false, true],
+              "allowed_values": [
+                false,
+                true
+              ],
               "validation": "isinstance(value, bool)",
               "class_type": "CameraExtraConfigNode"
             },
@@ -410,7 +443,10 @@
               "input": "dof_enabled",
               "type": "boolean",
               "default": false,
-              "allowed_values": [false, true],
+              "allowed_values": [
+                false,
+                true
+              ],
               "validation": "isinstance(value, bool)",
               "class_type": "CameraExtraConfigNode"
             },
@@ -428,7 +464,9 @@
               "input": "dof_weight",
               "type": "number",
               "default": 0.0,
-              "allowed_values": {"kind": "number"},
+              "allowed_values": {
+                "kind": "number"
+              },
               "validation": "isinstance(value, (int, float)) and not isinstance(value, bool)",
               "class_type": "CameraExtraConfigNode"
             },
@@ -437,7 +475,10 @@
               "input": "movement_enabled",
               "type": "boolean",
               "default": false,
-              "allowed_values": [false, true],
+              "allowed_values": [
+                false,
+                true
+              ],
               "validation": "isinstance(value, bool)",
               "class_type": "CameraExtraConfigNode"
             },
@@ -455,7 +496,10 @@
               "input": "composition_enabled",
               "type": "boolean",
               "default": false,
-              "allowed_values": [false, true],
+              "allowed_values": [
+                false,
+                true
+              ],
               "validation": "isinstance(value, bool)",
               "class_type": "CameraExtraConfigNode"
             },
@@ -473,7 +517,10 @@
               "input": "style_enabled",
               "type": "boolean",
               "default": false,
-              "allowed_values": [false, true],
+              "allowed_values": [
+                false,
+                true
+              ],
               "validation": "isinstance(value, bool)",
               "class_type": "CameraExtraConfigNode"
             },

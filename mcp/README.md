@@ -1,10 +1,13 @@
-# MCP 注册与桥接
+# MCP registration
 
-本目录只注册上游 `comfyui-mcp` stdio server，不实现 MCP server、不安装 Custom Nodes、不管理模型和工作流实体。
+This directory contains host registration examples for the upstream
+`comfyui-mcp` stdio server. It does not implement an MCP server, install
+ComfyUI custom nodes, manage models, or discover runtime workflows.
 
-## 注册
+The project server is `skills/_mcp`; it exposes the four unified project tools
+and invokes the upstream ComfyUI MCP client during `run_skill`.
 
-`mcp_servers.json`：
+## Registration
 
 ```json
 {
@@ -19,13 +22,17 @@
 }
 ```
 
-## 与两层技能的边界
+The active runtime contract is documented in
+[`docs/MCP_BRIDGE.md`](../docs/MCP_BRIDGE.md) and
+[`docs/camera-image-flow.md`](../docs/camera-image-flow.md).
 
-- `skills/prompt-forge/` 只编译 PromptPackage，不调用 MCP；
-- `skills/character-video-pipeline/runtime/` 通过 `McpBridge` 读取受信 workflow 并执行 approval-gated 提交；
-- bridge 默认只读，不实现 UI→API converter，不绕过 approval、consumption、queue 或 idempotency；
-- 宿主提供 `host_call_tool(tool_name, arguments) -> JSON-compatible result`，runtime 不依赖 Claude 或 Codex SDK。
+## Boundaries
 
-接口示例见 [`docs/MCP_BRIDGE.md`](../docs/MCP_BRIDGE.md)。安装脚本只注册配置并可选安装上游 npm 包，不验证本机模型、节点、工作流和 GPU。
+- `prompt-forge` never calls MCP.
+- `camera-image` supplies semantic config and a fixed UI source.
+- `comfyui-chenxin-mcp` owns project tool dispatch and execution sequencing.
+- `comfyui-mcp` owns ComfyUI protocol operations and UI-to-API strip conversion.
+- ComfyUI owns node execution and history.
 
-上游包来源和许可证见 [`ATTRIBUTION.md`](../ATTRIBUTION.md)。
+Missing capability or version mismatch is a hard failure. Do not substitute an
+older tool contract or emulate a missing conversion operation.

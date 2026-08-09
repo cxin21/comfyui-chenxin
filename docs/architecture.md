@@ -1,32 +1,99 @@
 # Architecture and first principles
 
-## Two bounded skills
+## Bounded responsibilities
 
-Prompt Forge is pure authoring and audit. `character-video-pipeline` is the production consumer and execution owner.
+| Component | Owns | Must not own |
+|---|---|---|
+| Prompt Forge | Evidence, prompt dialect, prompt quality, envelope gate | ComfyUI, models, nodes, workflow compilation, execution |
+| camera-image runtime | Fixed source workflow, semantic config compilation, group selection, graph contracts | MCP transport implementation, prompt authoring |
+| comfyui-chenxin-mcp engine | Unified tool dispatch, image upload, queue control, execution, history, artifacts | Skill-specific node logic |
+| comfyui-mcp | ComfyUI protocol operations, strip conversion, workflow validation, runtime checks | Product-level config semantics |
+| ComfyUI | Node execution and history | Prompt authoring and skill policy |
 
 ## Data flow
 
-`brief + evidence -> Claude/Codex draft -> deterministic PromptPackage -> external pipeline`
+```text
+CreativeEvidence + caller draft
+  -> Prompt Forge envelope gate
+  -> camera-image semantic config
+  -> fixed UI source + group selection
+  -> MCP strip_workflow
+  -> validated API graph
+  -> local ComfyUI enqueue/history
+  -> hashed PNG + submitted graph + run record
+```
 
-The external pipeline adds profiles, approval, ComfyUI/MCP submission, artifacts, and history.
+## Workflow authority
 
-## Ownership table
+The camera runtime has one source workflow:
 
-- Prompt Forge: evidence normalization, dialect and style language, tag checks, package validation.
-- Character video pipeline: model/workflow discovery, MCP, approvals, submission, artifacts, and RunRecords.
+```text
+skills/camera-image/camera_image/runtime/workflow_assets/camera-anima.json
+```
 
-## Boundary invariants
+It is a complete UI superset. Stage group files describe group membership, but
+they do not replace the source workflow. Generated API JSON files are release
+inspection artifacts, not runtime alternatives.
 
-- Prompt Forge never imports runtime code, reads workflow profiles, checks model installation, or emits execution state.
-- The pipeline never asks Prompt Forge to execute or silently rewrite a prompt.
+## Compiler boundary
 
-## Four-stage handoff
+The compiler is intentionally one-way:
 
-1. Prompt Forge writes the base-image prompt.
-2. The pipeline consumes it for the base image.
-3. Prompt Forge writes multiview, shot, and video prompts while preserving locked evidence.
-4. The pipeline consumes external assets; Prompt Forge remains side-effect free.
+```text
+RunConfig -> UI widgets/modes -> strip -> API graph
+```
+
+The UI graph is mutated in memory before strip. The API graph is validated and
+then treated as immutable. There is no temporary save/load round trip and no
+post-strip repair layer.
+
+## Contract layers
+
+1. `validate_config` checks envelope shape and declared feature dependencies.
+2. Group metadata validation checks caller titles, source node membership, and
+   stage-required groups.
+3. `validate_api_graph` checks resolved API references and image output paths.
+4. ComfyUI MCP validates the exact graph against installed node contracts.
+5. Runtime checks require the local execution environment.
+6. Artifact verification proves that execution produced the requested output.
+
+Each layer has one authority and one failure boundary. A later layer does not
+silently repair an earlier invalid result.
+
+## Layer boundaries
+
+- `comfyui_chenxin_mcp.engine.*` imports no skill runtime module.
+- `skills/*/runtime/*` imports no MCP engine module.
+- `skills/*/skill_data.py` supplies the explicit function-pointer bridge.
+- The MCP server exposes four unified tools regardless of skill count.
+
+## Virgin principle
+
+The current contract is designed as the only contract:
+
+- no legacy endpoint;
+- no old workflow fallback;
+- no API/UI dual runtime authority;
+- no silent feature downgrade;
+- no compatibility shim for changed node types;
+- no graph patch after conversion.
+
+When a contract changes, update the source asset, compiler, schema, tests, and
+documentation together, then remove the superseded behavior.
 
 ## Verification
 
-Prompt Forge is verified offline with deterministic tests. Runtime integration and live workflow checks belong to the production consumer.
+Offline checks:
+
+```powershell
+$root = (Get-Location).Path
+Push-Location (Join-Path $root "skills/camera-image/camera_image")
+$env:PYTHONPATH = (Get-Location).Path
+python -m pytest runtime/tests -q
+Pop-Location
+$env:PYTHONPATH = $root
+python -m pytest skills/_mcp/src/comfyui_chenxin_mcp/tests -q
+```
+
+Live checks are defined in [`camera-image-flow.md`](camera-image-flow.md) and
+require actual PNG output plus submitted-graph assertions.

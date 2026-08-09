@@ -1,30 +1,66 @@
-# Character Video Pipeline MCP Bridge
+# MCP execution boundary
 
-`McpBridge` 是 `character-video-pipeline` 的宿主无关适配层。Codex、Claude Code、其他 MCP 客户端和测试 harness 都只需提供同一个 `host_call_tool(tool_name, arguments)` callable；runtime 不导入任何宿主 SDK。
+The project uses two MCP layers with different responsibilities:
 
-```python
-from runtime.mcp_bridge import McpBridge
-
-bridge = McpBridge(
-    host_call_tool,
-    tool_names={
-        "get_workflow": "mcp__comfyui-mcp__get_workflow",
-        "strip_workflow": "mcp__comfyui-mcp__strip_workflow",
-        "validate_workflow": "mcp__comfyui-mcp__validate_workflow",
-        "check_workflow_runtime": "mcp__comfyui-mcp__check_workflow_runtime",
-    },
-    host_id="codex",
-    host_version="host-version",
-)
+```text
+Codex / host
+  -> comfyui-chenxin-mcp
+       -> skill engine
+            -> comfyui-mcp@0.49.8
+                 -> local ComfyUI
 ```
 
-## 边界规则
+## Project MCP server
 
-- bridge 只映射逻辑工具名、校验 JSON、记录参数/响应 hash 和时间戳；
-- `workflow_tools()` 返回 workflow discovery 所需的四个只读 callable；
-- bridge 不实现 UI→API converter，不选择 fallback，不发明 conversion receipt；
-- side effect 默认关闭，只有 pipeline 已完成 approval 和一次性 consumption 后才允许注入提交边界；
-- raw callable map 与 bridge 不能同时传入；
-- local orchestrator 仍负责 profile、graph、queue、idempotency、history 和 artifact 校验。
+`skills/_mcp` is the project server. It exposes exactly:
 
-详细生产顺序见 [`docs/USAGE.md`](USAGE.md)。
+- `list_skills`
+- `describe_config`
+- `validate_config`
+- `run_skill`
+
+It discovers skills through Python entry points and calls their `SkillData`
+function pointers. It does not know camera node IDs or implement feature
+patches.
+
+## ComfyUI MCP client
+
+The engine's `McpClient` owns the subprocess contract with
+`comfyui-mcp@0.49.8`. The camera workflow uses these operations:
+
+| Operation | Purpose |
+|---|---|
+| `upload_image` | Upload local stage images and return ComfyUI filenames |
+| `strip_workflow` | Convert the selected UI graph to API format |
+| `validate_workflow` | Validate the final API graph |
+| `check_workflow_runtime` | Confirm the graph uses the local runtime |
+| `enqueue_workflow` | Submit `{"workflow": graph}` |
+| history/image operations | Wait for completion and download the artifact |
+
+The exact MCP tool contract is owned by the installed `comfyui-mcp` package and
+is checked during environment setup. Do not call an older `get_workflow` save/load
+path for camera-image compilation.
+
+## Boundary rules
+
+- Prompt Forge does not call MCP.
+- The camera runtime does not import the MCP engine.
+- The engine does not import camera runtime modules directly.
+- The UI-to-API converter is not reimplemented in project code.
+- Conversion occurs once; no post-conversion graph repair is permitted.
+- Missing capabilities fail closed before enqueue.
+
+## Debugging order
+
+When a run fails, inspect in this order:
+
+1. `validate_config` result;
+2. image upload result and returned filename;
+3. `submitted-graph.json`;
+4. project graph validation result;
+5. ComfyUI `validate_workflow` result;
+6. ComfyUI node error and history entry;
+7. downloaded artifact and hash.
+
+Do not infer success from a prompt ID or an idle queue. The final evidence is
+the validated submitted graph plus the verified artifact.

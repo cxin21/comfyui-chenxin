@@ -81,6 +81,14 @@ def test_compute_enabled_groups_user_cannot_remove_defaults():
     assert "图像锐化（G2）" in g2
 
 
+def test_compute_enabled_groups_rejects_unknown_group_title():
+    with pytest.raises(ValueError, match="unknown group"):
+        source_workflow.compute_enabled_groups(
+            STAGES.T2I,
+            GroupsConfig(g1=["group-that-does-not-exist"]),
+        )
+
+
 def test_load_source_ui_returns_dict():
     ui = source_workflow._load_source_ui()
     assert isinstance(ui, dict)
@@ -152,51 +160,45 @@ def test_apply_modes_user_can_enable_extra_groups():
     assert nodes[35]["mode"] == 4   # not in enabled set
 
 
-def test_prepare_temporary_workflow_writes_temp_file_and_strips(tmp_path, monkeypatch):
-    """End-to-end: prepare_temporary_workflow writes a temp file, hands it
-    to MCP save_workflow, asks strip_workflow for the API graph, deletes
-    the temp file, and returns the API graph."""
+def test_prepare_temporary_workflow_uses_inline_strip_only():
     mcp = MagicMock()
     api_graph = {
+        "111": {"class_type": "ImageSharpen", "inputs": {}},
         "35": {"class_type": "Image Saver Simple", "inputs": {"images": ["111", 0]}},
     }
-    mcp.get_workflow.return_value = api_graph
+    mcp.strip_workflow.return_value = api_graph
 
-    captured: dict = {}
+    result = source_workflow.prepare_temporary_workflow(mcp, stage=STAGES.T2I)
 
-    real_mkstemp = source_workflow.tempfile.mkstemp
+    assert result is api_graph
+    mcp.strip_workflow.assert_called_once()
+    submitted_ui = mcp.strip_workflow.call_args.args[0]
+    assert submitted_ui["nodes"]
+    assert not hasattr(mcp, "save_workflow") or not mcp.save_workflow.called
+    assert not hasattr(mcp, "get_workflow") or not mcp.get_workflow.called
 
-    def fake_mkstemp(*args, **kwargs):
-        prefix = kwargs.get("prefix", args[0] if args else "temp_")
-        suffix = kwargs.get("suffix", args[1] if len(args) > 1 else ".json")
-        # route to tmp_path for test isolation
-        fd, path = real_mkstemp(prefix=prefix, suffix=suffix, dir=str(tmp_path))
-        captured["path"] = path
-        return fd, path
 
-    monkeypatch.setattr(source_workflow.tempfile, "mkstemp", fake_mkstemp)
+def test_prepare_temporary_workflow_rejects_dangling_api_reference():
+    mcp = MagicMock()
+    mcp.strip_workflow.return_value = {
+        "35": {
+            "class_type": "Image Saver Simple",
+            "inputs": {"images": ["missing-node", 0]},
+        },
+    }
 
-    g = source_workflow.prepare_temporary_workflow(mcp, stage=STAGES.T2I)
+    with pytest.raises(ValueError, match="dangling input reference"):
+        source_workflow.prepare_temporary_workflow(mcp, stage=STAGES.T2I)
 
-    # mcp.save_workflow was called with the temp filename + the modified UI
-    mcp.save_workflow.assert_called_once()
-    save_args = mcp.save_workflow.call_args
-    temp_filename = save_args[0][0]
-    uploaded_ui = save_args[0][1]
-    assert temp_filename.startswith("temp_")
-    assert temp_filename.endswith(".json")
-    assert isinstance(uploaded_ui, dict)
-    assert "nodes" in uploaded_ui
 
-    # mcp.get_workflow was called with the temp filename
-    mcp.get_workflow.assert_called_once()
-    gw_kwargs = mcp.get_workflow.call_args.kwargs
-    assert gw_kwargs["filename"] == temp_filename
-    assert gw_kwargs["format"] == "api"
+def test_prepare_temporary_workflow_rejects_output_without_image_link():
+    mcp = MagicMock()
+    mcp.strip_workflow.return_value = {
+        "35": {
+            "class_type": "Image Saver Simple",
+            "inputs": {"filename": "output"},
+        },
+    }
 
-    # the API graph was returned
-    assert g is api_graph
-
-    # local temp file was deleted
-    import os
-    assert not os.path.exists(captured["path"])
+    with pytest.raises(ValueError, match="output node.*images"):
+        source_workflow.prepare_temporary_workflow(mcp, stage=STAGES.T2I)

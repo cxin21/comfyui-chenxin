@@ -1,70 +1,70 @@
 # comfyui-chenxin
 
-面向本地 ComfyUI 的提示词与角色到视频生产插件。项目刻意拆成两个边界清晰的技能：`prompt-forge` 只负责由 Claude/Codex 创作并审查高质量提示词；`character-video-pipeline` 负责审批后的 ComfyUI/MCP 生产执行。
+面向本地 ComfyUI 的提示词与图像生产插件。项目将提示词创作与实际执行
+严格分开：`prompt-forge` 负责提示词契约，`camera-image` 负责 Anima
+相机图像工作流的编译、执行和输出验收。
 
-## 两个 active 技能
+## Active skills
 
-| 技能 | 责任 | 副作用 |
-| --- | --- | --- |
-| `skills/prompt-forge/SKILL.md` | CreativeEvidence、模型提示词方言、视觉风格、精确 tag 校验、PromptPackage 质量审查 | 无 |
-| `skills/camera-image/SKILL.md` | 四阶段工作流发现、审批、提交、历史与资产证据 | 仅 approval-gated local ComfyUI/MCP |
+| Skill | 职责 | 副作用 |
+|---|---|---|
+| `skills/prompt-forge/SKILL.md` | CreativeEvidence、提示词生成与质量校验 | 无 |
+| `skills/camera-image/SKILL.md` | T2I/I2I、LoRA、ControlNet、ComfyUI 执行与 PNG 验收 | 本地 ComfyUI/MCP |
 
-Prompt Forge 不检查模型是否安装，也不读取或执行工作流；模型资料只描述提示词语言。生产技能只消费已审查的 PromptPackage，不重新创作或静默改写提示词。
+`camera-multiview` 和 `camera-video` 目前只保留包结构，不属于本次
+camera-image 运行契约。
 
-## 四阶段生产路径
+## Canonical flow
 
 ```text
-Claude/Codex + CreativeEvidence
-  -> Prompt Forge: 正向/反向基础图 PromptPackage
-  -> 相机视角文生图: 正面基础图
-  -> Flux2-Klein: 人物多视图设定图
-  -> Prompt Forge: 镜头 PromptPackage（继承 continuity locks）
-  -> 相机视角 G1 图生图: 具体镜头图
-  -> Prompt Forge: 双语 LTX 视频 PromptPackage
-  -> LTX Yusu Director: 视频 + history + RunRecord
+Prompt Forge envelope
+  -> validate_config
+  -> fixed UI source + semantic config
+  -> group selection
+  -> strip_workflow once
+  -> final API graph validation
+  -> local ComfyUI enqueue/history
+  -> verified PNG + submitted graph + run record
 ```
 
-每一阶段都必须通过 profile、工作流指纹、审批、一次性消费、history 和 artifact 校验；证据缺失时 fail closed。
+运行时唯一工作流源是：
 
-## 前提与安装
+```text
+skills/camera-image/camera_image/runtime/workflow_assets/camera-anima.json
+```
 
-假设 ComfyUI 已部署并运行在 `http://127.0.0.1:8188/`。本仓库不携带模型权重、Custom Nodes 或工作流实体；这些由外部 ComfyUI 环境和生产技能管理。
+API 快照不是运行时替代源；不保存临时工作流，不在 strip 后补线，不保留
+旧接口兼容层。
+
+## Prerequisites and install
+
+假设 ComfyUI 已运行在 `http://127.0.0.1:8188`，且已安装 Anima 模型及
+所需自定义节点。
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/install.ps1
+powershell -ExecutionPolicy Bypass -File scripts\install.ps1
+powershell -ExecutionPolicy Bypass -File skills\prompt-forge\preflight-env.ps1
 ```
 
-```bash
-bash scripts/install.sh
-```
-
-安装脚本只登记 MCP 配置和宿主示例，不下载模型或伪造可用能力。
-
-## 验证
+## Verification
 
 ```powershell
-$env:PYTHONPATH = "skills/prompt-forge"
-py -3 -m pytest -q skills/prompt-forge/internals/tests
-$env:PYTHONPATH = "skills/character-video-pipeline"
-py -3 -m pytest -q skills/character-video-pipeline/runtime/tests
-py -3 -m compileall -q skills/prompt-forge/internals skills/character-video-pipeline/runtime
+$root = (Get-Location).Path
+Push-Location (Join-Path $root "skills/camera-image/camera_image")
+$env:PYTHONPATH = (Get-Location).Path
+python -m pytest runtime/tests -q
+Pop-Location
+$env:PYTHONPATH = $root
+python -m pytest skills/_mcp/src/comfyui_chenxin_mcp/tests -q
 ```
 
-Prompt Forge 的验证不需要 ComfyUI；live 生产测试必须显式 opt-in，并由 `character-video-pipeline` 负责。
+详细使用方式见：
 
-## 文档
+- [camera-image skill](skills/camera-image/SKILL.md)
+- [camera-image canonical flow](docs/camera-image-flow.md)
+- [MCP execution boundary](docs/MCP_BRIDGE.md)
+- [troubleshooting](docs/TROUBLESHOOTING.md)
+- [usage](docs/USAGE.md)
 
-- [使用说明](docs/USAGE.md)
-- [系统架构](docs/architecture.md)
-- [MCP Bridge](docs/MCP_BRIDGE.md)
-- [故障排查](docs/TROUBLESHOOTING.md)
-- [Prompt Forge 规范](skills/prompt-forge/SPEC.md)
-- [相机图像技能](skills/camera-image/SKILL.md)
-
-## 明确边界
-
-- 不自动安装 ComfyUI、模型、Custom Nodes 或工作流。
-- 不在 Prompt Forge 中调用 MCP、提交任务或保存 RunRecord。
-- 没有 Claude/Codex 的 caller-authored 草稿时，Prompt Forge 校验失败，不生成 fallback prose。
-
-许可证：MIT。上游 MCP 归属见 [`ATTRIBUTION.md`](ATTRIBUTION.md)。
+Prompt Forge 不安装模型、节点或工作流，也不调用 MCP。生产执行失败时
+必须保留真实错误，不生成伪造成功状态。

@@ -1,46 +1,67 @@
 # comfyui-chenxin
 
-A local ComfyUI plugin with two bounded skills: `prompt-forge` is an LLM-first authoring and audit boundary, while `character-video-pipeline` is the approval-gated production consumer.
+A local ComfyUI plugin with a strict boundary between prompt authoring and
+image execution. `prompt-forge` owns the prompt envelope; `camera-image` owns
+the Anima camera workflow compiler, ComfyUI execution, and PNG verification.
 
 ## Active skills
 
 | Skill | Responsibility | Side effects |
-| --- | --- | --- |
-| `skills/prompt-forge/SKILL.md` | CreativeEvidence, prompt dialects, visual styles, exact tag validation, and PromptPackage lint | None |
-| `skills/character-video-pipeline/SKILL.md` | Four-stage workflow discovery, approval, ComfyUI/MCP submission, history, and artifacts | Approval-gated local ComfyUI/MCP |
+|---|---|---|
+| `skills/prompt-forge/SKILL.md` | CreativeEvidence, prompt authoring, and quality checks | None |
+| `skills/camera-image/SKILL.md` | T2I/I2I, LoRA, ControlNet, ComfyUI execution, and artifact verification | Local ComfyUI/MCP |
 
-Claude or Codex writes the final prompt fields. Prompt Forge never checks installed models, reads workflows, calls MCP, or emits execution state. The production skill consumes an approved PromptPackage and does not silently rewrite it.
+`camera-multiview` and `camera-video` are package placeholders and are outside
+the current camera-image execution contract.
 
-## Production path
+## Canonical flow
 
 ```text
-CreativeEvidence + Claude/Codex
-  -> base image PromptPackage -> camera-view text-to-image -> front base image
-  -> Flux2-Klein multiview -> accepted character sheet
-  -> shot PromptPackage + G1 reference -> camera-view img2img -> shot image
-  -> bilingual video PromptPackage -> LTX Yusu Director -> verified video + RunRecord
+Prompt Forge envelope
+  -> validate_config
+  -> fixed UI source + semantic config
+  -> group selection
+  -> strip_workflow once
+  -> final API graph validation
+  -> local ComfyUI enqueue/history
+  -> verified PNG + submitted graph + run record
 ```
 
-The repository does not ship ComfyUI, model weights, Custom Nodes, or saved workflow entities.
+The only runtime workflow source is:
+
+```text
+skills/camera-image/camera_image/runtime/workflow_assets/camera-anima.json
+```
+
+API snapshots are not runtime alternatives. The compiler does not save a
+temporary workflow, repair the graph after strip, or retain an old interface.
 
 ## Prerequisites and install
 
-Assume ComfyUI is already running at `http://127.0.0.1:8188/`. Install only registers MCP configuration and host examples:
-
-```bash
-bash scripts/install.sh
-```
+Assume ComfyUI is running at `http://127.0.0.1:8188` with the Anima model and
+required custom nodes installed.
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/install.ps1
+powershell -ExecutionPolicy Bypass -File scripts\install.ps1
+powershell -ExecutionPolicy Bypass -File skills\prompt-forge\preflight-env.ps1
 ```
 
 ## Verification
 
-```bash
-PYTHONPATH=skills/prompt-forge pytest -q skills/prompt-forge/internals/tests
-PYTHONPATH=skills/character-video-pipeline pytest -q skills/character-video-pipeline/runtime/tests
-python -m compileall -q skills/prompt-forge/internals skills/character-video-pipeline/runtime
+```powershell
+$root = (Get-Location).Path
+Push-Location (Join-Path $root "skills/camera-image/camera_image")
+$env:PYTHONPATH = (Get-Location).Path
+python -m pytest runtime/tests -q
+Pop-Location
+$env:PYTHONPATH = $root
+python -m pytest skills/_mcp/src/comfyui_chenxin_mcp/tests -q
 ```
 
-See [`docs/USAGE.md`](docs/USAGE.md), [`docs/architecture.md`](docs/architecture.md), [`docs/MCP_BRIDGE.md`](docs/MCP_BRIDGE.md), [`skills/prompt-forge/SPEC.md`](skills/prompt-forge/SPEC.md), and [`skills/character-video-pipeline/SKILL.md`](skills/character-video-pipeline/SKILL.md).
+See:
+
+- [`skills/camera-image/SKILL.md`](skills/camera-image/SKILL.md)
+- [`docs/camera-image-flow.md`](docs/camera-image-flow.md)
+- [`docs/MCP_BRIDGE.md`](docs/MCP_BRIDGE.md)
+- [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md)
+- [`docs/USAGE.md`](docs/USAGE.md)

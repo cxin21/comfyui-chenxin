@@ -2,7 +2,6 @@
 from runtime.graph_patcher import (
     describe_config,
     NODE_FIELD_MAP,
-    _node_static_default,
     _apply_sampling,
     _apply_seed,
     _apply_image_size,
@@ -32,12 +31,6 @@ def test_node_field_map_keys_match_config_schema_paths():
     assert "image_size.width" in paths
     assert "image_size.height" in paths
     assert "controlnet_image" in paths
-
-
-def test_node_static_default_reads_workflow_value():
-    graph = {"50": {"inputs": {"steps": 40}}, "65": {"inputs": {"seed": -1}}}
-    assert _node_static_default(graph, "50", "steps") == 40
-    assert _node_static_default(graph, "65", "seed") == -1
 
 
 def test_describe_config_returns_workflow_bound_defaults():
@@ -116,8 +109,8 @@ def _stripped_graph(stage=STAGES.T2I):
                "class_type": "ImpactWildcardProcessor"},
         "25": {"inputs": {"wildcard_text": "", "populated_text": ""},
                "class_type": "ImpactWildcardProcessor"},
-        "26": {"inputs": {"text": "<lora:default:1.00>"},
-               "class_type": "Lora Loader (LoraManager)"},
+        "26": {"inputs": {"lora_syntax": "<lora:default:1.00>"},
+               "class_type": "LoRA Text Loader (LoraManager)"},
         "27": {"inputs": {"denoise": 1.0, "latent_image": ["86", 0]},
                "class_type": "KSampler"},
         "50": {"inputs": {"steps": 40, "cfg": 4, "sampler": "dpmpp_2m",
@@ -193,7 +186,7 @@ def test_apply_run_config_i2i_forces_denoise_override():
         stage=STAGES.I2I,
         config=_base_config(reference_image="ref.png"),
     )
-    assert g["27"]["inputs"]["denoise"] == 0.6
+    assert g["50"]["inputs"]["denoise"] == 0.6
 
 
 def test_apply_run_config_i2i_missing_reference_image_raises():
@@ -202,7 +195,7 @@ def test_apply_run_config_i2i_missing_reference_image_raises():
         apply_run_config(_stripped_graph(), stage=STAGES.I2I, config=cfg)
 
 
-def test_apply_run_config_i2i_rewires_vae_and_loadimage():
+def test_apply_run_config_i2i_sets_ui_converter_inputs():
     g = apply_run_config(
         _stripped_graph(),
         stage=STAGES.I2I,
@@ -210,10 +203,9 @@ def test_apply_run_config_i2i_rewires_vae_and_loadimage():
     )
     # node 21 (LoadImage) image -> uploaded filename
     assert g["21"]["inputs"]["image"] == "ref.png"
-    # node 59 (VAEEncode) pixels <- [21, 0]
-    assert g["59"]["inputs"]["pixels"] == ["21", 0]
-    # node 27 (KSampler) latent_image <- [59, 0]
-    assert g["27"]["inputs"]["latent_image"] == ["59", 0]
+    assert g["58"]["inputs"]["value"] == 2
+    # The converter owns the ImpactSwitch -> KSampler connection; this layer
+    # only supplies the UI values that determine the selected branch.
 
 
 def test_apply_run_config_controlnet_image_requires_group():

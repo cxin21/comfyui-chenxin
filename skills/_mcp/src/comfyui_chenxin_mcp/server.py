@@ -75,21 +75,22 @@ def main() -> None:
 
     @server.tool(
         name="validate_config",
-        description="Validate a config dict before running a skill.",
+        description="Validate envelope + config dicts before running a skill. Same shape as run_skill (minus output_dir).",
         input_schema={
             "type": "object",
             "properties": {
                 "skill": {"type": "string"},
                 "stage": {"type": "string"},
+                "envelope": {"type": "object"},
                 "config": {"type": "object"},
             },
-            "required": ["skill", "stage", "config"],
+            "required": ["skill", "stage", "envelope", "config"],
             "additionalProperties": False,
         },
     )
-    async def validate(skill: str, stage: str, config: dict) -> dict:
+    async def validate(skill: str, stage: str, envelope: dict, config: dict) -> dict:
         sd = _find_skill(skills, skill)
-        return validate_config(sd, stage, config)
+        return validate_config(sd, stage, envelope, config)
 
     @server.tool(
         name="run_skill",

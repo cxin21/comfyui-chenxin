@@ -1,91 +1,84 @@
-# comfyui-chenxin-mcp v1 Specification
+# comfyui-chenxin-mcp specification
 
-**Date:** 2026-08-08
-**Status:** implemented (in progress, v1)
+Status: current implementation contract
 
-## Context
+## Purpose
 
-Each `camera-*` skill (`camera-image`, `camera-multiview`, `camera-video`) has its own CLI surface, but LLM hosts (Claude Code, Codex, OpenCode) want MCP-native tool access. A plugin-level MCP server provides self-describing tools (`tools/list`) so LLMs don't need to read SKILL.md / docs before invoking capabilities.
+Provide one MCP-native execution surface for installed skills. Keep transport,
+queue, history, and artifact concerns in the shared engine; keep workflow
+semantics in the skill package.
 
-## Decisions
+## Fixed interface
 
-1. **v1 scope:** `camera-image` only (`t2i-camera` + `i2i-camera`). `camera-multiview` and `camera-video` are added in v2+ by each skill declaring its own entry-point.
-2. **Package name:** `comfyui-chenxin-mcp`
-3. **Entry point:** `comfyui-chenxin-mcp-server`
-4. **Transport:** stdio
-5. **Skill registry via Python entry-points:** each skill declares a `comfyui_chenxin_mcp.skills` entry-point in its own `pyproject.toml` pointing at `register(mcp)`. The MCP server iterates entry-points at startup — adding a new skill = pip-install the new skill package; no MCP server code changes.
-6. **Schema source of truth:** each skill's own `runtime.graph_patcher.describe_config`. MCP server dispatches to it lazily; never duplicates the field map.
-7. **`validate_config` is a separate MCP tool** (not a CLI subcommand) so LLM gets structured errors before invoking `run-*`.
+The stdio MCP server uses JSON-RPC 2.0 with MCP framing and exposes exactly:
 
-## Architecture
+- `list_skills`
+- `describe_config`
+- `validate_config`
+- `run_skill`
 
-Stdio JSON-RPC 2.0 server, MCP 2024-11-05 framing. Tools dispatch to existing `runtime.*` modules. `comfyui-mcp` is a downstream dependency reached via `McpClient`.
+The interface is skill-agnostic. Adding a skill adds a `SkillData` entry point;
+it does not add a new tool family.
 
-## Components
+## Skill entry point
 
-| Module | Responsibility |
-|--------|---------------|
-| `protocol.py` | JSON-RPC 2.0 / MCP 2024-11-05 framing |
-| `registry.py` | Skill registration + tool dispatch |
-| `workflow_dir.py` | Asset scan |
-| `schema.py` | Schema + validation |
-| `tools/camera.py` | `t2i-camera` / `i2i-camera` tool handlers |
-| `server.py` | Entrypoint |
-
-## Data Flow
-
-```
-LLM host (Claude Code/Codex)
-  -> tools/list (auto at startup)
-  -> describe_camera_config(stage="t2i-camera")
-     -> calls runtime.graph_patcher.describe_config (single source)
-  -> validate_camera_config(config={...})
-     -> calls runtime tools to verify schema + groups + sizes
-  -> run_t2i_camera(envelope=..., **tunables)
-     -> runtime.prompt_forge_bridge.compile_envelope (gate)
-     -> runtime.source_workflow.prepare_temporary_workflow (cp + mode + upload)
-     -> runtime.graph_patcher.apply_run_config (write tunables)
-     -> runtime.t2i_camera.run_t2i (enqueue + wait + download)
-     -> returns payload
+```toml
+[project.entry-points."comfyui_chenxin_mcp.skills"]
+camera-image = "camera_image.skill_data:get_skill_data"
 ```
 
-## Testing
+`SkillData` contains stages, workflow metadata, dependency rules, stage-image
+specifications, output type, and the skill-owned describe/prepare/config
+functions.
 
-- Per-tool unit tests with mocked `McpClient`
-- Protocol framing tests
-- Registry dispatch test
+## Runtime data flow
 
-## Scope
+```text
+MCP host
+  -> list / describe / validate
+  -> run_skill(envelope, config)
+  -> build RunConfig
+  -> Prompt Forge gate
+  -> ordered image upload
+  -> queue guard
+  -> skill.prepare_fn
+  -> final API graph validation
+  -> local runtime check
+  -> enqueue_workflow({"workflow": graph})
+  -> history wait
+  -> artifact download/hash
+  -> run record
+```
 
-**In scope (v1):**
+For camera-image, `prepare_fn` loads the fixed UI source, applies config and
+group modes, calls `strip_workflow` once, and returns the validated API graph.
 
-- `comfyui-chenxin-mcp` Python package with stdio JSON-RPC 2.0 server
-- `comfyui-chenxin-mcp-server` entry point
-- Entry-point-based skill registry; `camera-image` shipped as a separate package declaring its `register(mcp)` entry-point
-- Tools: `describe_camera_config`, `validate_camera_config`, `run_t2i_camera`, `run_i2i_camera`
-- Lazy dispatch to `runtime.graph_patcher.describe_config` (single source of truth)
-- Structured validation errors before `run-*` invocations
-- Downstream `McpClient` integration with `comfyui-mcp`
+## Error contract
 
-**Out of scope:**
+- Invalid envelope/config: `validate_config` returns `{ok:false, errors:[...]}`.
+- Prompt gate failure: `run_skill` returns `exit_code=1`.
+- Missing MCP capability or invalid graph: `run_skill` returns a typed failure.
+- ComfyUI node error: fail immediately; do not wait for a successful history.
+- Missing or invalid artifact: the run is unsuccessful.
 
-- `camera-multiview` and `camera-video` skills (added in v2+ via entry-point registration)
-- `flux2-klein-multiview` skill
-- `ltx-yusu-director` skill
-- HTTP / SSE transport
-- Auth / multi-tenant
-- A non-MCP CLI subcommand surface
+No fallback workflow, compatibility interface, temporary save/load path, or
+post-strip graph repair is part of the contract.
 
-## Self-Review Checklist
+## Boundaries
 
-1. Does the spec clearly state v1 ships only `camera-image` and explicitly defer `camera-multiview` / `camera-video` to v2+?
-2. Is the skill-registry mechanism defined as Python entry-points (not a hard-coded list, not a YAML config)?
-3. Is the schema source of truth identified as `runtime.graph_patcher.describe_config` with the MCP server dispatching lazily and never duplicating the field map?
-4. Is `validate_config` defined as a separate MCP tool (not a CLI subcommand) so LLMs get structured errors before `run-*`?
-5. Is the transport pinned to stdio and the framing to JSON-RPC 2.0 / MCP 2024-11-05?
-6. Are all six components (`protocol.py`, `registry.py`, `workflow_dir.py`, `schema.py`, `tools/camera.py`, `server.py`) listed with distinct responsibilities?
-7. Is the data-flow code block end-to-end (LLM host → `tools/list` → describe → validate → run) and does each `run-*` step name the specific `runtime.*` module invoked?
-8. Is the testing strategy concrete (per-tool unit tests with mocked `McpClient`, protocol framing tests, registry dispatch test) rather than "tests exist"?
-9. Are both scope items and out-of-scope items explicit (in-scope lists what ships; out-of-scope lists the deferred skills plus HTTP, auth, and CLI subcommand surface)?
-10. Are the package name (`comfyui-chenxin-mcp`) and entry point (`comfyui-chenxin-mcp-server`) named verbatim?
-11. Is `comfyui-mcp` identified as a downstream dependency reached via `McpClient`, and is it clear the new server does not reimplement that client?
+- The engine does not import skill runtime modules.
+- Skill runtime modules do not import the engine.
+- `skill_data.py` is the explicit bridge.
+- The upstream `comfyui-mcp` package owns ComfyUI protocol operations and strip
+  conversion.
+- Prompt Forge remains side-effect free.
+
+## Verification
+
+The engine tests cover MCP framing, registry discovery, schema dispatch,
+dependency validation, execution sequencing, client response contracts, and
+server smoke behavior. Camera-image tests cover fixed-source compilation,
+group contracts, API graph structure, and real PNG acceptance.
+
+See [`docs/camera-image-flow.md`](../../camera-image-flow.md) and
+[`skills/_mcp/README.md`](../../../skills/_mcp/README.md).

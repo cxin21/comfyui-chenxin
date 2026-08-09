@@ -1,12 +1,19 @@
 """Shared execution engine - one run_skill for all skills.
 
-Replaces t2i_camera.run_t2i + i2i_camera.run_i2i (80+ lines of duplicated code).
+Layered contract:
+  - MCP tool layer (server.py:run) — public; accepts envelope + config dicts.
+  - engine.execute.run_skill     — INTERNAL; takes a RunConfig dataclass.
+                                The MCP server builds it via SkillData.build_config_fn.
+                                Direct callers (e.g. unit tests) MUST construct
+                                a RunConfig themselves.
+
 Flow: prompt-forge gate -> upload images -> health -> prepare (UI: config + modes + strip) -> validate -> enqueue -> wait -> download.
 """
 from __future__ import annotations
 
 import hashlib
 import json
+import sys
 import time
 from dataclasses import asdict, replace
 from pathlib import Path
@@ -21,7 +28,7 @@ def run_skill(
     skill_data: SkillData,
     stage: str,
     config,
-    output_dir: Path,
+    output_dir: str | Path,
     timeout: float = 600.0,
     poll_interval: float = 3.0,
 ) -> tuple[dict[str, Any], int]:
@@ -35,7 +42,21 @@ def run_skill(
        return stripped API graph with config baked in)
     5. validate + check runtime
     6. enqueue + wait + download
+
+    `config` is the skill's RunConfig dataclass (the engine's internal
+    type). The MCP tool layer is the only public caller; it builds the
+    RunConfig via `SkillData.build_config_fn(envelope, **tunables)` so
+    hosts can keep using JSON-shape inputs.
+
+    `output_dir` accepts either a string (the JSON-RPC shape hosts send)
+    or a Path (idiomatic for direct callers). Coerced internally.
+
+    Returns ``({"accepted": False, "error": ..., "error_type": ...}, 1)``
+    on failure. The error message includes the exception class name so
+    callers can distinguish infrastructure failures from validation
+    failures without parsing prose.
     """
+    output_dir = Path(output_dir)
     started = time.monotonic()
     run_dir = output_dir / "runs" / f"{stage.replace('/', '-')}_{int(time.time())}"
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -83,26 +104,21 @@ def run_skill(
             mcp_list_loras=mcp.list_loras if patch_config.lora else None,
         )
 
-        # Step 5: check runtime.
-        # mcp.enqueue is the real validation gate — if the graph is truly
-        # broken, enqueue will fail. We deliberately do NOT pre-validate the
-        # graph here: comfyui-mcp's wrapper returns a markdown summary
-        # string, not the structured result the engine would need.
-        #
-        # The runtime check itself is best-effort: an older comfyui-mcp that
-        # has not yet migrated to list_packs (action:"check_runtime") will
-        # raise, and we do NOT want that to abort an otherwise-valid run.
-        # Only an authoritative "non-local" verdict gates the run.
-        try:
-            runtime_check = mcp.check_runtime(graph)
-        except Exception as exc:
-            runtime_check = None
-            print(f"[engine] runtime check skipped: {exc}")
-        if isinstance(runtime_check, dict) and runtime_check.get("runtime") not in (None, "local"):
+        # Step 5: validate the exact API graph before enqueueing it.
+        validation = mcp.validate_workflow(graph)
+        if not isinstance(validation, dict) or validation.get("valid") is not True:
+            raise RuntimeError(f"workflow validation failed: {validation}")
+
+        runtime_check = mcp.check_runtime(graph)
+        if not isinstance(runtime_check, dict):
+            raise RuntimeError(f"workflow runtime check returned an invalid result: {runtime_check}")
+        if runtime_check.get("runtime") not in (None, "local"):
             raise RuntimeError(f"workflow uses non-local runtime: {runtime_check}")
 
         # Step 6: enqueue + wait + download.
         result = mcp.enqueue(graph)
+        if isinstance(result, dict) and result.get("node_errors"):
+            raise RuntimeError(f"ComfyUI rejected workflow nodes: {result['node_errors']}")
         prompt_id = None
         if isinstance(result, dict):
             prompt_id = result.get("prompt_id") or result.get("promptId")
@@ -113,9 +129,24 @@ def run_skill(
         artifact = _download_artifact(mcp, entry, output_dir, skill_data.output_type)
 
     except Exception as exc:
+        import traceback as _tb
+        # Surface the full traceback to stderr so operators (and tests
+        # that drain MCP server stderr) can localise the failure without
+        # needing to enable a debug mode. The returned payload still has
+        # only the message; the traceback is for diagnosis only.
+        sys.stderr.write(f"[engine] run_skill({stage}) failed:\n")
+        sys.stderr.write(_tb.format_exc())
+        sys.stderr.flush()
         from .state import record_attempt
-        record_attempt({"stage": stage, "status": "failed", "error": str(exc)})
-        return {"accepted": False, "stage": stage, "error": str(exc)}, 1
+        record_attempt({"stage": stage, "status": "failed",
+                         "error": str(exc),
+                         "error_type": type(exc).__name__})
+        return {
+            "accepted": False,
+            "stage": stage,
+            "error": f"{type(exc).__name__}: {exc}",
+            "error_type": type(exc).__name__,
+        }, 1
 
     duration_ms = int((time.monotonic() - started) * 1000)
     run_record = {

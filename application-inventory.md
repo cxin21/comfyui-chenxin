@@ -1,24 +1,47 @@
-# Plugin inventory and boundaries
+# Application inventory and boundaries
 
 ## Active skills
 
 | Path | Responsibility | Side effects |
 |---|---|---|
-| `skills/prompt-forge/SKILL.md` | Claude/Codex-authored image and video prompts; deterministic audit | None |
-| `skills/character-video-pipeline/SKILL.md` | Four-stage production orchestration and artifact verification | Approval-gated local ComfyUI/MCP |
+| `skills/prompt-forge/SKILL.md` | Author and audit prompt envelopes | None |
+| `skills/camera-image/SKILL.md` | Compile and execute Anima camera T2I/I2I images | Local ComfyUI/MCP |
 
-## Prompt Forge retained surface
+## camera-image runtime ownership
 
-- `dialects/` and `styles/`: prompt-language and visual-language knowledge only.
-- `internals/intent_normalize.py`: CreativeEvidence normalization and provenance.
-- `internals/dialect_lookup.py`, `style_lookup.py`: exact lookup and advisory style rendering.
-- `internals/prompt_package.py`, `prompt_compile.py`: caller-draft validation and quality lint.
-- `internals/tag_lookup.py`: exact canonical and approved-alias tag validation.
-- `dictionary/tag-index.json`, `dictionary/zh-en.json`: checked-in language indexes.
-- `references/` and `aesthetics/`: auditable prompt vocabulary and evidence policy.
+`skills/camera-image/` owns:
 
-Prompt Forge does not inspect or execute models, nodes, workflows, MCP, hardware, hashes, or local services.
+- the fixed UI source workflow;
+- stage group membership contracts;
+- semantic config-to-UI compilation;
+- LoRA and ControlNet feature contracts;
+- final API graph structural validation;
+- camera-image acceptance tests.
 
-## Production consumer
+`skills/_mcp/` owns the generic execution engine:
 
-`skills/character-video-pipeline/` is the only owner of workflow profiles, ComfyUI transport, MCP calls, approvals, submissions, artifacts, history, and RunRecords. It consumes PromptPackage; it does not ask Prompt Forge to recompile prompts.
+- MCP tool dispatch;
+- Prompt Forge gate invocation;
+- image upload;
+- ComfyUI queue and runtime checks;
+- enqueue, history polling, artifact download, hashing, and run records.
+
+The engine does not import skill runtime code directly. Skills provide
+`SkillData` and function pointers through Python entry points.
+
+## Prompt Forge boundary
+
+Prompt Forge does not inspect or execute models, nodes, workflows, MCP, local
+services, or hardware. It emits the prompt envelope consumed by the execution
+engine.
+
+## Source-of-truth rule
+
+The camera runtime source is:
+
+```text
+skills/camera-image/camera_image/runtime/workflow_assets/camera-anima.json
+```
+
+Runtime never uses a discovered workflow, temporary saved workflow, or API
+snapshot as an alternate source.

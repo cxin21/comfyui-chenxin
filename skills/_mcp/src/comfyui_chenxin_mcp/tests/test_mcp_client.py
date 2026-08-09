@@ -61,19 +61,11 @@ def test_get_history_raw_reraises_non_404_http_errors():
             client.get_history_raw("broken")
 
 
-def test_get_history_delegates_to_get_history_raw():
-    """The legacy ``get_history`` shim must delegate to ``get_history_raw``."""
+def test_mcp_client_exposes_strict_workflow_gates():
     client = _client()
-    expected = {"prompt-1": {"status": {"status_str": "success"}, "outputs": {}}}
-    with patch.object(McpClient, "get_history_raw", return_value=expected) as mock_raw:
-        result = client.get_history("prompt-1")
-    mock_raw.assert_called_once_with("prompt-1")
-    assert result is expected
-
-
-def test_mcp_client_has_no_validate_workflow_method():
-    """validate_workflow was dead code and must be gone from McpClient's surface."""
-    client = _client()
-    assert not hasattr(client, "validate_workflow"), (
-        "validate_workflow was dead code; the McpClient must not expose it."
-    )
+    assert hasattr(client, "strip_workflow")
+    assert hasattr(client, "validate_workflow")
+    assert hasattr(client, "check_runtime")
+    assert hasattr(client, "enqueue")
+    assert not hasattr(client, "save_workflow")
+    assert not hasattr(client, "get_workflow")

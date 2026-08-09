@@ -84,7 +84,8 @@ def test_validate_config_returns_ok(server_proc):
         "jsonrpc": "2.0", "id": 2, "method": "tools/call",
         "params": {"name": "validate_config",
                    "arguments": {"skill": "camera-image", "stage": "t2i-camera",
-                                 "config": {"draft": {"positive": "1girl", "negative": "lowres"}}}},
+                                 "envelope": {"draft": {"positive": "1girl", "negative": "lowres"}},
+                                 "config": {}}},
     })
     text = json.loads(out["result"]["content"][0]["text"])
     assert text["ok"] is True

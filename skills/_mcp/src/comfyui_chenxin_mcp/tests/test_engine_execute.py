@@ -78,6 +78,7 @@ def _mock_mcp():
     mcp.__enter__ = lambda s: mcp
     mcp.__exit__ = lambda *a: False
     mcp.health.return_value = {"queue": {"running": [], "pending": []}}
+    mcp.validate_workflow.return_value = {"valid": True, "errors": []}
     mcp.check_runtime.return_value = {"runtime": "local"}
     mcp.enqueue.return_value = {"prompt_id": "test-prompt-123"}
     mcp.get_history_raw.return_value = {
@@ -141,6 +142,20 @@ def test_run_skill_health_check_fails(mock_compile, tmp_path):
                               output_dir=tmp_path, timeout=5.0, poll_interval=0.1)
     assert code == 1
     assert "queue" in payload["error"].lower()
+
+
+@patch("comfyui_chenxin_mcp.engine.prompt_forge.compile_envelope",
+       return_value={"quality": {}, "warnings": []})
+def test_run_skill_rejects_enqueue_node_errors(mock_compile, tmp_path):
+    sd = _skill_data()
+    config = _config()
+    mcp = _mock_mcp()
+    mcp.enqueue.return_value = {"prompt_id": "bad-prompt", "node_errors": {"26": {"errors": ["bad input"]}}}
+    payload, code = run_skill(mcp=mcp, skill_data=sd, stage="t2i-camera", config=config,
+                              output_dir=tmp_path, timeout=5.0, poll_interval=0.1)
+    assert code == 1
+    assert "rejected workflow nodes" in payload["error"]
+    mcp.get_history_raw.assert_not_called()
 
 
 @patch("comfyui_chenxin_mcp.engine.prompt_forge.compile_envelope",

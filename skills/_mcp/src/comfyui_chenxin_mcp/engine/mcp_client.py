@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -45,21 +46,32 @@ class McpClient:
         timeout: float = 60.0,
         comfyui_url: str = "http://127.0.0.1:8188",
     ) -> "McpClient":
-        """Spawn MCP stdio server, complete handshake, return client."""
-        creationflags = 0
+        """Spawn MCP stdio server, complete handshake, return client.
+
+        On Windows, ``shell=True`` is needed to resolve ``npx.cmd`` /
+        ``npx`` shims via PATHEXT, but it strips quoting around the
+        command path. A command path with spaces (e.g.
+        ``C:\\Program Files\\nodejs\\npx.cmd``) then gets truncated at
+        the first space and cmd.exe reports "not recognized as a
+        command". We side-step this by:
+
+          - resolving the command via ``shutil.which`` first (so we have
+            the full path, no shell needed for PATH lookup), and
+          - passing argv as a list (Windows kernel quotes each arg
+            properly), keeping ``shell=False``.
+
+        The only remaining reason to use ``shell=True`` is when the user
+        passes a shell metachar-prefixed command (e.g. ``"npm exec..."``)
+        that genuinely needs shell parsing — not our case.
+        """
+        creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
         use_shell = False
-        # On Windows, subprocess.Popen with a list-form argv does NOT consult
-        # PATHEXT/PATH to resolve commands like `npx` (no extension) or `.cmd`
-        # shims. Without `shell=True` the kernel reports FileNotFoundError even
-        # when `where npx` succeeds from the same shell. POSIX shells already
-        # resolve via PATH, so we only flip the flag on Windows.
-        if os.name == "nt":
-            creationflags = subprocess.CREATE_NO_WINDOW
-            use_shell = True
-        argv: list[str] | str
-        if use_shell:
-            argv = " ".join([command, *(str(a) for a in args)])
+        resolved = shutil.which(command) if os.name == "nt" else command
+        argv: list[str]
+        if resolved is not None:
+            argv = [resolved, *args]
         else:
+            # Fall back to letting the OS resolve (PATH lookup via list argv).
             argv = [command, *args]
         try:
             proc = subprocess.Popen(
@@ -109,26 +121,16 @@ class McpClient:
         return self._call("list_local_models", {"action": "list", "model_type": "loras"})
 
     def check_runtime(self, graph: dict) -> Any:
-        # comfyui-mcp ≥ 0.50.0 deprecated check_workflow_runtime. The replacement
-        # is list_packs (action:"check_runtime") which accepts either a pack name
-        # or a graph. Best-effort: callers should treat None as "unknown".
-        return self._call("list_packs", {"action": "check_runtime", "graph": graph})
+        """Check that every node in the graph is available in the local runtime."""
+        raw = self._call("check_workflow_runtime", {"graph": graph})
+        result = _extract_json_object(raw)
+        if not isinstance(result, dict):
+            raise McpClientError("check_workflow_runtime did not return a structured result")
+        return result
 
     def enqueue(self, graph: dict) -> Any:
-        # comfyui-mcp ≥ 0.50.0 requires an `action` discriminator on enqueue_workflow.
-        # `action="enqueue"` is the new-headless-submit entry point; same workflow
-        # shape (API-format dict) is forwarded under the `workflow` key.
-        return self._call("enqueue_workflow", {"action": "enqueue", "workflow": graph})
-
-    def get_history(self, prompt_id: str) -> dict:
-        """Compatibility shim: delegates to ``get_history_raw``.
-
-        Historical callers used the comfyui-mcp ``get_history`` tool, which
-        returns a markdown-formatted summary string. Modern callers want the
-        raw dict that ComfyUI itself returns. We expose both names so older
-        test suites keep working while new code reaches for the raw form.
-        """
-        return self.get_history_raw(prompt_id)
+        """Submit one validated API graph to ComfyUI."""
+        return self._call("enqueue_workflow", {"workflow": graph})
 
     def get_history_raw(self, prompt_id: str) -> dict:
         """Fetch raw history from ComfyUI's HTTP API.
@@ -193,42 +195,28 @@ class McpClient:
             return {"name": filename, "subfolder": ""}
         return {"name": None}
 
-    def save_workflow(self, filename: str, workflow: dict) -> Any:
-        """Upload a workflow JSON to the ComfyUI user library.
-
-        Used by ``source_workflow.prepare_temporary_workflow`` to hand a
-        UI workflow (with G1/G2 mode adjustments) to the ComfyUI server
-        so ``strip_workflow`` can read it server-side.
-        """
-        # comfyui-mcp ≥ 0.49.0: save_workflow requires action="save" + filename +
-        # workflow (Web UI format JSON preferred; API-format is auto-converted
-        # server-side).
-        return self._call("save_workflow", {
-            "action": "save",
-            "filename": filename,
-            "workflow": workflow,
-        })
-
-    def get_workflow(self, filename: str, format: str = "api") -> Any:
-        """Download a saved workflow from the ComfyUI user library.
-
-        Used by ``source_workflow.prepare_temporary_workflow`` to retrieve
-        the API-format JSON of a freshly uploaded temp workflow. Returns
-        a dict (api format) when format="api", or a dict (ui format)
-        when format="ui".
-        """
-        # comfyui-mcp ≥ 0.49.0: get_workflow requires action="get" + filename +
-        # optional format (api | ui | raw).
-        return self._call("get_workflow", {
-            "action": "get",
-            "filename": filename, "format": format,
-        })
-
     def health(self) -> Any:
         # comfyui-mcp ≥ 0.50.0 deprecated `health_check`. The replacement is
         # `get_system_stats (action:"health")` which still exposes a `queue`
         # field with `running`/`pending` arrays — same shape the engine reads.
         return self._call("get_system_stats", {"action": "health"})
+
+    def strip_workflow(self, graph: dict) -> dict:
+        """Convert the pinned UI workflow graph to ComfyUI API format."""
+        raw = self._call("strip_workflow", {"graph": graph, "format": "api"})
+        result = _extract_json_object(raw)
+        if not isinstance(result, dict) or not result:
+            raise McpClientError("strip_workflow did not return an API graph")
+        return result
+
+    def validate_workflow(self, graph: dict) -> dict:
+        """Validate an API graph and return a normalized result."""
+        raw = self._call("validate_workflow", {"workflow": graph})
+        if isinstance(raw, dict) and "valid" in raw:
+            return raw
+        text = _extract_text(raw)
+        valid = "## Workflow is valid" in text and "## Workflow has" not in text
+        return {"valid": valid, "errors": [] if valid else [text], "raw": text}
 
 
 def _make_stdio_caller(proc: subprocess.Popen, timeout: float) -> Callable[..., Any]:
@@ -237,7 +225,9 @@ def _make_stdio_caller(proc: subprocess.Popen, timeout: float) -> Callable[..., 
     # these we return the full content list (with binary base64 blocks)
     # instead of extracting only the first text block. Match by exact
     # tools/call name (which mirrors McpClient method names).
-    _MULTIMODAL_TOOLS = frozenset({"get_image"})
+    _RAW_CONTENT_TOOLS = frozenset({
+        "get_image", "strip_workflow", "validate_workflow", "check_workflow_runtime",
+    })
     """Build a call_tool closure for a stdio MCP subprocess."""
     next_id = [1]
     lock = __import__("threading").Lock()
@@ -306,7 +296,7 @@ def _make_stdio_caller(proc: subprocess.Popen, timeout: float) -> Callable[..., 
         if isinstance(result, dict) and "content" in result:
             content = result["content"]
             if isinstance(content, list) and content:
-                if name in _MULTIMODAL_TOOLS:
+                if name in _RAW_CONTENT_TOOLS:
                     return content
                 first = content[0]
                 if isinstance(first, dict) and "text" in first:
@@ -322,3 +312,45 @@ def _make_stdio_caller(proc: subprocess.Popen, timeout: float) -> Callable[..., 
         return result
 
     return call_tool
+
+
+def _extract_text(raw: Any) -> str:
+    if isinstance(raw, str):
+        return raw
+    if isinstance(raw, list):
+        return "\n".join(
+            item.get("text", "") for item in raw
+            if isinstance(item, dict) and isinstance(item.get("text"), str)
+        )
+    if isinstance(raw, dict):
+        if isinstance(raw.get("text"), str):
+            return raw["text"]
+        if isinstance(raw.get("content"), list):
+            return _extract_text(raw["content"])
+    return ""
+
+
+def _extract_json_object(raw: Any) -> Any:
+    if isinstance(raw, dict):
+        if isinstance(raw.get("content"), list):
+            return _extract_json_object(raw["content"])
+        if "runtime" in raw or "valid" in raw:
+            return raw
+        if raw and all(isinstance(value, dict) for value in raw.values()):
+            return raw
+    if isinstance(raw, list):
+        for item in reversed(raw):
+            if isinstance(item, dict) and isinstance(item.get("text"), str):
+                try:
+                    parsed = json.loads(item["text"])
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(parsed, dict):
+                    return parsed
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+        return parsed if isinstance(parsed, dict) else None
+    return None

@@ -42,14 +42,11 @@ from .camera_mapper import (
 )
 from .config_schema import (
     GROUPS,
-    I2I_NODES,
-    REFERENCE_IMAGE_NODE,
     CONTROLNET_IMAGE_NODE,
     RunConfig,
     SamplingConfig,
     ImageSizeConfig,
     STAGES,
-    WORKFLOW_CONVENTIONS,
 )
 from .lora_resolver import build_lora_patch, DEFAULT_LORA_STACK_TEXT
 from .source_workflow import (
@@ -96,12 +93,8 @@ _UI_WIDGET_INDEX: dict[tuple[str, str], int] = {
     ("4", "populated_text"): 1,
     ("5", "wildcard_text"): 0,
     ("5", "populated_text"): 1,
-    # Lora Loader (26) — `text` widget input is the first widget in the
-    # source UI's widgets_values list. Position 0 holds the literal stack
-    # text; position 1 is the LoraManager metadata dict (`{"version":1,
-    # "textWidgetName":"text"}`) which the strip ignores. Position 2 is
-    # the LoRA selection list (handled directly by ``_set_lora``).
-    ("26", "text"): 0,
+    # LoRA Text Loader (26) exposes one ordinary STRING widget.
+    ("26", "lora_syntax"): 0,
     # Input Parameters / Image Saver (50) — first-pass sampling
     # widgets_values layout: [seed, control_after_generate, steps,
     # cfg, sampler, scheduler, denoise]; widget input positions skip
@@ -126,6 +119,10 @@ _UI_WIDGET_INDEX: dict[tuple[str, str], int] = {
     ("71", "value"): 0,
     # LoadImage (129) — controlnet image.
     ("129", "image"): 0,
+    # LoadImage (21) — i2i reference image.
+    ("21", "image"): 0,
+    # PrimitiveInt (58) — select the VAE-encoded reference branch.
+    ("58", "value"): 0,
     # CameraAngleNode (583) — pos_x/y/z/roll at front of widgets_values.
     ("583", "pos_x"): 0,
     ("583", "pos_y"): 1,
@@ -269,45 +266,13 @@ def _set_lora(graph: dict, lora_patch: dict) -> None:
     # UI format has nodes in a list, not keyed by id.
     node_26 = _get_node(graph, "26")
     if node_26 is not None:
-        # 1. Stack text. UI position is widgets_values[0] (the source
-        # workflow exposes the literal stack text at position 0; position 1
-        # is the LoraManager metadata dict which the strip ignores).
-        # API position is inputs["text"] — the strip lifts the literal
-        # literals faithfully because the source declares the input as a
-        # standard STRING type (`type` was changed from the custom
-        # AUTOCOMPLETE_TEXT_LORAS to STRING so the strip preserves it).
-        _set_value(graph, "26", "text", lora_patch["node_26"]["text"])
-        # 2. LoRA list (widgets_values[2] in UI). ComfyUI's strip step reads
-        # widget slot 2 to populate the API graph; the text-only write above
-        # leaves the default 3-LoRA list in place and the strip falls back
-        # to the source literal. Write the per-LoRA objects that LoraManager
-        # expects so the strip lifts the custom selection.
-        widgets = node_26.get("widgets_values")
-        if isinstance(widgets, list) and len(widgets) >= 3:
-            widgets[2] = [_lora_widget_object(sel) for sel in lora_patch.get("selections", [])]
+        # The ordinary STRING widget is converter-visible and becomes the
+        # API lora_syntax literal.
+        _set_value(graph, "26", "lora_syntax", lora_patch["node_26"]["text"])
     node_66 = _get_node(graph, "66")
     if node_66 is not None and isinstance(node_66.get("inputs"), dict):
         for key, value in lora_patch["node_66"].items():
             node_66["inputs"][key] = value
-
-
-def _lora_widget_object(sel: dict) -> dict:
-    """Map a RunConfig lora selection dict to the LoraManager widget object.
-
-    Required keys (LoraManager reads these on widget deserialize):
-    name, strength, active, expanded, clipStrength, selected, locked.
-    Defaults match the source workflow's literal entries in
-    `workflow/source/文生图相机视角.json`.
-    """
-    return {
-        "name": sel["name"],
-        "strength": sel.get("strength_model", 1.0),
-        "active": sel.get("active", True),
-        "expanded": False,
-        "clipStrength": sel.get("strength_clip", 1.0),
-        "selected": False,
-        "locked": False,
-    }
 
 
 def _apply_sampling(graph: dict, s: SamplingConfig) -> None:
@@ -333,27 +298,6 @@ def _apply_image_size(graph: dict, size: ImageSizeConfig) -> None:
 
 def _apply_controlnet_image(graph: dict, image_name: str) -> None:
     _set_value(graph, "129", "image", image_name)
-
-
-def _activate_img2img(graph: dict, image_name: str) -> None:
-    """Rewire KSampler latent from EmptyLatentImage to VAEEncode for i2i.
-
-    Reads node ids from I2I_NODES (single source). After this function:
-    - I2I_NODES.LOAD_IMAGE[image] = image_name (uploaded filename)
-    - I2I_NODES.VAE_ENCODE[pixels]  = [I2I_NODES.LOAD_IMAGE, 0]
-    - I2I_NODES.KSAMPLER[latent_image] = [I2I_NODES.VAE_ENCODE, 0]
-    - I2I_NODES.KSAMPLER[denoise]   = 0.6
-
-    Raises KeyError if any required node is missing from the workflow.
-    The gate is fail-loud: silently skipping makes i2i produce t2i-style
-    output with denoise=0.6, masking the bug at the cost of garbage
-    results.
-    """
-    n = I2I_NODES
-    graph[n.LOAD_IMAGE]["inputs"]["image"] = image_name
-    graph[n.VAE_ENCODE]["inputs"]["pixels"] = [n.LOAD_IMAGE, 0]
-    graph[n.KSAMPLER]["inputs"]["latent_image"] = [n.VAE_ENCODE, 0]
-    graph[n.KSAMPLER]["inputs"]["denoise"] = 0.6
 
 
 def apply_run_config(
@@ -382,9 +326,8 @@ def apply_run_config(
         Group state is read from the per-stage groups.json (matches what
         the strip step applied).
     6.  ControlNet image (129).
-    7.  WORKFLOW_CONVENTIONS per stage (e.g. i2i denoise=0.6).
-    8.  i2i activation (after group validation so the upload path is
-        enforced).
+    7.  i2i reference image, branch selection, and denoise are written to
+        the UI graph before strip so the converter owns the final API shape.
     """
     enabled_g1, _ = compute_enabled_groups(stage, config.groups)
 
@@ -413,11 +356,8 @@ def apply_run_config(
     if config.camera_extra:
         _set_camera_extra(graph, validate_camera_extra(config.camera_extra))
 
-    # 3. LoRA. Always patch — even when no custom selection is provided,
-    # the source workflow's literal widgets_values[2] may differ from the
-    # resolver's default plan. The strip step reads widgets_values[2] (the
-    # list, not the text), so we write the resolver's selection explicitly
-    # to keep the lifted API graph in sync with the patcher's intent.
+    # 3. LoRA syntax is written before strip so the converter emits the
+    # selected stack as the node's ordinary API input.
     lora_patch = build_lora_patch(
         run_config_lora=config.lora,
         mcp_list_loras=mcp_list_loras,
@@ -457,11 +397,14 @@ def apply_run_config(
     if config.controlnet_image is not None:
         _apply_controlnet_image(graph, config.controlnet_image)
 
-    # 7. WORKFLOW_CONVENTIONS (e.g. i2i denoise=0.6) is applied
-    # post-strip in ``source_workflow.prepare_temporary_workflow`` so it
-    # runs against the API graph (this function is called against the UI
-    # graph pre-strip, where ``graph["27"]`` doesn't exist — UI nodes
-    # live in ``graph["nodes"]``).
+    if stage == STAGES.I2I:
+        if not config.reference_image:
+            raise ValueError("reference_image is required for i2i-camera")
+        _set_value(graph, "21", "image", config.reference_image)
+        _set_value(graph, "58", "value", 2)
+        _set_value(graph, "50", "denoise", 0.6)
+    elif config.reference_image is not None:
+        raise ValueError("reference_image is only supported in i2i-camera")
 
     return graph
 
