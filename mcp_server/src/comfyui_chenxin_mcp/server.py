@@ -140,13 +140,14 @@ def main() -> None:
                 "envelope": {"type": "object"},
                 "config": {"type": "object"},
                 "output_dir": {"type": "string", "default": "outputs"},
+                "timeout": {"type": "number", "description": "Polling timeout in seconds for ComfyUI history; default 1800 covers MiniMax H3 i2v-video (~12 min)"},
             },
             "required": ["skill", "stage", "envelope", "config"],
             "additionalProperties": False,
         },
     )
     async def run(skill: str, stage: str, envelope: dict, config: dict,
-                  output_dir: str = "outputs") -> dict:
+                  output_dir: str = "outputs", timeout: float = 1800.0) -> dict:
         sd = _find_skill(skills, skill)
 
         # Pre-flight: surface validation errors before any GPU work.
@@ -181,7 +182,7 @@ def main() -> None:
             with _spawn_mcp() as mcp:
                 payload, code = run_skill(
                     mcp=mcp, skill_data=sd, stage=stage, config=run_config,
-                    output_dir=Path(output_dir),
+                    output_dir=Path(output_dir), timeout=timeout,
                 )
         except Exception as exc:
             # Defensive: if spawn_mcp itself fails, classify it.

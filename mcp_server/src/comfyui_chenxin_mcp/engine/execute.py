@@ -29,7 +29,7 @@ def run_skill(
     stage: str,
     config,
     output_dir: str | Path,
-    timeout: float = 600.0,
+    timeout: float = 1800.0,
     poll_interval: float = 3.0,
 ) -> tuple[dict[str, Any], int]:
     """Execute a skill stage. Returns (payload, exit_code).
@@ -50,6 +50,13 @@ def run_skill(
 
     `output_dir` accepts either a string (the JSON-RPC shape hosts send)
     or a Path (idiomatic for direct callers). Coerced internally.
+
+    `timeout` (seconds, default 1800.0) bounds the wait for ComfyUI
+    to commit the prompt's terminal status. 1800s (30 min) covers the
+    MiniMax H3 i2v-video generation observed at ~12 min plus headroom;
+    shorter stages (t2i-camera, i2i-camera) finish in <5 min so the
+    default is harmless for them. Callers with known-slow stages may
+    raise this; callers wanting fast-fail on stuck queues may lower it.
 
     Returns ``({"accepted": False, "error": ..., "error_type": ...}, 1)``
     on failure. The error message includes the exception class name so
