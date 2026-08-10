@@ -197,6 +197,8 @@ def main() -> None:
             payload["error_category"] = _classify_error(inner)
         return {"exit_code": code, "payload": payload}
 
+    asyncio.run(server.serve_stdio())
+
 
 def _classify_error(exc: BaseException) -> str:
     """Map an engine-side exception to a coarse error_category the caller can act on."""
@@ -215,8 +217,6 @@ def _classify_error(exc: BaseException) -> str:
         if isinstance(exc, ValueError):
             return "engine_build"
     return "engine_build"
-
-    asyncio.run(server.serve_stdio())
 
 
 if __name__ == "__main__":
