@@ -64,7 +64,10 @@ def main() -> None:
 
     @server.tool(
         name="describe_config",
-        description="Return the full schema (defaults, groups, enums, dependencies) for a skill stage.",
+        description=(
+            "Return the full schema (defaults, groups, enums, dependencies) for a skill stage. "
+            "CALL THIS FIRST before validate_config or run_skill if any field's shape is unclear."
+        ),
         input_schema={
             "type": "object",
             "properties": {
@@ -81,7 +84,18 @@ def main() -> None:
 
     @server.tool(
         name="validate_config",
-        description="Validate envelope + config dicts before running a skill. Same shape as run_skill (minus output_dir).",
+        description=(
+            "Dry-run validation: same envelope + config shape as run_skill, returns "
+            "{ok, errors}. Use this BEFORE run_skill to surface field errors without "
+            "spending GPU time.\n"
+            "Minimum working payload for camera-image / t2i-camera:\n"
+            "  envelope = {\n"
+            "    \"dialect_id\": \"anima\",\n"
+            "    \"draft\": {\"positive\": \"1girl ...\", \"negative\": \"\"},\n"
+            "    \"evidence\": {}  // optional; omit keys you don't need\n"
+            "  }\n"
+            "  config = {\"image_size\": [1200, 800]}"
+        ),
         input_schema={
             "type": "object",
             "properties": {
@@ -100,7 +114,20 @@ def main() -> None:
 
     @server.tool(
         name="run_skill",
-        description="Run a skill stage (e.g. t2i-camera generation).",
+        description=(
+            "Execute one skill stage end-to-end (e.g. t2i-camera image generation). "
+            "Pre-flight: validate_config is run first; on validation failure the run is "
+            "aborted before any GPU time is spent and the response carries the full error list.\n"
+            "On runtime failure, payload.error_category is one of:\n"
+            "  prompt_forge_input   — fix envelope/draft/evidence fields\n"
+            "  engine_build         — server-side bug, file an issue\n"
+            "  comfyui_runtime      — ComfyUI rejected the workflow, check model/queue/connection\n"
+            "  unknown              — unclassified; treat as engine_build\n"
+            "Minimum working payload for camera-image / t2i-camera:\n"
+            "  envelope = {\"dialect_id\": \"anima\", \"draft\": {\"positive\": \"1girl ...\", \"negative\": \"\"}, \"evidence\": {}}\n"
+            "  config = {\"image_size\": [1200, 800]}\n"
+            "For full schema call describe_config(skill=\"camera-image\", stage=\"t2i-camera\")."
+        ),
         input_schema={
             "type": "object",
             "properties": {
@@ -117,13 +144,77 @@ def main() -> None:
     async def run(skill: str, stage: str, envelope: dict, config: dict,
                   output_dir: str = "outputs") -> dict:
         sd = _find_skill(skills, skill)
-        run_config = sd.build_config_fn(envelope, **config)
-        with _spawn_mcp() as mcp:
-            payload, code = run_skill(
-                mcp=mcp, skill_data=sd, stage=stage, config=run_config,
-                output_dir=Path(output_dir),
-            )
+
+        # Pre-flight: surface validation errors before any GPU work.
+        preflight = validate_config(sd, stage, envelope, config)
+        if not preflight.get("ok"):
+            return {
+                "exit_code": 1,
+                "payload": {
+                    "accepted": False,
+                    "stage": stage,
+                    "error_category": "prompt_forge_input",
+                    "error": "validate_config rejected the inputs; fix errors and retry",
+                    "preflight_errors": preflight.get("errors", []),
+                },
+            }
+
+        try:
+            run_config = sd.build_config_fn(envelope, **config)
+        except (ValueError, TypeError, KeyError) as exc:
+            return {
+                "exit_code": 1,
+                "payload": {
+                    "accepted": False,
+                    "stage": stage,
+                    "error_category": "engine_build",
+                    "error": f"{type(exc).__name__}: {exc}",
+                    "error_type": type(exc).__name__,
+                },
+            }
+
+        try:
+            with _spawn_mcp() as mcp:
+                payload, code = run_skill(
+                    mcp=mcp, skill_data=sd, stage=stage, config=run_config,
+                    output_dir=Path(output_dir),
+                )
+        except Exception as exc:
+            # Defensive: if spawn_mcp itself fails, classify it.
+            payload = {
+                "accepted": False,
+                "stage": stage,
+                "error_category": _classify_error(exc),
+                "error": f"{type(exc).__name__}: {exc}",
+                "error_type": type(exc).__name__,
+            }
+            return {"exit_code": 1, "payload": payload}
+
+        # run_skill() always returns a payload; enrich failure payloads with
+        # an error_category so callers can route the fix.
+        if not payload.get("accepted", False):
+            inner = RuntimeError(payload.get("error", ""))
+            payload["error_category"] = _classify_error(inner)
         return {"exit_code": code, "payload": payload}
+
+
+def _classify_error(exc: BaseException) -> str:
+    """Map an engine-side exception to a coarse error_category the caller can act on."""
+    msg = str(exc)
+    if "prompt-forge rejected" in msg:
+        return "prompt_forge_input"
+    if isinstance(exc, (AttributeError, KeyError, TypeError)):
+        return "engine_build"
+    if isinstance(exc, (RuntimeError, ValueError)):
+        if any(token in msg for token in (
+            "ComfyUI", "queue not idle", "enqueue", "execution failed",
+            "validate_workflow", "workflow validation", "no output", "timed out",
+            "workflow uses non-local runtime",
+        )):
+            return "comfyui_runtime"
+        if isinstance(exc, ValueError):
+            return "engine_build"
+    return "engine_build"
 
     asyncio.run(server.serve_stdio())
 

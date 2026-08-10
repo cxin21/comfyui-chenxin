@@ -239,8 +239,26 @@ def _string_list(payload: dict, name: str) -> list[str]:
     if not isinstance(raw, list) or not all(
         isinstance(item, str) and item.strip() for item in raw
     ):
-        raise ValueError(f"evidence {name!r} must be a string list")
+        raise ValueError(
+            f"evidence {name!r} must be a JSON array of non-empty strings, "
+            f"got {_type_repr(raw)}: {_truncate_repr(raw, 80)}"
+        )
     return _dedupe_strings([item.strip() for item in raw])
+
+
+def _type_repr(value: object) -> str:
+    if isinstance(value, list):
+        return "list"
+    if isinstance(value, dict):
+        return "dict"
+    return type(value).__name__
+
+
+def _truncate_repr(value: object, limit: int) -> str:
+    text = repr(value)
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "..."
 
 
 def _continuity_locks(payload: dict) -> dict[str, list[str]]:
