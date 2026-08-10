@@ -61,6 +61,15 @@ The skill is offline, side-effect free, and never touches execution
 state. Downstream tools (comfyui-chenxin-mcp, camera skills) consume
 the package.
 
+## Scope
+
+The skill is a structural renderability tool. It processes whatever
+concept objects the caller supplies and produces a renderable prompt in
+the target dialect's natural form. Content scope (subject matter,
+maturity level) is the caller's decision; this skill does not restrict
+it. The five validation gates (P1-P5) verify renderability, not
+morality.
+
 ## Three invariants
 
 - **Visibility** (P1): every Subject has an identity; every concept
