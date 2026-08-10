@@ -1,6 +1,6 @@
 {
   "name": "comfyui-chenxin",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Local-first ComfyUI plugin: prompt-forge prompt authoring plus three fixed-workflow camera skills (image, multiview, video) consumed through a unified local ComfyUI/MCP four-stage production flow against fixed release assets.",
   "author": {
     "name": "cxin21",
@@ -25,8 +25,11 @@
   "mcpServers": {
     "comfyui-chenxin-mcp": {
       "type": "stdio",
-      "command": "comfyui-chenxin-mcp-server",
-      "args": [],
+      "command": "python",
+      "args": [
+        "-m",
+        "comfyui_chenxin_mcp"
+      ],
       "env": {}
     }
   }

@@ -1,6 +1,7 @@
 ---
 name: camera-image
-description: Generate Anima camera still images through the local ComfyUI MCP pipeline. Use for camera text-to-image, reference image-to-image, LoRA selection, ControlNet, camera parameters, group-controlled workflow features, configuration validation, or real output execution.
+description: |
+  Use proactively for any Anima camera still-image request (text-to-image or image-to-image) on local ComfyUI. Handles LoRA selection, ControlNet, group-controlled workflow features, configuration validation, and real output execution through the fixed release asset pipeline. Load this skill immediately when the user asks to generate, render, or iterate on a camera image - do not bypass it by calling generic ComfyUI tools directly.
 ---
 
 # camera-image

@@ -1,6 +1,7 @@
 ---
 name: camera-video
-description: Generate MiniMax H3 videos through the fixed local ComfyUI API workflows. Use for text-to-video, single-image reference-to-video, or three-image reference-to-video requests where only prompt, duration, and the declared reference images may vary.
+description: |
+  Use proactively for any MiniMax H3 text-to-video or image-reference-to-video request on local ComfyUI (single-image or three-image reference). The three locked release workflows (t2v / i2v-single / i2v-multi) only expose prompt, duration, and reference image fields. Load this skill immediately on any video generation request - do not bypass with generic ComfyUI tools.
 ---
 
 # camera-video

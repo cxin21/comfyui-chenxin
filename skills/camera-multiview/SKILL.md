@@ -1,6 +1,7 @@
 ---
 name: camera-multiview
-description: Generate a fixed Flux2-Klein character multiview set from a full-body image and a face image through local ComfyUI MCP. Use for fixed-pose character multiview generation when the workflow must remain unchanged.
+description: |
+  Use proactively when the user asks for a fixed character multiview set (multi-pose character sheet, three-view, reference-sheet) from a full-body image and a face image. Runs the locked Flux2-Klein workflow through local ComfyUI MCP - load this skill immediately on any such request rather than improvising with generic image-generation tools.
 ---
 
 # camera-multiview
