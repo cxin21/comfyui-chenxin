@@ -24,8 +24,9 @@ The prompt-forge gate is strict: there is no silent fallback. If prompt-forge
 rejects a draft or marks it not-ready, the run aborts loud.
 
 Workflow assembly (2026-08-08): the source UI workflow at
-workflow/source/文生图相机视角.json is the single source of truth. Every
-run strips a fresh copy via MCP after applying G1/G2 mode changes.
+``camera_image/runtime/workflow_assets/camera-anima.json`` is the single
+source of truth. Every run strips a fresh copy via MCP after applying
+G1/G2 mode changes.
 """
 
 from .camera_mapper import CAMERA_EXTRA_FIELDS, map_camera, validate_camera_extra

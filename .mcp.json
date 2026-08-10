@@ -3,7 +3,7 @@
     "comfyui-mcp": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "comfyui-mcp@0.41.0", "--full", "--comfyui-url", "http://127.0.0.1:8188"],
+      "args": ["-y", "comfyui-mcp@0.49.8", "--full", "--comfyui-url", "http://127.0.0.1:8188"],
       "env": {}
     }
   }

@@ -12,7 +12,7 @@ Codex / host
 
 ## Project MCP server
 
-`skills/_mcp` is the project server. It exposes exactly:
+`mcp_server` is the project server. It exposes exactly:
 
 - `list_skills`
 - `describe_config`
@@ -31,7 +31,7 @@ The engine's `McpClient` owns the subprocess contract with
 | Operation | Purpose |
 |---|---|
 | `upload_image` | Upload local stage images and return ComfyUI filenames |
-| `strip_workflow` | Convert the selected UI graph to API format |
+| `strip_workflow` | Convert the selected UI graph to API format (`camera-image` only) |
 | `validate_workflow` | Validate the final API graph |
 | `check_workflow_runtime` | Confirm the graph uses the local runtime |
 | `enqueue_workflow` | Submit `{"workflow": graph}` |
@@ -39,7 +39,21 @@ The engine's `McpClient` owns the subprocess contract with
 
 The exact MCP tool contract is owned by the installed `comfyui-mcp` package and
 is checked during environment setup. Do not call an older `get_workflow` save/load
-path for camera-image compilation.
+path for camera-image compilation, and do not call `strip_workflow` for an
+already-exported API skill.
+
+For `camera-multiview` and `camera-video`, the input graph is already API
+format; the runtime intentionally does not call `strip_workflow`. The project
+contract uses `comfyui-mcp@0.49.8` with the full workflow tool set. Older
+validators may misread ComfyUI V3 autogrow keys such as `values.a`; that is a
+tool-version failure boundary, not permission to mutate the fixed graph at
+runtime.
+
+Video artifacts are returned by ComfyUI under the history `gifs` field because
+the fixed output node is `VHS_VideoCombine`. The media itself is MP4. The
+engine downloads every saved item, including MCP responses that identify a
+local video path rather than returning an inline image block, and records its
+size and SHA-256.
 
 ## Boundary rules
 

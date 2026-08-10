@@ -52,6 +52,11 @@ build/
 
 # Runtime test temp dirs
 .runtime-test-tmp*/
+.pytest-tmp/
+
+# Run records and generated outputs (never shipped)
+runs/
+outputs/
 
 # SDD temp workdirs
 .sdd-*/

@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "camera-video"
+version = "0.1.0"
+description = "Fixed MiniMax H3 video workflow skill for comfyui-chenxin-mcp."
+requires-python = ">=3.10"
+dependencies = [
+    "comfyui-chenxin-mcp",
+]
+
+[project.entry-points."comfyui_chenxin_mcp.skills"]
+camera-video = "camera_video.skill_data:get_skill_data"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["camera_video*"]
+exclude = ["tests*", "*.tests", "*.tests.*"]

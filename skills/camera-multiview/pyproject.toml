@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "camera-multiview"
+version = "0.1.0"
+description = "Fixed Flux2-Klein character multiview workflow skill for comfyui-chenxin-mcp."
+requires-python = ">=3.10"
+dependencies = [
+    "comfyui-chenxin-mcp",
+]
+
+[project.entry-points."comfyui_chenxin_mcp.skills"]
+camera-multiview = "camera_multiview.skill_data:get_skill_data"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["camera_multiview*"]
+exclude = ["tests*", "*.tests", "*.tests.*"]

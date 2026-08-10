@@ -16,19 +16,18 @@ workflow, compiler, execution contract, or acceptance tests.
 
 ## Non-negotiable rules
 
-1. Run `prompt-forge/preflight-env.ps1` before production-skill work.
-2. Use the fixed UI source asset:
+1. Use the fixed UI source asset:
    `camera_image/runtime/workflow_assets/camera-anima.json`.
-3. Use `workflow/{stage}/groups.json` as the group membership contract.
-4. Treat the source UI graph as a complete superset. Nodes in disabled groups
+2. Use `workflow/{stage}/groups.json` as the group membership contract.
+3. Treat the source UI graph as a complete superset. Nodes in disabled groups
    are valid source nodes; do not delete them or reinterpret them as errors.
-5. Apply configuration and group modes to the UI graph before conversion.
-6. Convert the selected UI graph exactly once with MCP `strip_workflow`.
-7. Validate the resulting API graph before enqueueing it.
-8. Never save a temporary workflow, load an API snapshot as the runtime source,
+4. Apply configuration and group modes to the UI graph before conversion.
+5. Convert the selected UI graph exactly once with MCP `strip_workflow`.
+6. Validate the resulting API graph before enqueueing it.
+7. Never save a temporary workflow, load an API snapshot as the runtime source,
    rewire the stripped graph, silently skip invalid groups, or add a legacy
    compatibility path.
-9. Fail closed when a required input, group dependency, node reference, output
+8. Fail closed when a required input, group dependency, node reference, output
    connection, model, MCP capability, or artifact check is invalid.
 
 ## Public MCP contract
@@ -54,8 +53,16 @@ Both stages require an envelope with non-empty prompt fields:
 {
   "evidence": {"locked_facts": []},
   "draft": {
-    "positive": "1girl, masterpiece, anime portrait",
-    "negative": "lowres, bad anatomy"
+    "positive": "1girl, masterpiece, anime portrait, cinematic lighting, anime style",
+    "negative": "lowres, bad anatomy",
+    "tags": ["1girl", "solo"],
+    "structure": [
+      {"name": "subject", "text": "1girl"},
+      {"name": "action_or_pose", "text": "portrait"},
+      {"name": "scene", "text": "cinematic"},
+      {"name": "lighting", "text": "cinematic lighting"},
+      {"name": "style", "text": "anime style"}
+    ]
   },
   "dialect_id": "anima"
 }
@@ -148,19 +155,6 @@ model patch loader -> AnimaLLLiteApply.model_patch
 
 The model patch is a real graph link, not a post-conversion insertion.
 
-## Verification
-
-Run offline tests from the repository root:
-
-```powershell
-$root = (Get-Location).Path
-Push-Location (Join-Path $root "skills/camera-image/camera_image")
-$env:PYTHONPATH = (Get-Location).Path
-python -m pytest runtime/tests -q
-Pop-Location
-$env:PYTHONPATH = $root
-python -m pytest skills/_mcp/src/comfyui_chenxin_mcp/tests -q
-```
 
 The live acceptance gate must include real PNG output and submitted-graph
 assertions for:

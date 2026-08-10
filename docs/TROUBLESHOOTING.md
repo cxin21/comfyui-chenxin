@@ -1,22 +1,22 @@
 # 故障排查
 
-camera-image 采用 fail-closed 流程。先定位失败边界，再修正唯一责任层；
-不要通过旧工作流、备用 API 图或运行时补线绕过错误。
+所有 camera 技能都采用 fail-closed 流程。先定位失败边界，再修正唯一
+责任层；不要通过旧工作流、备用 API 图或运行时补线绕过错误。
 
 ## 1. 环境与 ComfyUI
 
-先运行：
+Prompt Forge 提示词编写没有强制前置门禁。生产执行失败时，先检查实际运行
+边界；确认 ComfyUI 是否可访问可运行：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File skills\prompt-forge\preflight-env.ps1
 Invoke-RestMethod http://127.0.0.1:8188/system_stats
 ```
 
 检查：
 
-- Python 版本和插件缓存完整；
+- 需要确定性校验或本地执行时，Python 版本与插件缓存完整；
 - ComfyUI 正在 `127.0.0.1:8188` 监听；
-- Anima checkpoint 和所需自定义节点已安装；
+- 所选固定工作流需要的模型和自定义节点已安装；
 - MCP 工具完整且版本契约匹配。
 
 缺少硬依赖时停止，不用其他工具模拟运行时。
@@ -81,16 +81,49 @@ ControlNet 必须保留 `ModelPatchLoader -> AnimaLLLiteApply.model_patch` 的
 - 下载文件是否存在、非空、可解码；
 - `run-record.json` 是否记录了实际 artifact 和 SHA-256。
 
-## 7. 测试命令
 
-```powershell
-$root = (Get-Location).Path
-Push-Location (Join-Path $root "skills/camera-image/camera_image")
-$env:PYTHONPATH = (Get-Location).Path
-python -m pytest runtime/tests -q
-Pop-Location
-$env:PYTHONPATH = $root
-python -m pytest skills/_mcp/src/comfyui_chenxin_mcp/tests -q
-```
+## 8. camera-video 专项
 
-完整真实验收场景见 [`camera-image-flow.md`](camera-image-flow.md)。
+### 配置失败
+
+`camera-video` 只接受：
+
+- `t2v-video`: `prompt`, `duration`；
+- `i2v-video`: 上述字段加 `reference_image_1`；
+- `multi-i2v-video`: 上述字段加 `reference_image_1/2/3`。
+
+时长必须是 2–15 秒的有限数字。多图场景不允许缺图、复用图片或传入
+groups、LoRA、ControlNet、模型和采样器配置。
+
+### 固定 API 图失败
+
+确认 `manifest.json` 中的工作流哈希未变，且运行时没有调用
+`strip_workflow`、发现本地工作流或修改非声明字段。`camera-video` 的
+提交图必须直接来自固定 API 图，只写入提示词、时长和上传后图片文件名。
+
+### `ComfyMathExpression` 报 `values` 缺失
+
+`values.a` 是 ComfyUI V3 动态输入格式。若 MCP 校验器不识别该格式，先
+检查项目规定的 `comfyui-mcp` 工具版本和完整工具集；不要为通过校验器而
+改写固定 API 图。
+
+### `MiniMaxH3MemoryEfficientSageAttentionPatch` 不可执行
+
+该节点是可选显存优化，不是 MiniMax H3 生成必需节点。它依赖精确匹配的
+SageAttention、CUDA、PyTorch、ComfyUI-KJNodes 组合；不同 ComfyUI Python
+环境可能表现不同。发布的 `camera-video` 单图/多图固定资产已在发布前移除
+该节点，并直连固定 LoRA 模型路径。不要在运行时重新添加或条件跳过它。
+
+### 没有输出视频
+
+不能只看队列是否变空。检查：
+
+- history 是否成功完成；
+- `VHS_VideoCombine` 是否产生 `gifs` 条目；
+- 条目实际 MIME/扩展名是否为 MP4；
+- 下载文件是否存在且非空；
+- `run-record.json` 是否记录所有 artifact 的字节数和 SHA-256。
+
+完整流程见 [`camera-video-flow.md`](camera-video-flow.md)；图像和多视图流程
+分别见 [`camera-image-flow.md`](camera-image-flow.md) 和
+[`camera-multiview-flow.md`](camera-multiview-flow.md)。

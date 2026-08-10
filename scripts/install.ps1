@@ -1,10 +1,14 @@
 <#
 .SYNOPSIS
-  comfyui-chenxin one-shot installer for Windows.
+  comfyui-chenxin one-shot installer for Codex on Windows.
 .DESCRIPTION
-  Registers the plugin + comfyui-mcp MCP server for Claude Code and Codex,
-  installs the plugin into Codex's plugin cache, and verifies that the MCP
-  server actually starts and exposes the tools the runtime needs.
+  Writes the upstream comfyui-mcp stdio block into %USERPROFILE%\.codex\config.toml,
+  pip-installs the project MCP server and skills (so the host can spawn
+  comfyui-chenxin-mcp-server), then stages the plugin (skills + mcp_server +
+  .codex-plugin + .mcp.json + LICENSE + README.md) into
+  %USERPROFILE%\.codex\plugins\cache\personal\comfyui-chenxin\<version>.
+  Re-running replaces the previous version directory; config.toml is backed up
+  once per run before any edit.
 .PARAMETER Mode
   npx  : portable default; launches comfyui-mcp via `npx -y comfyui-mcp@<ver>`
   local: offline; launches via `node <clone>/dist/index.js`
@@ -19,15 +23,13 @@
 [CmdletBinding()]
 param(
     [string]$RepoRoot = '',
-    [string]$ClaudeHome = (Join-Path $env:USERPROFILE '.claude'),
     [string]$CodexHome = (Join-Path $env:USERPROFILE '.codex'),
     [ValidateSet('npx','local')] [string]$Mode = 'npx',
-    [string]$PackageVersion = '0.41.0',
+    [string]$PackageVersion = '0.49.8',
     [string]$ComfyUrl = 'http://127.0.0.1:8188',
     [string]$LocalClonePath = '',
-    [switch]$SkipClaude,
     [switch]$SkipCodex,
-    [switch]$SkipVerify
+    [switch]$SkipProbe
 )
 
 $ErrorActionPreference = 'Stop'
@@ -36,10 +38,7 @@ function Step($msg) { Write-Host "[install] $msg" }
 function Warn($msg) { Write-Host "[install][warn] $msg" -ForegroundColor Yellow }
 function Die($msg)  { Write-Host "[install][error] $msg" -ForegroundColor Red; exit 1 }
 
-# ---------- 0. Resolve the MCP launch spec ----------
-
-$node = Get-Command node -ErrorAction SilentlyContinue
-if (-not $node) { Die 'node is required on PATH.' }
+# ---------- 0. Resolve the upstream comfyui-mcp launch spec ----------
 
 $command = $null
 $argList = @()
@@ -60,11 +59,13 @@ switch ($Mode) {
     }
 }
 
-try {
-    $probe = [System.Net.WebRequest]::CreateHttp("$ComfyUrl/system_stats")
-    $probe.Timeout = 3000
-    $probe.GetResponse() | Out-Null
-} catch { Warn "ComfyUI at $ComfyUrl did not respond (continuing; server will be verified separately)." }
+if (-not $SkipProbe) {
+    try {
+        $probe = [System.Net.WebRequest]::CreateHttp("$ComfyUrl/system_stats")
+        $probe.Timeout = 3000
+        $probe.GetResponse() | Out-Null
+    } catch { Warn "ComfyUI at $ComfyUrl did not respond (continuing)." }
+}
 
 # ---------- Helpers ----------
 
@@ -109,46 +110,7 @@ if (-not $RepoRoot) {
     }
 }
 
-# ---------- 1. Claude Code ----------
-
-if (-not $SkipClaude) {
-    Step 'Claude Code: registering plugin + copying MCP config'
-    if (-not (Test-Path $ClaudeHome)) { New-Item -ItemType Directory -Path $ClaudeHome -Force | Out-Null }
-    $settingsPath = Join-Path $ClaudeHome 'settings.json'
-    $settings = @{}
-    if (Test-Path $settingsPath) {
-        try {
-            $raw = Get-Content $settingsPath -Raw -Encoding UTF8
-            if (-not [string]::IsNullOrWhiteSpace($raw)) { $settings = $raw | ConvertFrom-Json }
-        } catch { Warn "Could not parse $settingsPath; leaving alone."; $settings = @{} }
-    }
-    if (-not $settings.PSObject.Properties.Name.Contains('plugins')) {
-        Add-Member -InputObject $settings -NotePropertyName 'plugins' -NotePropertyValue @() -Force
-    }
-    $pluginEntry = $settings.plugins | Where-Object { $_.name -eq 'comfyui-chenxin' } | Select-Object -First 1
-    if (-not $pluginEntry) {
-        $pluginEntry = [pscustomobject]@{
-            name    = 'comfyui-chenxin'
-            source  = 'github'
-            repo    = 'cxin21/comfyui-chenxin'
-            enabled = $true
-        }
-        $settings.plugins = @($settings.plugins + $pluginEntry)
-    }
-    $settings | ConvertTo-Json -Depth 10 | Set-Content $settingsPath -Encoding UTF8
-    Step "registered plugin in $settingsPath"
-
-    $mcpSrc = Join-Path $RepoRoot 'mcp\mcp_servers.json'
-    $mcpDstDir = Join-Path $ClaudeHome 'mcp_servers'
-    $mcpDst = Join-Path $mcpDstDir 'comfyui-chenxin.json'
-    if (Test-Path $mcpSrc) {
-        if (-not (Test-Path $mcpDstDir)) { New-Item -ItemType Directory -Path $mcpDstDir -Force | Out-Null }
-        Copy-Item -Path $mcpSrc -Destination $mcpDst -Force
-        Step "copied $mcpSrc -> $mcpDst"
-    } else { Warn "mcp/mcp_servers.json not found; skipping Claude MCP file copy." }
-}
-
-# ---------- 2. Codex: MCP + plugin cache ----------
+# ---------- 1. Codex: upstream MCP block + plugin cache ----------
 
 if (-not $SkipCodex) {
     Step 'Codex: writing [mcp_servers.comfyui-mcp] into config.toml'
@@ -166,13 +128,7 @@ if (-not $SkipCodex) {
         "command = `"$command`""
         "args = [$argsStr]"
     )
-    $envBlock = @(
-        '[mcp_servers.comfyui-mcp.env]'
-        'NPM_CONFIG_REGISTRY = "https://registry.npmjs.org"'
-        'npm_config_registry = "https://registry.npmjs.org"'
-    )
     Set-TomlBlock -Path $configPath -Header '[mcp_servers.comfyui-mcp]' -BlockLines $block
-    Set-TomlBlock -Path $configPath -Header '[mcp_servers.comfyui-mcp.env]' -BlockLines $envBlock
     Step "wrote MCP block to $configPath"
 
     Step 'Codex: installing plugin into plugin cache'
@@ -183,11 +139,12 @@ if (-not $SkipCodex) {
     if (-not $version) { Die 'plugin.json has no version.' }
     $cacheRoot = Join-Path $CodexHome 'plugins\cache\personal\comfyui-chenxin'
     $stagingRoot = Join-Path $env:TEMP "comfyui-chenxin-install-$version"
-    if (Test-Path $stagingRoot) { Remove-Item $stagingRoot -Recurse -Force }
+    if (Test-Path $stagingRoot) { cmd /c "rmdir /S /Q `"$stagingRoot`"" }
     New-Item -ItemType Directory -Path $stagingRoot -Force | Out-Null
 
     $candidates = @(
         @{ Name = 'skills';         Src = Join-Path $RepoRoot 'skills' }
+        @{ Name = 'mcp_server';     Src = Join-Path $RepoRoot 'mcp_server' }
         @{ Name = '.codex-plugin';  Src = Join-Path $RepoRoot '.codex-plugin' }
         @{ Name = '.mcp.json';      Src = Join-Path $RepoRoot '.mcp.json' }
         @{ Name = 'LICENSE';        Src = Join-Path $RepoRoot 'LICENSE' }
@@ -212,7 +169,7 @@ if (-not $SkipCodex) {
                 Die "Refusing to delete path outside cache root: $full"
             }
             Step "removing previous version directory $full"
-            Remove-Item $full -Recurse -Force
+            cmd /c "rmdir /S /Q `"$full`""
         }
     }
     if (-not (Test-Path $cacheRoot)) { New-Item -ItemType Directory -Path $cacheRoot -Force | Out-Null }
@@ -220,68 +177,13 @@ if (-not $SkipCodex) {
     Move-Item -Path $stagingRoot -Destination $target
     Step "installed plugin at $target"
 
-    # --- Generate integrity manifest ---
-    Step 'Generating integrity manifest...'
-    $manifest = @{
-        version      = $version
-        generated_at = (Get-Date -Format 'o')
-        files        = @()
-    }
-    $skillDirs = @(
-        'skills\character-video-pipeline'
-        'skills\prompt-forge'
-    )
-    foreach ($skillDir in $skillDirs) {
-        $fullSkillDir = Join-Path $target $skillDir
-        if (-not (Test-Path $fullSkillDir)) { continue }
-        $skillFiles = Get-ChildItem $fullSkillDir -Recurse -File | Where-Object {
-            $_.Extension -in '.py', '.ps1', '.md', '.json'
-        }
-        foreach ($sf in $skillFiles) {
-            $rel = $sf.FullName.Substring($target.Length + 1).Replace('\', '/')
-            $hash = (Get-FileHash $sf.FullName -Algorithm SHA256).Hash
-            $manifest.files += @{ path = $rel; sha256 = $hash }
-        }
-    }
-    $manifestPath = Join-Path $target 'manifest.json'
-    $manifest | ConvertTo-Json -Depth 5 | Set-Content $manifestPath -Encoding UTF8
-    Step "Manifest written: $($manifest.files.Count) files"
-
-    # --- Verify critical files match between repo and cache ---
-    $criticalFiles = @(
-        'skills/character-video-pipeline/SKILL.md'
-        'skills/character-video-pipeline/preflight-env.ps1'
-        'skills/character-video-pipeline/runtime/preflight.py'
-        'skills/character-video-pipeline/runtime/camera_config_helper.py'
-        'skills/character-video-pipeline/runtime/attempt_state.py'
-        'skills/prompt-forge/SKILL.md'
-        'skills/prompt-forge/preflight-env.ps1'
-        'skills/_mcp/pyproject.toml'
-    )
-    foreach ($rel in $criticalFiles) {
-        $cacheFile = Join-Path $target ($rel -replace '/', '\')
-        $repoFile  = Join-Path $RepoRoot ($rel -replace '/', '\')
-        if ((Test-Path $cacheFile) -and (Test-Path $repoFile)) {
-            $cacheHash = (Get-FileHash $cacheFile).Hash.Substring(0, 16)
-            $repoHash  = (Get-FileHash $repoFile).Hash.Substring(0, 16)
-            $match = if ($cacheHash -eq $repoHash) { 'MATCH' } else { 'DIFFER' }
-            Step "$rel [$match]"
-        }
-    }
-}
-
-# ---------- 3. Verification ----------
-
-if (-not $SkipVerify) {
-    Step "Verifying MCP handshake (command=$command)"
+    Step 'Codex: pip-installing mcp_server + skills (so the host finds comfyui-chenxin-mcp-server)'
     $pythonExe = $null
-    $pythonArgs = @()
     foreach ($candidate in @('py -3','python','python3')) {
         $parts = $candidate -split ' '
         $exe = $parts[0]
         if (Get-Command $exe -ErrorAction SilentlyContinue) {
             $pythonExe = $exe
-            $pythonArgs = $parts[1..($parts.Count-1)]
             break
         }
     }
@@ -290,15 +192,23 @@ if (-not $SkipVerify) {
         if (Test-Path $bundled) { $pythonExe = $bundled }
     }
     if (-not $pythonExe) {
-        Warn 'No python on PATH and Codex bundled python missing. Skipping handshake verification.'
-    } else {
-        $verify = Join-Path $RepoRoot 'scripts\verify_mcp.py'
-        $argsJson = (ConvertTo-Json -Compress -InputObject @($argList))
-        $argsJson | & $pythonExe @pythonArgs $verify --command $command --timeout 180
-        switch ($LASTEXITCODE) {
-            0 { Step 'MCP handshake OK; all required tools present.' }
-            1 { Die   'MCP handshake started but the server is missing required tools (see JSON above).' }
-            default { Die 'MCP server failed to start or did not answer the handshake (see JSON above).' }
+        Die 'python is required so the host can find comfyui-chenxin-mcp-server on PATH.'
+    }
+    $installPkgs = @(
+        @{ Name = 'mcp_server';     Src = Join-Path $target 'mcp_server' },
+        @{ Name = 'camera-image';    Src = Join-Path $target 'skills\camera-image' },
+        @{ Name = 'camera-multiview';Src = Join-Path $target 'skills\camera-multiview' },
+        @{ Name = 'camera-video';    Src = Join-Path $target 'skills\camera-video' }
+    )
+    foreach ($p in $installPkgs) {
+        if (Test-Path (Join-Path $p.Src 'pyproject.toml')) {
+            & $pythonExe -m pip install -e $p.Src --quiet | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                Die "pip install -e $($p.Src) failed (rc=$LASTEXITCODE). Re-run without -e is fine; -e gives live source edits."
+            }
+            Step "pip-installed $($p.Name)"
+        } else {
+            Warn "skip $($p.Name) (no pyproject.toml at $($p.Src))"
         }
     }
 }

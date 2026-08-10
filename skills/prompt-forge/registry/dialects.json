@@ -1,0 +1,713 @@
+{
+  "_meta": {
+    "schema_version": "2.0",
+    "consolidation_policy": "Version variants of the same model family (e.g. flux_1/flux_2/flux_kontext) are exposed as aliases of a single canonical entry, not as separate dialects. Aliases resolve to the canonical id via dialect_lookup.py. Aliases that have a genuinely distinct prompt language (e.g. flux_1_kontext is an edit-only model while flux is a generation model) are kept as separate canonical entries.",
+    "supported_count": "31 canonical + 44 aliases (see aliases arrays)"
+  },
+  "dialects": [
+    {
+      "id": "flux",
+      "aliases": [
+        "flux_kontext"
+      ],
+      "modality": "image",
+      "form": "natural_paragraph",
+      "projection": "flux",
+      "ordering": [
+        "subjects",
+        "action",
+        "place",
+        "camera",
+        "light",
+        "style"
+      ],
+      "required": [
+        "subjects",
+        "action"
+      ],
+      "supports_negative": false,
+      "supports_style": true,
+      "notes": "Flux reads natural prose. Negative prompt not supported; express exclusions positively. flux_kontext is an alias because in practice the prompt form is the same for generation; use flux_1_kontext if you specifically want the edit model."
+    },
+    {
+      "id": "flux_1_kontext",
+      "aliases": [],
+      "modality": "image",
+      "form": "focused_edit_instruction",
+      "projection": "flux_1_kontext",
+      "ordering": [
+        "task",
+        "target",
+        "change",
+        "preservation"
+      ],
+      "required": [
+        "task",
+        "target",
+        "change"
+      ],
+      "supports_negative": false,
+      "supports_style": true,
+      "notes": "Flux Kontext is an edit-only model; use spec.references to pass source image. Prompt is task/target/change/preservation rather than a full scene description."
+    },
+    {
+      "id": "anima",
+      "aliases": [
+        "miaomiao_harem"
+      ],
+      "modality": "image",
+      "form": "tag_form",
+      "projection": "anima",
+      "ordering": [
+        "subjects",
+        "appearance",
+        "clothing",
+        "action",
+        "scene",
+        "light",
+        "style"
+      ],
+      "required": [
+        "subjects",
+        "action"
+      ],
+      "supports_negative": true,
+      "supports_style": true,
+      "notes": "Danbooru-style comma-separated tags with score_ prefix. Supports negative prompts (classic Danbooru excludes). nano_banana_2 / nano_banana_2_lite / nano_banana_pro all alias here because the prompt form is identical."
+    },
+    {
+      "id": "qwen_image",
+      "aliases": [
+        "qwen"
+      ],
+      "modality": "image",
+      "form": "structured_natural_language",
+      "projection": "qwen_image",
+      "ordering": [
+        "task",
+        "subjects",
+        "place",
+        "style",
+        "text"
+      ],
+      "required": [
+        "subjects",
+        "place"
+      ],
+      "supports_negative": false,
+      "supports_style": true,
+      "notes": "Qwen Image reads structured task framing with explicit visible-text placeholders."
+    },
+    {
+      "id": "qwen_image_edit",
+      "aliases": [],
+      "modality": "image",
+      "form": "structured_edit_instruction",
+      "projection": "qwen_image_edit",
+      "ordering": [
+        "task",
+        "target",
+        "change",
+        "preservation"
+      ],
+      "required": [
+        "task",
+        "target",
+        "change"
+      ],
+      "supports_negative": false,
+      "supports_style": true,
+      "notes": "Qwen Image Edit is an edit-only model. Use spec.references for source image and spec.initial_state for current scene. Prompt focuses on what to change and what to preserve."
+    },
+    {
+      "id": "sdxl",
+      "aliases": [
+        "stable_diffusion_xl"
+      ],
+      "modality": "image",
+      "form": "hybrid_natural_language_and_tags",
+      "projection": "sdxl",
+      "ordering": [
+        "subjects",
+        "action",
+        "place",
+        "composition",
+        "light",
+        "style"
+      ],
+      "required": [
+        "subjects",
+        "place"
+      ],
+      "supports_negative": true,
+      "supports_style": true,
+      "notes": "SDXL accepts both prose and tag fragments. Negative prompt supported."
+    },
+    {
+      "id": "sd_1_5",
+      "aliases": [
+        "sd15",
+        "stable_diffusion_1_5"
+      ],
+      "modality": "image",
+      "form": "weighted_comma_tags",
+      "projection": "sd_1_5",
+      "ordering": [
+        "subjects",
+        "scene",
+        "style"
+      ],
+      "required": [
+        "subjects",
+        "scene"
+      ],
+      "supports_negative": true,
+      "supports_style": true,
+      "notes": "SD 1.5 prefers weighted comma-separated tags. Negative prompt supported. stable_diffusion_1_5 alias resolves here."
+    },
+    {
+      "id": "gpt_image",
+      "aliases": [
+        "gpt_image_1",
+        "gpt_image_2"
+      ],
+      "modality": "image",
+      "form": "structured_creative_brief",
+      "projection": "gpt_image",
+      "ordering": [
+        "goal",
+        "subjects",
+        "composition",
+        "style",
+        "constraints"
+      ],
+      "required": [
+        "subjects"
+      ],
+      "supports_negative": false,
+      "supports_style": true,
+      "notes": "GPT Image reads goal-first structured briefs. gpt_image_1 and gpt_image_2 alias here because the prompt form is identical across versions."
+    },
+    {
+      "id": "krea_2",
+      "aliases": [
+        "krea_1"
+      ],
+      "modality": "image",
+      "form": "natural_language_with_quoted_text",
+      "projection": "krea_2",
+      "ordering": [
+        "subjects",
+        "composition",
+        "style"
+      ],
+      "required": [
+        "subjects"
+      ],
+      "supports_negative": false,
+      "supports_style": true,
+      "notes": "Krea 2 reads short natural prose with quoted text rendered literally. krea_1 alias resolves here."
+    },
+    {
+      "id": "hidream_i1",
+      "aliases": [],
+      "modality": "image",
+      "form": "subject_first_natural_language",
+      "projection": "hidream_i1",
+      "ordering": [
+        "subjects",
+        "place",
+        "style"
+      ],
+      "required": [
+        "subjects"
+      ],
+      "supports_negative": false,
+      "supports_style": true,
+      "notes": "HiDream I1 reads subject-first natural language; style as final clause."
+    },
+    {
+      "id": "nano_banana",
+      "aliases": [
+        "nano_banana_2",
+        "nano_banana_2_lite",
+        "nano_banana_pro"
+      ],
+      "modality": "image",
+      "form": "rich_descriptive_prose",
+      "projection": "nano_banana",
+      "ordering": [
+        "goal",
+        "subjects",
+        "composition",
+        "light"
+      ],
+      "required": [
+        "subjects"
+      ],
+      "supports_negative": false,
+      "supports_style": true,
+      "notes": "Nano Banana reads rich descriptive prose with composition cues. All nano_banana_* variants alias here because the prompt form is identical."
+    },
+    {
+      "id": "ideogram",
+      "aliases": [
+        "ideogram_2",
+        "ideogram_3"
+      ],
+      "modality": "image",
+      "form": "natural_language_with_typography",
+      "projection": "ideogram",
+      "ordering": [
+        "subjects",
+        "layout",
+        "style",
+        "literal_text"
+      ],
+      "required": [
+        "subjects"
+      ],
+      "supports_negative": false,
+      "supports_style": true,
+      "notes": "Ideogram reads typography-aware briefs; quoted text rendered literally."
+    },
+    {
+      "id": "recraft",
+      "aliases": [],
+      "modality": "image",
+      "form": "design_brief",
+      "projection": "recraft",
+      "ordering": [
+        "asset_type",
+        "layout",
+        "style",
+        "palette"
+      ],
+      "required": [
+        "asset_type",
+        "layout",
+        "style",
+        "palette"
+      ],
+      "supports_negative": false,
+      "supports_style": true,
+      "notes": "Recraft reads design briefs emphasizing asset_type, layout, style, and palette. Style field is required for palette rendering."
+    },
+    {
+      "id": "grok_image",
+      "aliases": [],
+      "modality": "image",
+      "form": "five_part_visual_brief",
+      "projection": "grok_image",
+      "ordering": [
+        "intent",
+        "subjects",
+        "composition",
+        "look"
+      ],
+      "required": [
+        "subjects"
+      ],
+      "supports_negative": false,
+      "supports_style": true,
+      "notes": "Grok Image reads a five-part visual brief: intent, subject, composition, look."
+    },
+    {
+      "id": "ernie_image",
+      "aliases": [],
+      "modality": "image",
+      "form": "instruction_and_visual_spec",
+      "projection": "ernie_image",
+      "ordering": [
+        "task",
+        "subjects",
+        "composition",
+        "style"
+      ],
+      "required": [
+        "task",
+        "subjects",
+        "composition",
+        "style"
+      ],
+      "supports_negative": false,
+      "supports_style": true,
+      "notes": "ERNIE image reads instruction + visual spec combined. Style field is required."
+    },
+    {
+      "id": "wan_2_7",
+      "aliases": [
+        "wan",
+        "wan_2",
+        "wan_2_5",
+        "wan_2_6",
+        "wan_2_1_2_2",
+        "wan_2_2"
+      ],
+      "modality": "video",
+      "form": "cinematic_shot_description",
+      "projection": "wan",
+      "ordering": [
+        "shot",
+        "subjects",
+        "action",
+        "place",
+        "camera",
+        "light",
+        "ending"
+      ],
+      "required": [
+        "subjects",
+        "action",
+        "camera"
+      ],
+      "supports_negative": true,
+      "supports_style": true,
+      "notes": "Wan 2.x reads cinematic shot descriptions. wan_2_1_2_2 / wan_2_5_2_6 alias here because the prompt form is identical across versions."
+    },
+    {
+      "id": "ltx_2_3",
+      "aliases": [
+        "ltx",
+        "ltx_2",
+        "ltx_2_pro"
+      ],
+      "modality": "video",
+      "form": "shot_opening_motion_sequence",
+      "projection": "ltx",
+      "ordering": [
+        "opening_frame",
+        "subject_motion",
+        "camera_motion",
+        "scene_evolution",
+        "light"
+      ],
+      "required": [
+        "subject_motion",
+        "camera_motion"
+      ],
+      "supports_negative": false,
+      "supports_style": true,
+      "notes": "LTX 2.3 reads one flowing shot from opening state through motion. ltx_2_pro alias resolves here."
+    },
+    {
+      "id": "kling_kuaishou",
+      "aliases": [
+        "kling",
+        "kling_ai"
+      ],
+      "modality": "video",
+      "form": "natural_language_motion_description",
+      "projection": "kling",
+      "ordering": [
+        "subjects",
+        "primary_motion",
+        "place_response",
+        "camera",
+        "mood",
+        "finish"
+      ],
+      "required": [
+        "subjects",
+        "primary_motion"
+      ],
+      "supports_negative": true,
+      "supports_style": true,
+      "notes": "Kling reads subject + primary motion + camera + finish. Negative prompt may be ignored in some variants."
+    },
+    {
+      "id": "sora_2_sora_2_pro",
+      "aliases": [
+        "sora",
+        "sora_2",
+        "sora_2_pro"
+      ],
+      "modality": "video",
+      "form": "storyboard_sketch",
+      "projection": "sora",
+      "ordering": [
+        "scene",
+        "shot_beats",
+        "action",
+        "camera",
+        "continuity"
+      ],
+      "required": [
+        "scene",
+        "shot_beats"
+      ],
+      "supports_negative": true,
+      "supports_style": true,
+      "notes": "Sora reads scene + shot beats + camera + continuity. Explicit shot beats required."
+    },
+    {
+      "id": "veo",
+      "aliases": [
+        "veo_2",
+        "veo_3",
+        "veo_3_3_1"
+      ],
+      "modality": "video",
+      "form": "cinematic_sequence",
+      "projection": "veo",
+      "ordering": [
+        "scene",
+        "action",
+        "camera",
+        "temporal_change"
+      ],
+      "required": [
+        "scene",
+        "action"
+      ],
+      "supports_negative": true,
+      "supports_style": true,
+      "notes": "Veo reads cinematic sequence with temporal change cues. veo_3_3_1 alias resolves here."
+    },
+    {
+      "id": "seedance",
+      "aliases": [
+        "seedance_1",
+        "seedance_2",
+        "seedance_1_0_and_2_0"
+      ],
+      "modality": "video",
+      "form": "directed_shot_beats",
+      "projection": "seedance",
+      "ordering": [
+        "opening_state",
+        "action_beats",
+        "camera",
+        "ending_state"
+      ],
+      "required": [
+        "opening_state",
+        "action_beats"
+      ],
+      "supports_negative": true,
+      "supports_style": true,
+      "notes": "Seedance reads opening -> action beats -> camera -> ending. seedance_1_0_and_2_0 alias resolves here."
+    },
+    {
+      "id": "hunyuan_video",
+      "aliases": [
+        "hunyuan",
+        "hunyuan_video_1_5"
+      ],
+      "modality": "video",
+      "form": "detailed_natural_language_motion",
+      "projection": "hunyuan",
+      "ordering": [
+        "subjects",
+        "action",
+        "scene",
+        "camera"
+      ],
+      "required": [
+        "subjects",
+        "action"
+      ],
+      "supports_negative": true,
+      "supports_style": true,
+      "notes": "Hunyuan Video reads detailed natural language motion description."
+    },
+    {
+      "id": "minimax_h3",
+      "aliases": [],
+      "modality": "video",
+      "form": "direct_chinese_brief",
+      "projection": "minimax_h3",
+      "ordering": [
+        "header",
+        "core_concept",
+        "constraints",
+        "timeline",
+        "camera",
+        "style",
+        "sound",
+        "ending"
+      ],
+      "required": [
+        "header",
+        "timeline",
+        "ending"
+      ],
+      "supports_negative": false,
+      "supports_style": true,
+      "notes": "MiniMax H3 direct Chinese production brief. Seven labeled sections in canonical order. flow is one of drama/action/storyboard. No native negative prompt; express exclusions via constraints."
+    },
+    {
+      "id": "minimax_hailuo",
+      "aliases": [
+        "hailuo",
+        "minimax"
+      ],
+      "modality": "video",
+      "form": "structured_motion_brief",
+      "projection": "hailuo",
+      "ordering": [
+        "subjects",
+        "action",
+        "place",
+        "camera"
+      ],
+      "required": [
+        "subjects",
+        "action"
+      ],
+      "supports_negative": true,
+      "supports_style": true,
+      "notes": "Hailuo reads subject + action + place + camera."
+    },
+    {
+      "id": "runway",
+      "aliases": [
+        "gen_3",
+        "gen_4",
+        "runway_gen_4_gen_4_5"
+      ],
+      "modality": "video",
+      "form": "content_and_motion_only",
+      "projection": "runway",
+      "ordering": [
+        "subject_motion",
+        "place_motion",
+        "visual_finish"
+      ],
+      "required": [
+        "subject_motion"
+      ],
+      "supports_negative": true,
+      "supports_style": true,
+      "notes": "Runway Gen-3/Gen-4 reads content + motion + finish. runway_gen_4_gen_4_5 alias resolves here."
+    },
+    {
+      "id": "luma_dream_machine",
+      "aliases": [
+        "luma",
+        "ray_2",
+        "luma_ray_2_ray_3"
+      ],
+      "modality": "video",
+      "form": "content_and_motion_only",
+      "projection": "luma",
+      "ordering": [
+        "subjects",
+        "action",
+        "place",
+        "temporal_finish"
+      ],
+      "required": [
+        "subjects",
+        "action"
+      ],
+      "supports_negative": true,
+      "supports_style": true,
+      "notes": "Luma Ray reads subject + action + place + finish. luma_ray_2_ray_3 alias resolves here."
+    },
+    {
+      "id": "vidu",
+      "aliases": [],
+      "modality": "video",
+      "form": "subject_camera_sequence",
+      "projection": "vidu",
+      "ordering": [
+        "subjects",
+        "action",
+        "camera",
+        "place_response",
+        "ending_state"
+      ],
+      "required": [
+        "subjects",
+        "action"
+      ],
+      "supports_negative": false,
+      "supports_style": true,
+      "notes": "Vidu reads subject + camera + ending sequence."
+    },
+    {
+      "id": "pika_2_2_2_5",
+      "aliases": [],
+      "modality": "video",
+      "form": "concise_motion_instruction",
+      "projection": "pika",
+      "ordering": [
+        "subjects",
+        "motion",
+        "effect",
+        "camera",
+        "finish"
+      ],
+      "required": [
+        "subjects",
+        "motion"
+      ],
+      "supports_negative": false,
+      "supports_style": true,
+      "notes": "Pika 2.2/2.5 reads concise motion + effect + finish instruction."
+    },
+    {
+      "id": "svd",
+      "aliases": [],
+      "modality": "video",
+      "form": "image_conditioned_motion_description",
+      "projection": "svd",
+      "ordering": [
+        "source_frame",
+        "subject_motion",
+        "ending_state"
+      ],
+      "required": [
+        "source_frame",
+        "subject_motion",
+        "ending_state"
+      ],
+      "supports_negative": false,
+      "supports_style": true,
+      "notes": "Stable Video Diffusion. Image-conditioned: spec.references must include the source frame. Prompt describes subject_motion and ending_state."
+    },
+    {
+      "id": "pixverse",
+      "aliases": [],
+      "modality": "video",
+      "form": "structured_motion_description",
+      "projection": "pixverse",
+      "ordering": [
+        "subjects",
+        "action",
+        "camera",
+        "place"
+      ],
+      "required": [
+        "subjects",
+        "action",
+        "camera",
+        "place"
+      ],
+      "supports_negative": false,
+      "supports_style": true,
+      "notes": "PixVerse reads structured motion description with camera language."
+    },
+    {
+      "id": "gemini_omni_flash",
+      "aliases": [],
+      "modality": "video",
+      "form": "structured_video_brief",
+      "projection": "gemini_omni_flash",
+      "ordering": [
+        "goal",
+        "scene",
+        "action",
+        "continuity"
+      ],
+      "required": [
+        "scene",
+        "action"
+      ],
+      "supports_negative": false,
+      "supports_style": true,
+      "notes": "Gemini Omni Flash reads goal + scene + action + continuity as a structured video brief."
+    }
+  ]
+}

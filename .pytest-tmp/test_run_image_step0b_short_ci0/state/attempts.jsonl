@@ -1,2 +1,0 @@
-{"blockers": ["comfyui_reachable"], "phase": "preflight", "profile_id": "camera-anima-v1", "recorded_at": "2026-08-06T21:15:14.895501Z", "schema_version": "1.0", "stage": "character-base", "status": "failed"}
-{"blockers": ["comfyui_reachable"], "overlap": ["comfyui_reachable"], "phase": "preflight", "profile_id": "camera-anima-v1", "recorded_at": "2026-08-06T21:15:14.900525Z", "schema_version": "1.0", "stage": "character-base", "status": "short_circuited"}

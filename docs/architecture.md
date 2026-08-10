@@ -6,6 +6,8 @@
 |---|---|---|
 | Prompt Forge | Evidence, prompt dialect, prompt quality, envelope gate | ComfyUI, models, nodes, workflow compilation, execution |
 | camera-image runtime | Fixed source workflow, semantic config compilation, group selection, graph contracts | MCP transport implementation, prompt authoring |
+| camera-multiview runtime | Fixed API workflow, two-image binding, pose asset integrity, all-output collection | MCP transport implementation, prompt authoring, group selection |
+| camera-video runtime | Three fixed MiniMax H3 API workflows, strict prompt/duration/image binding, MP4 artifact contract | MCP transport implementation, prompt authoring, workflow discovery, compatibility branches |
 | comfyui-chenxin-mcp engine | Unified tool dispatch, image upload, queue control, execution, history, artifacts | Skill-specific node logic |
 | comfyui-mcp | ComfyUI protocol operations, strip conversion, workflow validation, runtime checks | Product-level config semantics |
 | ComfyUI | Node execution and history | Prompt authoring and skill policy |
@@ -15,12 +17,12 @@
 ```text
 CreativeEvidence + caller draft
   -> Prompt Forge envelope gate
-  -> camera-image semantic config
-  -> fixed UI source + group selection
-  -> MCP strip_workflow
+  -> camera-image, camera-multiview, or camera-video semantic config
+  -> fixed UI source + group selection (camera-image)
+  -> fixed API source (camera-multiview/camera-video)
   -> validated API graph
   -> local ComfyUI enqueue/history
-  -> hashed PNG + submitted graph + run record
+  -> hashed PNG/MP4 + submitted graph + run record
 ```
 
 ## Workflow authority
@@ -32,20 +34,53 @@ skills/camera-image/camera_image/runtime/workflow_assets/camera-anima.json
 ```
 
 It is a complete UI superset. Stage group files describe group membership, but
-they do not replace the source workflow. Generated API JSON files are release
-inspection artifacts, not runtime alternatives.
+they do not replace the source workflow. Generated API JSON files are not
+runtime alternatives for `camera-image`.
 
-## Compiler boundary
+`camera-multiview` has a separate, directly executable API authority:
 
-The compiler is intentionally one-way:
+```text
+skills/camera-multiview/camera_multiview/runtime/workflow_assets/Flux2-Klein人物一键多视图工作流.json
+```
+
+Its API file, `manifest.json`, and `pose/` directory are one immutable release
+asset. Runtime must not discover, convert, repair, or replace them.
+
+`camera-video` has three directly executable API authorities:
+
+```text
+skills/camera-video/camera_video/runtime/workflow_assets/minimax-h3-t2v.json
+skills/camera-video/camera_video/runtime/workflow_assets/minimax-h3-i2v-single.json
+skills/camera-video/camera_video/runtime/workflow_assets/minimax-h3-i2v-multi.json
+```
+
+The adjacent `manifest.json` locks each hash and declares the only writable
+node IDs. Runtime does not convert, strip, discover, repair, or switch among
+these graphs.
+
+## Compiler boundaries
+
+`camera-image` compiles one-way:
 
 ```text
 RunConfig -> UI widgets/modes -> strip -> API graph
 ```
 
-The UI graph is mutated in memory before strip. The API graph is validated and
-then treated as immutable. There is no temporary save/load round trip and no
-post-strip repair layer.
+The UI graph is mutated in memory before strip. `camera-multiview` has no UI
+compiler:
+
+```text
+RunConfig(two image paths) -> fixed API graph -> validate -> enqueue
+```
+
+`camera-video` also has no UI compiler:
+
+```text
+RunConfig(prompt, duration, optional image paths) -> fixed API graph -> validate -> enqueue
+```
+
+Both API graph families are validated and then treated as immutable. There is
+no temporary save/load round trip or post-conversion repair layer.
 
 ## Contract layers
 
@@ -56,6 +91,10 @@ post-strip repair layer.
 4. ComfyUI MCP validates the exact graph against installed node contracts.
 5. Runtime checks require the local execution environment.
 6. Artifact verification proves that execution produced the requested output.
+
+For `camera-video`, the skill-owned stage schema is the only public
+configuration authority. The manifest is the only fixed-asset authority, and
+the shared engine is the only transport/execution authority.
 
 Each layer has one authority and one failure boundary. A later layer does not
 silently repair an earlier invalid result.
@@ -80,20 +119,3 @@ The current contract is designed as the only contract:
 
 When a contract changes, update the source asset, compiler, schema, tests, and
 documentation together, then remove the superseded behavior.
-
-## Verification
-
-Offline checks:
-
-```powershell
-$root = (Get-Location).Path
-Push-Location (Join-Path $root "skills/camera-image/camera_image")
-$env:PYTHONPATH = (Get-Location).Path
-python -m pytest runtime/tests -q
-Pop-Location
-$env:PYTHONPATH = $root
-python -m pytest skills/_mcp/src/comfyui_chenxin_mcp/tests -q
-```
-
-Live checks are defined in [`camera-image-flow.md`](camera-image-flow.md) and
-require actual PNG output plus submitted-graph assertions.

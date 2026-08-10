@@ -4,7 +4,7 @@ This directory contains host registration examples for the upstream
 `comfyui-mcp` stdio server. It does not implement an MCP server, install
 ComfyUI custom nodes, manage models, or discover runtime workflows.
 
-The project server is `skills/_mcp`; it exposes the four unified project tools
+The project server is `mcp_server`; it exposes the four unified project tools
 and invokes the upstream ComfyUI MCP client during `run_skill`.
 
 ## Registration

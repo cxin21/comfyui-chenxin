@@ -14,7 +14,7 @@ Format-aware: the patcher detects UI vs API by the shape of
   Write to ``graph[node_id]["widgets_values"][_UI_INDEX[(node_id, name)]]``.
 
 Hardcoded UI widget index map (_UI_WIDGET_INDEX) is derived from
-``workflow/source/文生图相机视角.json`` structure. The strip step is
+``camera_image/runtime/workflow_assets/camera-anima.json`` structure. The strip step is
 the source of truth for converting widget values to API inputs; we
 only need to write the right index.
 
@@ -75,7 +75,7 @@ NODE_FIELD_MAP: dict[str, tuple[str, str]] = {
 # UI widget index map.
 #
 # Maps (node_id, input_name) -> position in the node's widgets_values
-# list. Derived by inspecting ``workflow/source/文生图相机视角.json``
+# list. Derived by inspecting ``camera_image/runtime/workflow_assets/camera-anima.json``
 # (committed UI workflow). Used when the patcher is called against a
 # UI-format graph (pre-strip) so the value lands in the slot that
 # ComfyUI's strip will lift into the API dict.

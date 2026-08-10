@@ -72,7 +72,15 @@ The MCP host sends:
     "evidence": {"locked_facts": []},
     "draft": {
       "positive": "1girl, masterpiece, anime portrait",
-      "negative": "lowres, bad anatomy"
+      "negative": "lowres, bad anatomy",
+      "tags": ["1girl", "solo"],
+      "structure": [
+        {"name": "subject", "text": "1girl"},
+        {"name": "action_or_pose", "text": "portrait"},
+        {"name": "scene", "text": "cinematic"},
+        {"name": "lighting", "text": "cinematic lighting"},
+        {"name": "style", "text": "anime style"}
+      ]
     },
     "dialect_id": "anima"
   },
@@ -87,9 +95,10 @@ The MCP host sends:
 }
 ```
 
-`draft.positive` and `draft.negative` are non-empty strings. Prompt text passes
-the Prompt Forge gate before ComfyUI receives anything. Workflow and execution
-fields stay in `config`.
+`draft.positive` and `draft.negative` are non-empty strings. An Anima draft
+also supplies exact `tags` and an ordered `structure` covering the required
+dialect dimensions. Prompt text passes the Prompt Forge gate before ComfyUI
+receives anything. Workflow and execution fields stay in `config`.
 
 `i2i-camera` requires `config.reference_image`. All image config values are
 local paths at the public boundary. The engine uploads them and replaces them
@@ -215,18 +224,4 @@ The minimum live acceptance set is:
 | T2I + LoRA + ControlNet | PNG plus both complete feature subgraphs |
 | I2I + LoRA + ControlNet | PNG plus both feature subgraphs and I2I latent route |
 
-Offline gates:
 
-```powershell
-$root = (Get-Location).Path
-Push-Location (Join-Path $root "skills/camera-image/camera_image")
-$env:PYTHONPATH = (Get-Location).Path
-python -m pytest runtime/tests -q
-Pop-Location
-$env:PYTHONPATH = $root
-python -m pytest skills/_mcp/src/comfyui_chenxin_mcp/tests -q
-```
-
-The live gate must run against ComfyUI at `http://127.0.0.1:8188` with the
-fixed release asset and installed custom nodes. A failed gate is a failed run;
-do not fall back to an older workflow, API snapshot, or node contract.

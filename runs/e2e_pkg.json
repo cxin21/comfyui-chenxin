@@ -1,6 +1,0 @@
-﻿{
-    "schema_version":  "2.0",
-    "negative":  "lowres, bad anatomy, bad hands, watermark",
-    "positive":  "score_9, 1girl, solo, smiling, looking at viewer, upper body",
-    "dialect":  "anima"
-}
