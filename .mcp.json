@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "comfyui-chenxin-mcp": {
+      "type": "stdio",
+      "command": "python",
+      "args": [
+        "-m",
+        "comfyui_chenxin_mcp"
+      ],
+      "env": {}
+    }
+  }
+}

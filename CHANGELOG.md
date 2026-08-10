@@ -4,6 +4,60 @@ All notable changes to comfyui-chenxin are documented here. Format follows [Keep
 
 ## [Unreleased] — current state on disk
 
+### MCP server registration fix (2026-08-10) — v0.1.6
+
+- **Switch MCP server config from `.claude-plugin/plugin.json` (which the
+  Claude Code plugin loader IGNORES) to plugin-root `.mcp.json` (which
+  IS the canonical, loader-read source — same pattern as `ecc` and
+  `claude-mem`).**
+- Symptom: every plugin version bump from v0.1.2 onward broke MCP tool
+  exposure (`mcp__plugin_comfyui-chenxin_comfyui-chenxin-mcp__*`),
+  because `installed_plugins.json` was being edited manually and the
+  plugin loader only registers MCP servers on the initial
+  `claude plugin install` call. Sessions running against v0.1.3+
+  silently lost the MCP tools, and assistants fell back to upstream
+  `comfyui-mcp` (or, worse, gave up).
+- Fix: `.mcp.json` is now the single source of truth. `.claude-plugin/plugin.json`
+  no longer declares `mcpServers`. Tool names are now
+  `mcp__comfyui-chenxin-mcp__*` (the standard Claude Code naming,
+  same shape as `mcp__chrome-devtools__*` from ecc).
+- Recovery: on machines where v0.1.5 or earlier is installed, run
+  `claude plugin uninstall comfyui-chenxin@comfyui-chenxin` then
+  `claude plugin install comfyui-chenxin@comfyui-chenxin` to trigger
+  the loader's fresh `.mcp.json` read. On fresh machines, the
+  marketplace install handles it automatically.
+
+### Per-LoRA strength (2026-08-10) — v0.1.5
+
+- `lora_resolver.resolve_lora_names` now accepts `list[dict]` per
+  selection, with optional `strength_model` / `strength_clip` /
+  `active` / `trigger_words` keys. The previous `list[str]` shape was
+  truncated — the underlying `LoraSelection` dataclass and
+  `render_stack_text` were already strength-aware, but the input layer
+  discarded the strength info entirely. Now the user's "GUOMAN 0.8"
+  request is honored. See `skills/camera-image/SKILL.md` for the
+  new shape and examples.
+
+### Error diagnostics hardening (2026-08-10) — v0.1.3
+
+- `evidence._string_list` error messages now include the received
+  type and a truncated repr of the value (root-caused from session
+  2c6a0517's 6-attempt `locked_facts` retry loop).
+- `comfyui-chenxin-mcp` server tools gain minimum-payload examples in
+  their tool descriptions; `run_skill` pre-flights `validate_config`
+  before spawning any subprocess; failure payloads carry
+  `error_category` (prompt_forge_input | engine_build | comfyui_runtime
+  | unknown) so callers can route the fix without reading prose.
+
+### prompt-forge proactive trigger (2026-08-10) — v0.1.4
+
+- `skills/prompt-forge/SKILL.md` description rewritten with explicit
+  "INVOKE THIS SKILL BEFORE hand-crafting any image or video prompt"
+  trigger (root-caused from session a2fc7837 where the assistant
+  skipped the skill for a one-line brief). Plus a clarification that
+  CLAUDE.md §10 极简任务 applies to Agent dispatch, not Skill tool
+  invocation.
+
 ### P1 production hardening (2026-08-06)
 
 - Add `runtime.preflight.run_preflight()` with a stable JSON contract: four checks (version_stamp, comfyui_reachable, fixed_assets_integrity, host_mcp_tools) plus a `blockers` list and per-check `remediation`. New CLI subcommands: `preflight`, `--version`.
