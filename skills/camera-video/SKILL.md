@@ -2,6 +2,12 @@
 name: camera-video
 description: |
   Use proactively for any MiniMax H3 text-to-video or image-reference-to-video request on local ComfyUI (single-image or three-image reference). The three locked release workflows (t2v / i2v-single / i2v-multi) only expose prompt, duration, and reference image fields. Load this skill immediately on any video generation request - do not bypass with generic ComfyUI tools.
+
+  INVOKE describe_config FIRST (before validate_config or run_skill) to
+  learn the field types and shape. Critical gotcha: `duration` is a JSON
+  number (e.g. 8.0) NOT a JSON string ("8.0") — the validator will reject
+  the latter with `duration must be a number`. dialect_id is hard-coded
+  to `minimax_h3` and is auto-coerced; do not pass any other dialect.
 ---
 
 # camera-video

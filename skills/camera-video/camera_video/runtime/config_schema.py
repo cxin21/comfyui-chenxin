@@ -7,6 +7,13 @@ from math import isfinite
 from typing import Any
 
 
+def _truncate_repr(value: Any, limit: int) -> str:
+    text = repr(value)
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "..."
+
+
 STAGES = ("t2v-video", "i2v-video", "multi-i2v-video")
 IMAGE_FIELDS = {
     "i2v-video": ("reference_image_1",),
@@ -40,20 +47,33 @@ class RunConfig:
             raise TypeError("envelope.evidence must be an object")
         if envelope.get("draft") not in (None, {}):
             raise ValueError("camera-video does not accept envelope.draft; use config.prompt")
-        if envelope.get("dialect_id") not in (None, "minimax_h3"):
-            raise ValueError("camera-video uses the fixed minimax_h3 dialect")
+        # dialect_id is hard-coded; silently coerce any value (including
+        # legacy "anima" mistakes) to minimax_h3 — caller doesn't need to
+        # know or specify the dialect.
         unknown = sorted(set(tunables) - ALLOWED_FIELDS)
         if unknown:
-            raise TypeError(f"unsupported camera-video config field(s): {unknown}")
+            raise TypeError(
+                f"unsupported camera-video config field(s): {unknown}; "
+                f"valid fields: {sorted(ALLOWED_FIELDS)}"
+            )
         prompt = tunables.get("prompt")
         if not isinstance(prompt, str) or not prompt.strip():
-            raise ValueError("prompt must be a non-empty string")
+            raise ValueError(
+                f"prompt must be a non-empty string, "
+                f"got {type(prompt).__name__}: {_truncate_repr(prompt, 60)}"
+            )
         duration = tunables.get("duration")
         if isinstance(duration, bool) or not isinstance(duration, (int, float)):
-            raise TypeError("duration must be a number")
+            raise TypeError(
+                f"duration must be a JSON number (got "
+                f"{type(duration).__name__}: {_truncate_repr(duration, 60)}); "
+                f"use 8.0 not \"8.0\""
+            )
         duration = float(duration)
         if not isfinite(duration) or not 2.0 <= duration <= 15.0:
-            raise ValueError("duration must be between 2 and 15 seconds")
+            raise ValueError(
+                f"duration must be between 2 and 15 seconds, got {duration}"
+            )
         return cls(
             evidence=dict(envelope.get("evidence") or {}),
             draft={},

@@ -126,7 +126,11 @@ def main() -> None:
             "Minimum working payload for camera-image / t2i-camera:\n"
             "  envelope = {\"dialect_id\": \"anima\", \"draft\": {\"positive\": \"1girl ...\", \"negative\": \"\"}, \"evidence\": {}}\n"
             "  config = {\"image_size\": [1200, 800]}\n"
-            "For full schema call describe_config(skill=\"camera-image\", stage=\"t2i-camera\")."
+            "For full schema call describe_config(skill=\"camera-image\", stage=\"t2i-camera\").\n"
+            "For camera-video (t2v / i2v / multi-i2v) stages:\n"
+            "  envelope = {\"evidence\": {}}  # draft is forbidden; dialect_id auto-coerced\n"
+            "  config = {\"prompt\": \"@图片1 ...\", \"duration\": 8.0, \"reference_image_1\": \"/path/to/img.png\"}\n"
+            "  CRITICAL: `duration` is a JSON number (8.0), NOT a string (\"8.0\")."
         ),
         input_schema={
             "type": "object",

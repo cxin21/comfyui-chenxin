@@ -35,8 +35,9 @@ def validate_envelope(envelope: dict) -> list[str]:
         errors.append("envelope.evidence must be an object")
     if envelope.get("draft") not in (None, {}):
         errors.append("camera-video does not accept envelope.draft; use config.prompt")
-    if envelope.get("dialect_id") not in (None, "minimax_h3"):
-        errors.append("camera-video uses the fixed minimax_h3 dialect")
+    # dialect_id is auto-coerced to minimax_h3 in config_schema.from_envelope,
+    # so any caller-supplied value (including wrong ones like "anima") is
+    # silently accepted at this surface.
     return errors
 
 
