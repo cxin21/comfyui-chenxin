@@ -1,0 +1,33 @@
+{
+  "name": "comfyui-chenxin",
+  "version": "0.1.0",
+  "description": "Local-first ComfyUI plugin: prompt-forge prompt authoring plus three fixed-workflow camera skills (image, multiview, video) consumed through a unified local ComfyUI/MCP four-stage production flow against fixed release assets.",
+  "author": {
+    "name": "cxin21",
+    "url": "https://github.com/cxin21"
+  },
+  "homepage": "https://github.com/cxin21/comfyui-chenxin",
+  "repository": "https://github.com/cxin21/comfyui-chenxin",
+  "license": "MIT",
+  "keywords": [
+    "comfyui",
+    "prompt-engineering",
+    "character-consistency",
+    "flux",
+    "minimax",
+    "anima",
+    "video",
+    "ai-image"
+  ],
+  "skills": [
+    "./skills/"
+  ],
+  "mcpServers": {
+    "comfyui-chenxin-mcp": {
+      "type": "stdio",
+      "command": "comfyui-chenxin-mcp-server",
+      "args": [],
+      "env": {}
+    }
+  }
+}
