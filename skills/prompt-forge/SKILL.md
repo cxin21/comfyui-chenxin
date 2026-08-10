@@ -1,6 +1,13 @@
 ---
 name: prompt-forge
 description: |
+  INVOKE THIS SKILL BEFORE hand-crafting any image or video prompt.
+  Even a one-line user brief ("写个 Anima 的旗袍提示词") MUST go through
+  compile(spec, dialect_id); you may summarize or trim the returned
+  PromptPackage for the user, but the validator MUST run. Skip ONLY when
+  the user explicitly says "no skill, raw text only" / "no validation" /
+  "just write the prompt, don't run anything".
+
   LLM-first prompt authoring and quality-audit for image and video
   models. The LLM authors typed concept objects (Subject with
   identity / appearance / pose / gesture / expression / gaze /
@@ -40,6 +47,12 @@ Use this skill to:
 - Generate a MiniMax H3 Chinese production brief.
 - Enforce persistence / continuity requirements across multi-frame video,
   with role-anchored tokens that cannot drift to the wrong subject.
+
+Note on CLAUDE.md §10 (极简任务): the §10 exemption skips **Agent
+dispatch** (sub-agent spawning), NOT Skill-tool invocation. Even when
+the user's request looks small ("写一个 Anima 提示词,token 别太多"),
+this skill's validator must still run; you may summarize or trim the
+returned PromptPackage before showing it to the user.
 
 Do NOT use this skill for:
 
@@ -114,6 +127,17 @@ word list. See docs/theory.md for the rationale.
     |   +-- dialects.json        # 31 dialect definitions
     +-- docs/                   # theory, contracts, dialect guide, examples
     +-- .gitignore
+
+## Fast channel for tag-form dialects
+
+For Anima / SDXL / SD-1.5 / gpt_image / nano_banana / hidream_i1 / ideogram
+/ recraft / grok_image / ernie_image, `compile(spec, dialect_id)` returns
+a comma-joined Danbooru-style tag string (typically < 300 characters) in
+`package.prompt`, plus a comma-joined negative in `package.negative`. This
+is already the renderable form for these models — no further summarization
+or rewriting needed. Do not refuse to invoke compile on the grounds that
+"the result will be too long"; the result for these dialects is short by
+design.
 
 ## Quick start
 
