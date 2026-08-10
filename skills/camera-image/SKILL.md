@@ -82,6 +82,22 @@ Use `describe_config` for the complete current config surface. Common fields:
 - `controlnet_image`
 - `reference_image` for `i2i-camera`
 
+`lora.selections` is a list of dicts (NOT bare strings — the old list[str]
+shape was removed in v0.1.5). Each entry requires `name`; `strength_model`
+and `strength_clip` default to 1.0 if omitted. Examples:
+
+```python
+config.lora = {
+    "selections": [
+        {"name": "GUOMAN", "strength_model": 0.8},            # model 0.8, clip = 0.8
+        {"name": "add_detail", "strength_model": 0.6,
+         "strength_clip": 0.4},                              # differential strength
+        {"name": "anima-base-1-masterpiece-v51", "active": False},  # skip this LoRA
+    ]
+}
+# Empty list or missing key = use the default 3-LoRA stack (all strength 1.0).
+```
+
 Do not put execution fields such as `seed`, `steps`, `cfg`, `sampler`,
 `denoise`, `camera`, or `lora` into Prompt Forge `evidence` or `draft`.
 

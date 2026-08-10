@@ -7,6 +7,15 @@ matching so users can pass "add_detail" instead of "Anima\\add_detail.safetensor
 `RunConfig.lora` dict shape (see config_schema.RunConfig.lora) and reads the
 optional `selections` key. None / empty dict / missing key fall through to
 the default 3-LoRA plan.
+
+Selection shape (each item is a dict, NOT a bare string — old list[str]
+shape was removed in v0.1.5):
+
+  {"name": str,                              # required
+   "strength_model": float,                  # optional, default 1.0
+   "strength_clip":   float,                 # optional, default = strength_model
+   "active":         bool,                   # optional, default True
+   "trigger_words":  list[str]}              # optional, default []
 """
 
 from __future__ import annotations
@@ -83,16 +92,35 @@ def filter_anima_loras(inventory: list[str]) -> list[str]:
 
 
 def resolve_lora_names(
-    selections: list[str],
+    selections: list[dict],
     inventory: list[str],
 ) -> list[LoraSelection]:
-    """Resolve user-provided LoRA names against inventory.
+    """Resolve user-provided LoRA selections against inventory.
 
-    Matching priority:
+    Each `sel` must be a dict with a required `name` key and optional
+    `strength_model` / `strength_clip` / `active` / `trigger_words`. Short
+    name matching:
     1. Exact short-name match (normalized filename)
     2. Exact full-name match
     3. Case-insensitive substring match on short name
     """
+    if not isinstance(selections, list):
+        raise TypeError(
+            f"LoRA selections must be a list of dicts, "
+            f"got {type(selections).__name__}: {_truncate_repr(selections, 80)}"
+        )
+    for i, sel in enumerate(selections):
+        if not isinstance(sel, dict):
+            raise TypeError(
+                f"LoRA selections[{i}] must be a dict with 'name', "
+                f"got {type(sel).__name__}: {_truncate_repr(sel, 80)}"
+            )
+        if "name" not in sel or not isinstance(sel["name"], str) or not sel["name"].strip():
+            raise ValueError(
+                f"LoRA selections[{i}] missing required non-empty 'name' string, "
+                f"got: {_truncate_repr(sel, 80)}"
+            )
+
     by_short: dict[str, str] = {}
     for full_name in inventory:
         short = _normalize_filename(full_name)
@@ -100,41 +128,53 @@ def resolve_lora_names(
 
     resolved: list[LoraSelection] = []
     for sel in selections:
-        sel = sel.strip()
-        if not sel:
+        name_query = sel["name"].strip()
+        if not name_query:
             continue
-        key = sel.casefold()
+        key = name_query.casefold()
+        matched_full: str | None = None
         if key in by_short:
-            resolved.append(LoraSelection(
-                name=_normalize_filename(by_short[key]),
-            ))
-            continue
-        matched = False
-        for full_name in inventory:
-            if full_name == sel or full_name.casefold() == key:
-                resolved.append(LoraSelection(
-                    name=_normalize_filename(full_name),
-                ))
-                matched = True
-                break
-        if matched:
-            continue
-        matches = [
-            short for short in by_short
-            if key in short or short in key
-        ]
-        if len(matches) == 1:
-            full = by_short[matches[0]]
-            resolved.append(LoraSelection(
-                name=_normalize_filename(full),
-            ))
-        elif len(matches) > 1:
-            raise ValueError(
-                f"LoRA name {sel!r} is ambiguous, matches: {matches}"
-            )
+            matched_full = by_short[key]
         else:
-            raise ValueError(f"LoRA {sel!r} not found in inventory")
+            for full_name in inventory:
+                if full_name == name_query or full_name.casefold() == key:
+                    matched_full = full_name
+                    break
+            if matched_full is None:
+                matches = [
+                    short for short in by_short
+                    if key in short or short in key
+                ]
+                if len(matches) == 1:
+                    matched_full = by_short[matches[0]]
+                elif len(matches) > 1:
+                    raise ValueError(
+                        f"LoRA name {name_query!r} is ambiguous, matches: {matches}"
+                    )
+                else:
+                    raise ValueError(f"LoRA {name_query!r} not found in inventory")
+        strength_model = float(sel.get("strength_model", 1.0))
+        if "strength_clip" in sel:
+            strength_clip = float(sel["strength_clip"])
+        else:
+            strength_clip = strength_model
+        active = bool(sel.get("active", True))
+        trigger_words = list(sel.get("trigger_words", []))
+        resolved.append(LoraSelection(
+            name=_normalize_filename(matched_full),
+            strength_model=strength_model,
+            strength_clip=strength_clip,
+            active=active,
+            trigger_words=trigger_words,
+        ))
     return resolved
+
+
+def _truncate_repr(value: Any, limit: int) -> str:
+    text = repr(value)
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "..."
 
 
 def default_lora_plan() -> list[LoraSelection]:

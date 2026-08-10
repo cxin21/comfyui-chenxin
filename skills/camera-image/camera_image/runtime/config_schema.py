@@ -91,7 +91,10 @@ class RunConfig:
     # existing tunables
     camera: CameraConfig | None = None
     camera_extra: dict | None = None
-    lora: dict | None = None   # supported keys: {"selections": [short,...]}
+    lora: dict | None = None   # supported keys: {"selections": [{"name": str, "strength_model": float?, "strength_clip": float?, "active": bool?, "trigger_words": [str]?}, ...]}
+    #                           # Each entry MUST be a dict with 'name'; per-LoRA
+    #                           # strength_model/strength_clip optional, default 1.0.
+    #                           # Empty / missing selections = use the default 3-LoRA stack.
     groups: GroupsConfig | None = None
     # new tunables
     sampling: SamplingConfig | None = None
