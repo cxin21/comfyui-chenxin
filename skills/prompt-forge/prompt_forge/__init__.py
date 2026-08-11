@@ -1,13 +1,28 @@
-"""Model-native prompt authoring contracts for the project camera skills."""
+"""Three explicit model-native Prompt Forge authoring paths."""
 
-from .contracts import ForgeRequest, PromptArtifact, PromptForgeError
-from .forge import forge_prompt
-from .lint import lint_prompt
+from __future__ import annotations
+
+from typing import NoReturn
+
+from . import contracts as _contracts
 
 __all__ = [
-    "ForgeRequest",
-    "PromptArtifact",
-    "PromptForgeError",
-    "forge_prompt",
-    "lint_prompt",
+    "author_anima_prompt",
+    "author_h3_t2va_prompt",
+    "author_h3_ref2va_prompt",
 ]
+
+
+def author_anima_prompt(request: _contracts.AnimaAuthoringRequest) -> NoReturn:
+    del request
+    raise NotImplementedError("Anima authoring is implemented in Task 8")
+
+
+def author_h3_t2va_prompt(request: _contracts.H3T2VAAuthoringRequest) -> NoReturn:
+    del request
+    raise NotImplementedError("H3 T2VA authoring is implemented in Task 10")
+
+
+def author_h3_ref2va_prompt(request: _contracts.H3Ref2VAAuthoringRequest) -> NoReturn:
+    del request
+    raise NotImplementedError("H3 Ref2VA authoring is implemented in Task 11")
