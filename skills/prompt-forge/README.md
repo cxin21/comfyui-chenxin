@@ -1,108 +1,19 @@
 # Prompt Forge
 
-LLM-first prompt authoring and quality-audit for image and video
-models. v3 redesign.
+Greenfield prompt authoring for the fixed Anima and MiniMax-H3 production workflows.
 
-## Layout
-
-```
-prompt-forge/
-├── SKILL.md             # Skill entry point
-├── internals/
-│   ├── spec.py          # Concept objects + dataclasses
-│   ├── evidence.py      # Evidence normalization
-│   ├── dialect.py       # Dialect registry
-│   ├── project.py       # Per-dialect projectors
-│   ├── validate.py      # Validation propositions (P1-P5)
-│   ├── package.py       # PromptPackage envelope
-│   ├── render.py        # Debug renderer (concept-aware)
-│   ├── compile.py       # User entry point
-│   ├── registry/
-│   │   └── dialects.json  # 31 dialect definitions
-│   └── docs/            # Theory, contracts, examples
-└── README.md
-```
-
-## Architecture
-
-```
-                    ┌────────────────────┐
-                    │     LLM (caller)   │
-                    │   authors concept  │
-                    │     objects        │
-                    └──────────┬─────────┘
-                               │
-                               ▼
-   ┌─────────────────────────────────────────────────────────┐
-   │                  compile(spec, dialect)                 │
-   │                                                         │
-   │   evidence.py    dialect.py    project.py    validate  │
-   │        │            │             │              │      │
-   │        ▼            ▼             ▼              ▼      │
-   │   normalize    lookup       spec->text    P1..P5       │
-   └────────────────────────┬────────────────────────────────┘
-                            │
-                            ▼
-                  ┌──────────────────────┐
-                  │   PromptPackage      │
-                  │   (envelope)         │
-                  └──────────────────────┘
-```
-
-## Quick start
+The core API is:
 
 ```python
-from internals.spec import (
-    Specification, State, Style, Constraint,
-    Subject, Costume, Prop, Environment, Atmosphere, Lighting, Frame,
-)
-from internals.compile import compile
+from prompt_forge.contracts import ForgeRequest
+from prompt_forge.forge import forge_prompt
 
-spec = Specification(
-    modality="image",
-    initial_state=State(
-        subjects=(
-            Subject(
-                identity="a mage in a red robe",
-                costume=(Costume(garment="robe", material="silk", color="vermilion"),),
-                props=(Prop(item="jade staff"),),
-            ),
-        ),
-        environment=Environment(place="a tower"),
-        lighting=Lighting(key="candlelight"),
-        frame=Frame(shot="medium shot"),
-    ),
-    style=Style(medium="ink wash", palette="charcoal and vermilion"),
-)
-
-package = compile(spec, "flux")
-assert package.ready_for_review
-print(package.prompt)
+artifact = forge_prompt(ForgeRequest(
+    profile_id="anima.miaomiao-harem.anima-1.5",
+    operation="t2i",
+    positive="score_9, score_8_up, ...",
+    negative="low quality, bad anatomy",
+))
 ```
 
-## Design principles
-
-1. **First principles, not enumeration**: validation uses structural
-   propositions (P1-P5), not growing word lists.
-2. **Concepts, not flat strings**: every visual signal is a typed
-   field on a concept object. The projector expands each concept
-   into dialect-appropriate prose.
-3. **Per-dialect composition**: each dialect owns its render
-   strategy. No shared clause skeleton.
-4. **Single responsibility**: each `internals/*.py` does one thing.
-5. **Frozen dataclasses**: types are the documentation; mutations
-   are forbidden.
-6. **Forbidden fields**: `workflow`, `node`, `hash`, `gpu`,
-   `execution`, `mode`, `runtime` cannot enter the envelope at any
-   depth.
-
-## Adding a dialect
-
-1. Append to `registry/dialects.json` (canonical id, projection
-   short name, modality, form, ordering, required, supports flags,
-   notes).
-2. Add a function in `internals/project.py` named by the
-   `projection` field. Compose the concept renderers in your
-   preferred order; do not share clause structure with other dialects.
-3. Register the function in `_PROJECTIONS`.
-4. Call `compile(spec, dialect_id)` and inspect `ready_for_review`.
+The caller authors the text. Prompt Forge selects the exact profile, validates objective constraints, lints the native grammar, and returns a structured artifact. It does not maintain a cross-model dialect registry, projection pipeline, compatibility adapter, or creative post-processor.

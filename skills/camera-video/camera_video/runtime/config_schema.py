@@ -31,8 +31,7 @@ ALLOWED_FIELDS = {
 @dataclass(frozen=True)
 class RunConfig:
     evidence: dict[str, Any]
-    draft: dict[str, Any]
-    dialect_id: str
+    profile_id: str
     prompt: str
     duration: float
     reference_image_1: str | None = None
@@ -45,10 +44,11 @@ class RunConfig:
     def from_envelope(cls, envelope: dict[str, Any], **tunables: Any) -> "RunConfig":
         if not isinstance(envelope.get("evidence"), dict):
             raise TypeError("envelope.evidence must be an object")
-        if envelope.get("draft") not in (None, {}):
-            raise ValueError("camera-video does not accept envelope.draft; use config.prompt")
-        # dialect_id is hard-coded; silently coerce any value to minimax_h3.
-        # The caller never needs to know or specify the dialect.
+        profile_id = envelope.get("profile_id")
+        if not isinstance(profile_id, str) or not profile_id.strip():
+            raise TypeError("envelope.profile_id must be a non-empty string")
+        if "draft" in envelope or "dialect_id" in envelope:
+            raise ValueError("legacy prompt envelope fields are forbidden")
         unknown = sorted(set(tunables) - ALLOWED_FIELDS)
         if unknown:
             raise TypeError(
@@ -75,8 +75,7 @@ class RunConfig:
             )
         return cls(
             evidence=dict(envelope.get("evidence") or {}),
-            draft={},
-            dialect_id="minimax_h3",
+            profile_id=profile_id,
             prompt=prompt,
             duration=duration,
             reference_image_1=tunables.get("reference_image_1"),

@@ -52,20 +52,11 @@ Both stages require an envelope with non-empty prompt fields:
 
 ```json
 {
-  "evidence": {"locked_facts": []},
-  "draft": {
-    "positive": "1girl, masterpiece, anime portrait, cinematic lighting, anime style",
-    "negative": "lowres, bad anatomy",
-    "tags": ["1girl", "solo"],
-    "structure": [
-      {"name": "subject", "text": "1girl"},
-      {"name": "action_or_pose", "text": "portrait"},
-      {"name": "scene", "text": "cinematic"},
-      {"name": "lighting", "text": "cinematic lighting"},
-      {"name": "style", "text": "anime style"}
-    ]
-  },
-  "dialect_id": "anima"
+  "profile_id": "anima.miaomiao-harem.anima-1.5",
+  "prompt": {
+    "positive": "score_9, score_8_up, 1girl, anime portrait, cinematic lighting",
+    "negative": "low quality, bad anatomy"
+  }
 }
 ```
 
@@ -99,7 +90,7 @@ config.lora = {
 ```
 
 Do not put execution fields such as `seed`, `steps`, `cfg`, `sampler`,
-`denoise`, `camera`, or `lora` into Prompt Forge `evidence` or `draft`.
+`denoise`, `camera`, or `lora` into Prompt Forge `evidence` or `prompt`.
 
 ## Group semantics
 

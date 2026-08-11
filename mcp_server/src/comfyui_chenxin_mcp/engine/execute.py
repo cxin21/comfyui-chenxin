@@ -35,7 +35,7 @@ def run_skill(
     """Execute a skill stage. Returns (payload, exit_code).
 
     Generic flow:
-    1. prompt-forge gate (compile_envelope)
+    1. Prompt Forge artifact gate
     2. upload stage_images (reference, controlnet)
     3. health check (ComfyUI queue idle)
     4. prepare temp workflow (apply config + G1/G2 modes to UI, upload,
@@ -70,12 +70,9 @@ def run_skill(
 
     try:
         # Step 1: prompt-forge gate.
-        from .prompt_forge import compile_envelope
-        package = (
-            skill_data.prompt_gate_fn(config)
-            if skill_data.prompt_gate_fn is not None
-            else compile_envelope(config.evidence, config.draft, skill_data.dialect_id)
-        )
+        if skill_data.prompt_gate_fn is None:
+            raise RuntimeError(f"skill {skill_data.name} has no exact prompt profile gate")
+        package = skill_data.prompt_gate_fn(config)
 
         # Step 2: upload stage_images.
         patch_config = config
@@ -172,7 +169,7 @@ def run_skill(
         "artifact": artifact,
         "duration_ms": duration_ms,
         "config": asdict(config),
-        "prompt_package_quality": package.get("quality", {}),
+        "prompt_artifact_lint": package.get("lint", {}),
     }
     (run_dir / "submitted-graph.json").write_text(
         json.dumps(graph, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -192,7 +189,7 @@ def run_skill(
         "artifact": artifact,
         "duration_ms": duration_ms,
         "run_record_path": str(run_dir / "run-record.json"),
-        "prompt_forge_warnings": package.get("warnings", []),
+        "prompt_forge_lint": package.get("lint", {}),
     }
     return payload, 0
 

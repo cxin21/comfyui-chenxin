@@ -5,7 +5,7 @@ Single source of truth for what callers can tune. All fields are optional
 static values at patch time.
 
 Mandatory inputs are:
-  * RunConfig.draft (must contain keys "positive" and "negative")
+  * RunConfig.prompt (must contain keys "positive" and "negative")
   * RunConfig.evidence (CreativeEvidence ledger)
 Prompt text MUST pass through the prompt-forge gate before reaching here.
 
@@ -81,13 +81,13 @@ class GroupsConfig:
 class RunConfig:
     """Top-level config for patch_graph + run_t2i / run_i2i.
 
-    Mandatory: evidence (dict) + draft (dict, must contain "positive" and "negative").
+    Mandatory: evidence (dict) + prompt (dict, must contain "positive" and "negative").
     All other fields are optional — fall through to workflow.json defaults when None.
     """
     # prompt-forge gate (always required)
     evidence: dict
-    draft: dict
-    dialect_id: str = "anima"
+    profile_id: str
+    prompt: dict
     # existing tunables
     camera: CameraConfig | None = None
     camera_extra: dict | None = None
@@ -113,8 +113,7 @@ class RunConfig:
     def from_envelope(cls, envelope: dict, **tunables) -> "RunConfig":
         """Build RunConfig from an envelope dict + tunable kwargs.
 
-        envelope must contain: evidence (dict), draft (dict).
-        Optional envelope key: dialect_id (str, default "anima").
+        envelope must contain: evidence (dict), prompt (dict).
         tunables: camera (dict), camera_extra (dict), lora (dict),
                   groups (dict), sampling (dict), seed (int),
                   image_size (dict), reference_image (str), controlnet_image (str),
@@ -134,8 +133,8 @@ class RunConfig:
             groups = GroupsConfig(**groups)
         return cls(
             evidence=envelope.get("evidence", {}),
-            draft=envelope.get("draft", {}),
-            dialect_id=envelope.get("dialect_id", "anima"),
+            profile_id=envelope.get("profile_id", ""),
+            prompt=envelope.get("prompt", {}),
             camera=camera,
             camera_extra=tunables.get("camera_extra"),
             lora=tunables.get("lora"),

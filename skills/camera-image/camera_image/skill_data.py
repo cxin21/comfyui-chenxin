@@ -16,6 +16,47 @@ from camera_image.runtime.graph_patcher import NODE_FIELD_MAP, describe_config
 from camera_image.runtime.source_workflow import prepare_temporary_workflow
 
 
+def compile_prompt_gate(config) -> dict:
+    from comfyui_chenxin_mcp.engine.prompt_forge import forge_prompt
+
+    operation = "i2i" if config.reference_image else "t2i"
+    return forge_prompt(
+        prompt=config.prompt.get("positive", ""),
+        negative=config.prompt.get("negative"),
+        profile_id=config.profile_id,
+        operation=operation,
+        regional={
+            channel: getattr(config, f"{channel}_prompt")
+            for channel in ("red", "green", "blue")
+            if getattr(config, f"{channel}_prompt") is not None
+        },
+        evidence=config.evidence,
+        adapter_manifest=config.lora,
+    )
+
+
+def validate_envelope(envelope: dict) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(envelope.get("evidence"), dict):
+        errors.append("envelope.evidence must be an object")
+    if envelope.get("profile_id") != "anima.miaomiao-harem.anima-1.5":
+        errors.append("envelope.profile_id must be anima.miaomiao-harem.anima-1.5")
+    prompt = envelope.get("prompt")
+    if not isinstance(prompt, dict):
+        errors.append("envelope.prompt must be an object")
+    else:
+        for key in ("positive", "negative"):
+            if key not in prompt:
+                errors.append(f"envelope.prompt.{key} is required")
+            elif prompt[key] is not None and not isinstance(prompt[key], str):
+                errors.append(f"envelope.prompt.{key} must be a string or null")
+        if isinstance(prompt.get("positive"), str) and not prompt["positive"].strip():
+            errors.append("envelope.prompt.positive must be non-empty")
+    if "draft" in envelope or "dialect_id" in envelope:
+        errors.append("legacy prompt envelope fields are forbidden")
+    return errors
+
+
 def get_skill_data() -> SkillData:
     return SkillData(
         name="camera-image",
@@ -98,5 +139,6 @@ def get_skill_data() -> SkillData:
         describe_fn=describe_config,
         prepare_fn=prepare_temporary_workflow,
         build_config_fn=RunConfig.from_envelope,
-        dialect_id="anima",
+        prompt_gate_fn=compile_prompt_gate,
+        envelope_validate_fn=validate_envelope,
     )

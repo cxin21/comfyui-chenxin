@@ -6,8 +6,8 @@ description: |
   INVOKE describe_config FIRST (before validate_config or run_skill) to
   learn the field types and shape. Critical gotcha: `duration` is a JSON
   number (e.g. 8.0) NOT a JSON string ("8.0") — the validator will reject
-  the latter with `duration must be a number`. dialect_id is hard-coded
-  to `minimax_h3` and is auto-coerced; do not pass any other dialect.
+  the latter with `duration must be a number`. Select the exact profile:
+  `minimax-h3.base.t2va` for t2v or `minimax-h3.base.ref2va` for reference video.
 ---
 
 # camera-video

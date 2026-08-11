@@ -19,7 +19,7 @@ the source of truth for converting widget values to API inputs; we
 only need to write the right index.
 
 Order:
-1.  Prompts (24/25) from ``config.draft`` (prompt-forge-validated).
+1.  Prompts (24/25) from ``config.prompt`` (Prompt Forge artifact).
 2.  Camera (583) + camera_extra (585).
 3.  LoRA (26/66).
 4.  Sampling (50/51), seed (65), image_size (68/71).
@@ -309,7 +309,7 @@ def apply_run_config(
 ) -> dict[str, Any]:
     """Write every tunable into the graph (UI or API format).
 
-    Caller supplies a RunConfig (with evidence + draft + tunables) and
+    Caller supplies a RunConfig (with evidence + prompt artifact + tunables) and
     a graph produced by ``source_workflow.prepare_temporary_workflow``.
     Format is detected automatically: UI (pre-strip, inputs=list) writes
     to ``widgets_values``; API (post-strip, inputs=dict) writes to
@@ -318,7 +318,7 @@ def apply_run_config(
     only writes the *values*.
 
     Order:
-    1.  Prompts (24/25) from ``config.draft`` (prompt-forge-validated).
+    1.  Prompts (24/25) from ``config.prompt`` (prompt-forge-validated).
     2.  Camera (583) + camera_extra (585).
     3.  LoRA (26/66).
     4.  Sampling (50/51), seed (65), image_size (68/71).
@@ -332,8 +332,8 @@ def apply_run_config(
     enabled_g1, _ = compute_enabled_groups(stage, config.groups)
 
     # 1. Prompts.
-    _set_prompt(graph, "24", config.draft["positive"].strip())
-    _set_prompt(graph, "25", config.draft["negative"].strip())
+    _set_prompt(graph, "24", config.prompt["positive"].strip())
+    _set_prompt(graph, "25", (config.prompt.get("negative") or "").strip())
 
     # 1b. Region prompts (Red/Green/Blue) — only when the G1 group is on.
     if GROUPS.AREA_PROMPT in enabled_g1:
@@ -481,13 +481,13 @@ def describe_config(stage: str = STAGES.T2I) -> dict[str, Any]:
 
     # Special slots that don't map to NODE_FIELD_MAP.
     slots["positive"] = {
-        "source": "envelope.draft.positive",
+        "source": "envelope.prompt.positive",
         "node": "24",
         "type": "ImpactWildcardProcessor",
         "required": True,
     }
     slots["negative"] = {
-        "source": "envelope.draft.negative",
+        "source": "envelope.prompt.negative",
         "node": "25",
         "type": "ImpactWildcardProcessor",
         "required": True,

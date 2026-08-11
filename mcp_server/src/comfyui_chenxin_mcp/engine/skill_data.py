@@ -50,7 +50,6 @@ class SkillData:
     describe_fn: Callable[..., dict[str, Any]]
     prepare_fn: Callable[..., dict[str, Any]]
     build_config_fn: Callable[..., Any]
-    dialect_id: str = "anima"
     artifact_mode: str = "first"
     prompt_gate_fn: Callable[[Any], dict[str, Any]] | None = None
     envelope_validate_fn: Callable[[dict[str, Any]], list[str]] | None = None

@@ -5,28 +5,36 @@ from __future__ import annotations
 from comfyui_chenxin_mcp.engine.skill_data import ImageSpec, SkillData
 
 from .runtime.config_schema import STAGES, RunConfig
+from .runtime.assets import scene_spec
 from .runtime.graph_patcher import describe_config
 from .runtime.source_workflow import prepare_workflow
 
 
 def compile_prompt_gate(config) -> dict:
-    """Compile the one true camera-video prompt through MiniMax H3 rules."""
-    from comfyui_chenxin_mcp.engine.prompt_forge import compile_envelope
+    """Lint an authored prompt against the exact local H3 task profile."""
+    from comfyui_chenxin_mcp.engine.prompt_forge import forge_prompt
 
-    # The scene brief is config.prompt; reference_count is informational
-    # only (the actual reference images are passed via config.reference_image_N
-    # in the RunConfig, not the prompt text).
     reference_count = sum(
         bool(getattr(config, f"reference_image_{index}", None))
         for index in range(1, 4)
     )
-    scene_brief = (
-        f"{config.prompt}\n\nReferences: {reference_count} image(s)."
-    ).strip()
-    return compile_envelope(
-        scene_brief=scene_brief,
+    expected_profile_id = "minimax-h3.base.ref2va" if reference_count else "minimax-h3.base.t2va"
+    if config.profile_id != expected_profile_id:
+        raise ValueError(
+            f"profile_id {config.profile_id!r} does not match {stage}: "
+            f"expected {expected_profile_id!r}"
+        )
+    operation = "ref2va" if reference_count else "t2va"
+    stage = "multi-i2v-video" if reference_count == 3 else "i2v-video" if reference_count == 1 else "t2v-video"
+    return forge_prompt(
+        prompt=config.prompt,
         evidence=config.evidence,
-        dialect_id="minimax_h3",
+        profile_id=config.profile_id,
+        operation=operation,
+        duration=config.duration,
+        reference_count=reference_count,
+        workflow_sha256=scene_spec(stage)["sha256"],
+        asset_bindings=tuple({"input_index": index} for index in range(1, reference_count + 1)),
     )
 
 
@@ -35,11 +43,10 @@ def validate_envelope(envelope: dict) -> list[str]:
     errors: list[str] = []
     if not isinstance(envelope.get("evidence"), dict):
         errors.append("envelope.evidence must be an object")
-    if envelope.get("draft") not in (None, {}):
-        errors.append("camera-video does not accept envelope.draft; use config.prompt")
-    # dialect_id is auto-coerced to minimax_h3 in config_schema.from_envelope,
-    # so any caller-supplied value (including wrong ones like "anima") is
-    # silently accepted at this surface.
+    if not isinstance(envelope.get("profile_id"), str) or not envelope["profile_id"].strip():
+        errors.append("envelope.profile_id must be a non-empty string")
+    if "draft" in envelope or "dialect_id" in envelope:
+        errors.append("legacy prompt envelope fields are forbidden")
     return errors
 
 
@@ -65,7 +72,6 @@ def get_skill_data() -> SkillData:
         describe_fn=describe_config,
         prepare_fn=prepare_workflow,
         build_config_fn=RunConfig.from_envelope,
-        dialect_id="minimax_h3",
         prompt_gate_fn=compile_prompt_gate,
         envelope_validate_fn=validate_envelope,
     )
