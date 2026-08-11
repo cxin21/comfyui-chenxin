@@ -17,8 +17,7 @@ Public API:
 Single entry-point rule (2026-08-07): all prompt text destined for ComfyUI
 must come through the engine's prompt_forge.compile_envelope. Execution is
 handled via the MCP server tools: list_skills, describe_config, validate_config,
-and run_skill. RunConfig is the only config object accepted (no
-backwards-compat kwargs).
+and run_skill. RunConfig is the only config object accepted.
 
 The prompt-forge gate is strict: there is no silent fallback. If prompt-forge
 rejects a draft or marks it not-ready, the run aborts loud.

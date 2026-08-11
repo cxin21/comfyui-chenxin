@@ -19,9 +19,8 @@ prompt-forge/
 │   ├── compile.py       # User entry point
 │   ├── registry/
 │   │   └── dialects.json  # 31 dialect definitions
-│   ├── docs/            # Theory, contracts, examples
-│   └── legacy-archive/  # v2 backup (not imported)
-└── .gitignore
+│   └── docs/            # Theory, contracts, examples
+└── README.md
 ```
 
 ## Architecture
@@ -96,8 +95,6 @@ print(package.prompt)
 6. **Forbidden fields**: `workflow`, `node`, `hash`, `gpu`,
    `execution`, `mode`, `runtime` cannot enter the envelope at any
    depth.
-7. **No backward compatibility**: v2 lives in `internals/_v2_*_backup.py`
-   files (not imported, kept for diff review).
 
 ## Adding a dialect
 

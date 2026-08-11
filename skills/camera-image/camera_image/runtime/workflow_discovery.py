@@ -24,10 +24,10 @@ REQUIRED_WORKFLOW_TOOLS = frozenset(
 )
 _PROFILE_ROOT = Path(__file__).with_name("profiles")
 
-# The legacy Flux workflow is kept as a first-class diagnostic candidate.  The
-# promoted flat-v2 workflow is an explicit production alternative, not a
-# silent fallback, because the legacy graph currently has unresolved virtual
-# buses in the local ComfyUI instance.
+# The Flux workflow with virtual buses is kept as a diagnostic candidate.
+# The flat-v2 workflow is the production path, not a silent fallback,
+# because the bus-based graph currently has unresolved virtual buses in the
+# local ComfyUI instance.
 DEFAULT_WORKFLOW_SPECS = (
     {
         "role": "character-base",
@@ -122,7 +122,7 @@ def _mark(candidate: dict, code: str, reason: str) -> None:
 
 
 def _looks_grouped_flux(profile: dict, workflow_name: str, graph: dict) -> bool:
-    """Detect the legacy Flux graph whose virtual buses are not production-safe.
+    """Detect the Flux graph whose virtual buses are not production-safe.
 
     Grouped graphs are intentionally rejected by evidence, not by filename
     alone.  A profile may explicitly mark itself as grouped, while an API

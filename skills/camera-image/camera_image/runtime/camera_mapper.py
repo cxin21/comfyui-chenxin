@@ -2,8 +2,7 @@
 
 The CameraAngleNode (node 583) accepts pos_x/pos_y/pos_z/roll as FLOATs in
 [-1, 1] (verified via MCP get_node_info). This module maps human-readable
-semantic values to those coordinates using the correct ranges from the
-legacy adapters/camera.py, now consolidated here.
+semantic values to those coordinates.
 """
 
 from __future__ import annotations

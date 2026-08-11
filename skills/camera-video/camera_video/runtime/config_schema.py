@@ -47,9 +47,8 @@ class RunConfig:
             raise TypeError("envelope.evidence must be an object")
         if envelope.get("draft") not in (None, {}):
             raise ValueError("camera-video does not accept envelope.draft; use config.prompt")
-        # dialect_id is hard-coded; silently coerce any value (including
-        # legacy "anima" mistakes) to minimax_h3 — caller doesn't need to
-        # know or specify the dialect.
+        # dialect_id is hard-coded; silently coerce any value to minimax_h3.
+        # The caller never needs to know or specify the dialect.
         unknown = sorted(set(tunables) - ALLOWED_FIELDS)
         if unknown:
             raise TypeError(
