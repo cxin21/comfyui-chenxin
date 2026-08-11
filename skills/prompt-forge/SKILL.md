@@ -2,11 +2,17 @@
 name: prompt-forge
 description: |
   INVOKE THIS SKILL BEFORE hand-crafting any image or video prompt.
-  Even a one-line user brief ("写个 Anima 的旗袍提示词") MUST go through
-  compile(spec, dialect_id); you may summarize or trim the returned
-  PromptPackage for the user, but the validator MUST run. Skip ONLY when
-  the user explicitly says "no skill, raw text only" / "no validation" /
-  "just write the prompt, don't run anything".
+  The caller (LLM) writes a single natural-language scene_brief string;
+  the engine derives a minimal Specification and runs the validator.
+  Skip ONLY when the user explicitly says "no skill, raw text only" /
+  "no validation" / "just write the prompt, don't run anything".
+
+  Use the MCP tool surface (mcp__comfyui-chenxin-mcp__validate_config and
+  __run_skill) — the caller must NOT import internals.compile() directly
+  or write wasteland_*.py scripts that hand-build dataclasses. The
+  engine accepts a single scene_brief string; the camera skill (e.g.
+  camera-image, camera-video) supplies its own RunConfig which the
+  bridge compiles through this skill.
 
   LLM-first prompt authoring + renderability audit for image AND video
   models. The LLM authors typed concept objects (Subject with

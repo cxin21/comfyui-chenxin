@@ -13,18 +13,20 @@ def compile_prompt_gate(config) -> dict:
     """Compile the one true camera-video prompt through MiniMax H3 rules."""
     from comfyui_chenxin_mcp.engine.prompt_forge import compile_envelope
 
+    # The scene brief is config.prompt; reference_count is informational
+    # only (the actual reference images are passed via config.reference_image_N
+    # in the RunConfig, not the prompt text).
     reference_count = sum(
         bool(getattr(config, f"reference_image_{index}", None))
         for index in range(1, 4)
     )
+    scene_brief = (
+        f"{config.prompt}\n\nReferences: {reference_count} image(s)."
+    ).strip()
     return compile_envelope(
-        config.evidence,
-        {
-            "global_prompt": config.prompt,
-            "duration_seconds": config.duration,
-            "reference_count": reference_count,
-        },
-        "minimax_h3",
+        scene_brief=scene_brief,
+        evidence=config.evidence,
+        dialect_id="minimax_h3",
     )
 
 

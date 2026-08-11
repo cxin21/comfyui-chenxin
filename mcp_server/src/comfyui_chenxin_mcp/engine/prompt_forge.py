@@ -4,19 +4,21 @@ Enforces the project rule: ALL prompt text for every camera skill stage
 must be authored through prompt-forge before reaching a ComfyUI submit.
 
 Boundary (mirrored from prompt-forge):
-- The compile envelope (evidence / draft / dialect) MUST NOT carry any
-  execution fields (workflow / node / hash / gpu / execution / mode /
+- The compile envelope (evidence / scene_brief / dialect) MUST NOT carry
+  any execution fields (workflow / node / hash / gpu / execution / mode /
   runtime / profile / camera / lens / lora / loras / checkpoint /
   sampler / seed / steps / cfg / denoise).
 - Camera / LoRA / sampler / cfg / steps / seed stay in the camera skill;
   prompt-forge only owns the prompt text.
 
 Flow:
-1. Caller supplies evidence (locked_facts, continuity_locks, ...) and a
-   draft (positive + negative for image; global_prompt + duration_seconds
-   + reference_count for video).
-2. Bridge builds a minimal v3 Specification from the draft, normalises
-   the evidence via prompt-forge.internals, and calls
+1. Caller supplies a single natural-language scene_brief (the entire
+   intent in prose) plus an evidence ledger (locked_facts,
+   continuity_locks, ...). The caller never writes a Specification
+   dataclass or a draft dict.
+2. Bridge builds a minimal v3 Specification from scene_brief based on
+   dialect (image -> Subject.identity; video -> Transition.action),
+   normalises evidence via prompt-forge.internals, and calls
    internals.compile.compile() in-process.
 3. The returned PromptPackage is converted to a dict and returned.
 4. The caller refuses to continue if quality.ready_for_review is False
@@ -43,21 +45,22 @@ _FORBIDDEN_IN_ENVELOPE = frozenset({
     "seed", "steps", "cfg", "denoise",
 })
 
+_VIDEO_DIALECTS = frozenset({
+    "minimax_h3", "wan", "ltx", "kling", "sora", "veo", "seedance",
+    "hunyuan", "hailuo", "runway", "luma", "vidu", "pika", "svd",
+    "pixverse", "gemini_omni_flash",
+})
 
-def _check_envelope(envelope: dict) -> None:
-    """Reject any envelope that carries execution-only fields."""
-    bad: list[str] = []
-    for section in ("evidence", "draft"):
-        body = envelope.get(section)
-        if not isinstance(body, dict):
-            continue
-        for key in body:
-            if key.lower() in _FORBIDDEN_IN_ENVELOPE:
-                bad.append(f"{section}.{key}")
+
+def _check_evidence_shape(evidence: Any) -> None:
+    """Reject any evidence that carries execution-only fields."""
+    if not isinstance(evidence, dict):
+        return
+    bad = [k for k in evidence if k.lower() in _FORBIDDEN_IN_ENVELOPE]
     if bad:
         raise ValueError(
-            "prompt-forge envelope must not carry execution fields: "
-            + ", ".join(sorted(set(bad)))
+            "prompt-forge evidence must not carry execution fields: "
+            + ", ".join(sorted(bad))
             + " - those belong to the camera skill"
         )
 
@@ -69,84 +72,66 @@ def _ensure_prompt_forge_on_path() -> None:
         sys.path.insert(0, pf_root)
 
 
-def _draft_to_spec(draft: dict, dialect_id: str) -> Any:
-    """Build a minimal v3 Specification from the simple camera draft.
+def _scene_to_spec(scene_brief: str, dialect_id: str) -> Any:
+    """Build a minimal v3 Specification from a single natural-language brief.
 
-    Image drafts: {"positive": str, "negative": str, "tags": [...], "structure": [...]}
-    Video drafts: {"global_prompt": str, "duration_seconds": int, "reference_count": int}
+    The caller writes ONE prose string describing what they want. The
+    bridge derives a minimal Specification whose initial_state carries
+    the brief as Subject.identity (image) or whose transitions carry it
+    as Transition.action (video). The dialect's projector renders the
+    rest from there.
 
-    The new prompt-forge v3 takes typed concept objects (Subject, Costume,
-    etc.) rather than flat strings. The bridge maps the flat draft into a
-    minimal Specification whose initial_state.subjects[0].identity is the
-    positive/global_prompt text. The dialect renders that into the
-    project-specific prompt. Quality is the gate; exact byte-for-byte
-    equality with the input draft is not promised.
+    Image: spec.modality='image', Subject(identity=brief)
+    Video: spec.modality='video', single Transition over 0..5s with
+           brief as both action and trigger
     """
-    from internals.spec import Specification, State, Subject, Style, Transition
+    from internals.spec import Specification, State, Subject, Transition
 
-    is_video = (
-        "global_prompt" in draft
-        or "duration_seconds" in draft
-        or dialect_id in ("minimax_h3", "wan", "ltx", "kling", "sora", "veo", "seedance", "hunyuan", "hailuo", "runway", "luma", "vidu", "pika", "svd", "pixverse", "gemini_omni_flash")
-    )
+    brief = scene_brief.strip()
+    if not brief:
+        raise ValueError("scene_brief must be a non-empty string")
 
-    if is_video:
-        global_prompt = str(draft.get("global_prompt") or "").strip()
-        if not global_prompt:
-            raise ValueError("video draft.global_prompt must be a non-empty string")
-        duration = float(draft.get("duration_seconds") or 5.0)
-        # P2-0/P4-5: videos need at least one transition; P2-1/P5-1 require
-        # the transition's trigger to name the cause with at least 2 word
-        # tokens. The bridge synthesises a single beat so the runtime can
-        # produce a ready_for_review video without inventing story beats;
-        # the camera-video skill supplies the real beat structure via
-        # config.
-        result_state = State(subjects=(Subject(identity=global_prompt),))
+    if dialect_id in _VIDEO_DIALECTS:
+        # Default duration 5s; the camera-video skill's config.duration
+        # takes precedence in the downstream RunConfig.
+        result_state = State(subjects=(Subject(identity=brief),))
         transition = Transition(
             start=0.0,
-            end=duration,
+            end=5.0,
             trigger="opening shot of the scene",
-            action=global_prompt,
+            action=brief,
             result=result_state,
         )
-        spec = Specification(
+        return Specification(
             modality="video",
             initial_state=result_state,
             transitions=(transition,),
-            duration=duration,
-            h3_flow=draft.get("h3_flow"),
+            duration=5.0,
         )
-        return spec
 
-    positive = str(draft.get("positive") or "").strip()
-    if not positive:
-        raise ValueError("image draft.positive must be a non-empty string")
-    negative = str(draft.get("negative") or "").strip()
-    style_directives = tuple(
-        str(t).strip() for t in (draft.get("tags") or []) if str(t).strip()
-    )
-    style = Style(directives=style_directives) if style_directives else None
-    spec = Specification(
+    return Specification(
         modality="image",
-        initial_state=State(subjects=(Subject(identity=positive),)),
-        negative=(negative,) if negative else (),
-        style=style,
+        initial_state=State(subjects=(Subject(identity=brief),)),
     )
-    return spec
 
 
 def compile_envelope(
-    evidence: dict,
-    draft: dict,
+    scene_brief: str,
+    evidence: dict | None = None,
     dialect_id: str = "anima",
 ) -> dict:
-    """Run prompt-forge.internals.compile on the supplied envelope.
+    """Run prompt-forge.internals.compile on a natural-language scene brief.
 
     Args:
+        scene_brief: caller-authored prose describing the entire scene in
+            natural language. The bridge derives a minimal Specification
+            from this string; callers do not write draft dicts or
+            Specification dataclasses.
         evidence: CreativeEvidence-shaped ledger (no execution fields).
-        draft: caller-authored prompt fields (positive + negative for image,
-            global_prompt + duration_seconds + reference_count for video).
-        dialect_id: prompt-forge dialect id (default "anima").
+            May be empty {} for a one-shot prompt with no persistence
+            requirements.
+        dialect_id: prompt-forge dialect id (default "anima"). Camera-video
+            skills pass "minimax_h3".
 
     Returns:
         PromptPackage dict with quality flags. Raises if
@@ -154,7 +139,7 @@ def compile_envelope(
 
     Raises:
         FileNotFoundError: prompt-forge skill not installed.
-        ValueError: envelope violated boundary or draft is incomplete.
+        ValueError: scene_brief is empty or envelope violated boundary.
         RuntimeError: prompt-forge rejected the spec, or compilation failed.
     """
     if not (PROMPT_FORGE_ROOT / "internals").is_dir():
@@ -163,8 +148,15 @@ def compile_envelope(
             "run scripts/install.ps1 to sync"
         )
 
-    envelope = {"evidence": evidence, "draft": draft, "dialect_id": dialect_id}
-    _check_envelope(envelope)
+    if not isinstance(scene_brief, str):
+        raise ValueError(
+            f"scene_brief must be a string, got {type(scene_brief).__name__}: "
+            f"{scene_brief!r}"
+        )
+    if not scene_brief.strip():
+        raise ValueError("scene_brief must be a non-empty string")
+
+    _check_evidence_shape(evidence or {})
 
     _ensure_prompt_forge_on_path()
 
@@ -175,14 +167,17 @@ def compile_envelope(
     try:
         evidence_obj = normalize_evidence(evidence or {})
     except ValueError as exc:
+        # Surface the field path so callers can locate the bad key.
         raise RuntimeError(f"prompt-forge rejected evidence: {exc}") from exc
 
-    spec = _draft_to_spec(draft, dialect_id)
+    spec = _scene_to_spec(scene_brief, dialect_id)
 
     try:
         package = pf_compile(spec, dialect_id, evidence_obj)
     except (TypeError, ValueError) as exc:
-        raise RuntimeError(f"prompt-forge rejected spec: {exc}") from exc
+        raise RuntimeError(
+            f"prompt-forge rejected spec for dialect {dialect_id!r}: {exc}"
+        ) from exc
 
     pkg_dict = package.to_dict()
     errors = pkg_dict.get("violations") or []
@@ -208,7 +203,7 @@ def compile_envelope(
         raise RuntimeError(
             "prompt-forge marked prompt not ready_for_review: "
             + ", ".join(reasons)
-            + "; fix draft and re-run"
+            + "; refine scene_brief to mention the missing fact and re-run"
         )
 
     return pkg_dict
