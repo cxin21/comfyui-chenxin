@@ -121,7 +121,7 @@ def _mark(candidate: dict, code: str, reason: str) -> None:
     candidate["reasons"].append(reason)
 
 
-def _looks_grouped_flux(profile: dict, workflow_name: str, graph: dict) -> bool:
+def _looks_grouped_workflow(profile: dict, workflow_name: str, graph: dict) -> bool:
     """Detect the Flux graph whose virtual buses are not production-safe.
 
     Grouped graphs are intentionally rejected by evidence, not by filename
@@ -334,7 +334,7 @@ def discover_workflow_candidates(
             candidate["workflow_fingerprint"] = structure_fingerprint(ui_graph)
             candidate["api_graph_hash"] = content_hash(stripped_graph)
             candidate["converted_api_graph_hash"] = content_hash(converted_graph)
-            if _looks_grouped_flux(profile, workflow_name, stripped_graph):
+            if _looks_grouped_workflow(profile, workflow_name, stripped_graph):
                 _mark(
                     candidate,
                     "unresolved_grouped_flux_buses",

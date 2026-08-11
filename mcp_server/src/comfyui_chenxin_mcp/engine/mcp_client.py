@@ -183,7 +183,6 @@ class McpClient:
             "source_path": source_path,
         })
         if isinstance(raw, dict):
-            # Forward-compat: if the server ever returns a structured dict, use it as-is.
             return raw
         if isinstance(raw, str):
             filename: str | None = None
@@ -196,9 +195,8 @@ class McpClient:
         return {"name": None}
 
     def health(self) -> Any:
-        # comfyui-mcp ≥ 0.50.0 deprecated `health_check`. The replacement is
-        # `get_system_stats (action:"health")` which still exposes a `queue`
-        # field with `running`/`pending` arrays — same shape the engine reads.
+        # Returns {"queue": {"running": [...], "pending": [...]}} via the
+        # upstream server's get_system_stats tool (action="health").
         return self._call("get_system_stats", {"action": "health"})
 
     def strip_workflow(self, graph: dict) -> dict:

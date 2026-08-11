@@ -71,7 +71,7 @@ Currently: **31 canonical dialects, 44 aliases.**
 
 - flux does not read negative prompts; express exclusions positively.
 - anima tags are validated against a curated lexicon in the
-  consuming skill (legacy constraint); novel tags may be rejected.
+  consuming skill; novel tags may be rejected.
 - minimax_h3 must declare flow (drama/action/storyboard) explicitly.
   No native negative; express exclusions via constraints.
 - kling ignores negative prompts in some variants.
