@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "knowledge_version": "aesthetics-v1",
+  "task_scope": ["anima"],
+  "precedence": [
+    "anti_patterns_override",
+    "core_vocabulary",
+    "style_signatures",
+    "recipes"
+  ],
+  "structure": {
+    "core_layers": [
+      "composition.md",
+      "lighting.md",
+      "palette.md",
+      "camera.md",
+      "mood-texture.md"
+    ],
+    "style_signatures_file": "style-signatures.md",
+    "anti_patterns_file": "anti-patterns.md",
+    "recipes_directory": "recipes/"
+  },
+  "row_counts": {
+    "composition_terms": 27,
+    "lighting_terms": 22,
+    "palette_terms": 22,
+    "camera_terms": 20,
+    "mood_texture_terms": 38,
+    "style_signatures": 14,
+    "anti_patterns": 18,
+    "recipes": 6
+  },
+  "source_ids": [
+    "anima-tag-vocabulary-2026-08-12",
+    "prompt-forge-aesthetic-methodology-v1"
+  ],
+  "sources": [
+    {
+      "acquired_at": "2026-08-13T00:00:00+08:00",
+      "kind": "anima_tag_subset",
+      "license_spdx": "MIT",
+      "license_url": "https://github.com/cxin21/comfyui-chenxin/blob/main/LICENSE",
+      "redistribution_allowed": true,
+      "revision": "anima-tags-2026-08-12",
+      "sha256": "4401b7e78340acb4da3cc7b5b082d394c0a42139172b6557d8abe2a77000407d",
+      "source_id": "anima-tag-vocabulary-2026-08-12",
+      "source_url": "knowledge/anima/tags.sqlite",
+      "redistribution_basis": "The bundled tag vocabulary is the same Gelbooru snapshot already locked in knowledge/anima/manifest.json. Aesthetics/ is a curated subset index with usage annotations, not a new dataset."
+    },
+    {
+      "acquired_at": "2026-08-13T00:00:00+08:00",
+      "kind": "aesthetic_methodology",
+      "license_spdx": "MIT",
+      "license_url": "https://github.com/cxin21/comfyui-chenxin/blob/main/LICENSE",
+      "redistribution_allowed": true,
+      "revision": "methodology-v1",
+      "sha256": "TBD_BY_BUILDER",
+      "source_id": "prompt-forge-aesthetic-methodology-v1",
+      "source_url": "knowledge/aesthetics/",
+      "redistribution_basis": "Aesthetics/ contains project-authored usage annotations and recipe compositions derived from public-domain photography vocabulary and the bundled Anima tag subset. No third-party corpus is embedded."
+    }
+  ],
+  "manifest_sha256": "TBD_BY_BUILDER",
+  "applies_to": {
+    "anima": "fully supported; the five core layers plus style-signatures and recipes",
+    "h3_t2va": "out of scope for this revision",
+    "h3_ref2va": "out of scope for this revision"
+  }
+}

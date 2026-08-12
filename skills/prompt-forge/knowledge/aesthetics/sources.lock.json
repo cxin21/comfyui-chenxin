@@ -1,0 +1,32 @@
+{
+  "knowledge_version": "aesthetics-v1",
+  "task_scope": ["anima"],
+  "sources": [
+    {
+      "source_id": "anima-tag-vocabulary-2026-08-12",
+      "kind": "anima_tag_subset",
+      "filename": "tags.sqlite",
+      "revision": "anima-tags-2026-08-12",
+      "sha256": "4401b7e78340acb4da3cc7b5b082d394c0a42139172b6557d8abe2a77000407d",
+      "acquired_at": "2026-08-13T00:00:00+08:00",
+      "source_url": "knowledge/anima/tags.sqlite",
+      "license_spdx": "MIT",
+      "license_url": "https://github.com/cxin21/comfyui-chenxin/blob/main/LICENSE",
+      "redistribution_allowed": true,
+      "redistribution_basis": "Curated subset of the already-locked Anima tag vocabulary. Indexing and per-term usage annotations are project-authored MIT content."
+    },
+    {
+      "source_id": "prompt-forge-aesthetic-methodology-v1",
+      "kind": "aesthetic_methodology",
+      "filename": "*.md",
+      "revision": "methodology-v1",
+      "sha256": "TBD_BY_BUILDER",
+      "acquired_at": "2026-08-13T00:00:00+08:00",
+      "source_url": "knowledge/aesthetics/",
+      "license_spdx": "MIT",
+      "license_url": "https://github.com/cxin21/comfyui-chenxin/blob/main/LICENSE",
+      "redistribution_allowed": true,
+      "redistribution_basis": "Project-authored per-term usage annotations and recipe compositions. No third-party dataset is embedded; only public-domain photography vocabulary is summarized."
+    }
+  ]
+}

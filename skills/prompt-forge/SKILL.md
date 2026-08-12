@@ -40,8 +40,11 @@ Stop if the requested production model is not one of the three.
    renders; no opaque prose. The hard contract — including the negative stream, reserved
    namespaces, and attribution — is in
    [references/authoring-contract.md](references/authoring-contract.md).
-4. **Polish.** Cover the five aesthetic layers below. A prompt with only
-   subject/action/environment is *correct but flat*.
+4. **Polish.** Apply the **Aesthetic coverage (mandatory retrieval)** flow
+   below. A prompt with only subject / action / environment is *correct but
+   flat*. A prompt that ignores the bundled aesthetics knowledge is *correct
+   but slop*. Every aesthetic term must come from `knowledge/aesthetics/` —
+   never from memory, never from generic prose.
 5. **Preflight and compile.** Check tags against the dictionary
    ([references/dictionary-preflight.md](references/dictionary-preflight.md)), compile, then
    fix every code the audit reports in one pass
@@ -51,28 +54,54 @@ Never truncate a prompt or remove a protected fact. If protected content stays a
 quality limit, resolve the conflict through its `user_choices` — never weaken a protected fact
 automatically.
 
-## The five aesthetic layers (content vs art)
+## Aesthetic coverage (mandatory retrieval)
 
-The gap between a competent image and a beautiful one lives almost entirely in the missing
-layers. Before authoring, ask all five questions and add at least one tag for each, each as its
-own segment, each linked to a fact:
+The five aesthetic layers are not a checklist of "questions to ask" the model.
+They are a mandatory retrieval from `knowledge/aesthetics/` that the author must
+do before writing a single tag.
 
-1. **Composition** — where is the eye drawn? `rule of thirds`, `golden ratio`,
-   `low angle shot`, `leading lines`, `foreground framing`, `negative space`,
-   `diagonal composition`.
-2. **Color grade** — one coherent palette, not scattered color words. `teal and orange color
-   grade`, `warm golden color grade`, `cold blue tonal palette`, `high contrast`,
-   `complementary colors`.
-3. **Camera / lens** — how is it shot? `wide cinematic shot`, `close-up`, `medium shot`,
-   `shallow depth of field`, `background blur`, `35mm film look`, `anamorphic lens`.
-4. **Lighting direction + atmosphere** — directional and layered, not just "warm".
-   `golden hour`, `backlit`, `rim light`, `volumetric light`, `dramatic backlighting`,
-   `god rays`, `chiaroscuro`.
-5. **Mood / texture** — the feeling. `film grain`, `dusty haze`, `fog`, `floating ash`,
-   `rain-soaked reflections`, `smoke`, `melancholic`, `epic`, `grim`.
+### The five required sources
 
-A request with zero composition, zero color grade, and zero camera tags reads as amateur even
-when every tag is real.
+For every Anima prompt, the author must read and apply terms from:
+
+1. [`knowledge/aesthetics/composition.md`](knowledge/aesthetics/composition.md) — framing, angle, layout
+2. [`knowledge/aesthetics/lighting.md`](knowledge/aesthetics/lighting.md) — quality, direction, source
+3. [`knowledge/aesthetics/palette.md`](knowledge/aesthetics/palette.md) — named grades and palettes
+4. [`knowledge/aesthetics/camera.md`](knowledge/aesthetics/camera.md) — render medium and optical style
+5. [`knowledge/aesthetics/mood-texture.md`](knowledge/aesthetics/mood-texture.md) — mood, atmosphere, particles
+
+### How to apply
+
+1. **Read once per authoring session.** Open all five files; do not author from memory.
+2. **Pick at least one term per layer** from the bundled knowledge; bind it to a
+   fact in the ledger as `agent_embellishment`. The five facts together give
+   the prompt design intent.
+3. **Use a recipe when the genre is named.** When the user's request maps to a
+   genre in `knowledge/aesthetics/recipes/` (film-noir, cyberpunk-neon,
+   wes-anderson-pastel, helmut-newton-bw, ghibli-aesthetic, wuxia-ink), pull
+   the recipe's pre-composed five-layer composition instead of assembling
+   from scratch.
+4. **Cite the source.** Each aesthetic fact carries a `source_ref` of the
+   form `<file>.md#<cluster>:<term>` — e.g.
+   `composition.md#framing:close-up` or
+   `recipes/film-noir.md`. The audit treats uncited aesthetic terms as
+   unverified noise.
+5. **Run `anti-patterns.md` as an override.** Any pattern in sections A–G of
+   [`knowledge/aesthetics/anti-patterns.md`](knowledge/aesthetics/anti-patterns.md)
+   must be removed before compiling, regardless of what the five layers
+   suggest. Empty intensifiers are worse than absent content.
+6. **Preflight before compile.** Verify every aesthetic tag against the
+   bundled Anima dictionary using the command in
+   [`references/dictionary-preflight.md`](references/dictionary-preflight.md);
+   `unverified` aesthetic tags from memory (i.e. not in `knowledge/aesthetics/`)
+   must be dropped, not shipped.
+
+### Coverage check
+
+Before compiling, the ledger must contain at least one fact bound to each
+of `composition.md`, `lighting.md`, `palette.md`, `camera.md`, and
+`mood-texture.md`. A prompt that compiles but lacks any one layer ships
+flat — the audit will not catch this; the author must.
 
 ## Quality hierarchy
 
