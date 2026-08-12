@@ -20,6 +20,26 @@ SCRIPT = Path(__file__).parents[1] / "scripts" / "build_anima_dictionary.py"
 BUNDLED_ROOT = Path(__file__).parents[1] / "knowledge" / "anima"
 
 
+def test_anima_audit_resolves_all_tags_with_one_read_only_connection(monkeypatch) -> None:
+    original = AnimaTagDictionary.connect
+    calls = 0
+
+    def counted(self):
+        nonlocal calls
+        calls += 1
+        return original(self)
+
+    monkeypatch.setattr(AnimaTagDictionary, "connect", counted)
+    ledger = FactLedger(
+        (
+            Fact("count", "1girl", "user_explicit", False, "subject_1", "count"),
+            Fact("hair", "blue hair", "user_explicit", False, "subject_1", "appearance"),
+        )
+    )
+    audit_anima_prompt(("1girl", "benchmark connection fixture"), "", ledger)
+    assert calls == 1
+
+
 def load_builder() -> ModuleType:
     spec = importlib.util.spec_from_file_location("build_anima_dictionary", SCRIPT)
     assert spec is not None and spec.loader is not None

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_sha256",
+    "workflow_sha256",
+    "seed",
+    "path",
+    "stratum",
+    "blind_pair_id",
+    "human_decision",
+    "criteria"
+  ],
+  "properties": {
+    "artifact_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "workflow_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "seed": {"type": "integer", "minimum": 0},
+    "path": {"enum": ["anima", "h3_t2va", "h3_ref2va"]},
+    "stratum": {"enum": ["simple", "boundary", "adversarial"]},
+    "blind_pair_id": {"type": "string", "minLength": 1},
+    "human_decision": {"enum": ["A", "B", "tie"]},
+    "criteria": {
+      "type": "object",
+      "additionalProperties": {"type": "integer", "minimum": 1, "maximum": 5},
+      "minProperties": 3
+    },
+    "notes": {"type": "string"}
+  }
+}

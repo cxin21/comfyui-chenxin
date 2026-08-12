@@ -82,7 +82,9 @@ def audit_anima_prompt(
         for fact in ledger.facts
     }
 
-    for index, raw_tag in enumerate(tags):
+    resolved_tags = dictionary.resolve_many(tuple(raw_tag.strip() for raw_tag in tags))
+
+    for index, (raw_tag, exact) in enumerate(zip(tags, resolved_tags)):
         tag = raw_tag.strip()
         semantic = semantic_form(tag)
         fact_ids = tuple(
@@ -91,7 +93,6 @@ def audit_anima_prompt(
             if value == semantic
         )
         syntax = _syntax_error(tag)
-        exact = dictionary.resolve(tag)
         status: TagStatus
         if syntax is not None:
             status, code, message = syntax

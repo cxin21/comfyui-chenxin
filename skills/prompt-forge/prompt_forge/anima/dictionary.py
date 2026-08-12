@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -11,6 +12,8 @@ from typing import Literal
 _DEFAULT_DATABASE = (
     Path(__file__).resolve().parents[2] / "knowledge" / "anima" / "tags.sqlite"
 )
+_RESOLUTION_CACHE: OrderedDict[tuple[str, int, int, str], TagCandidate | None] = OrderedDict()
+_RESOLUTION_CACHE_LIMIT = 4096
 
 
 class DictionaryQueryError(ValueError):
@@ -122,14 +125,20 @@ class AnimaTagDictionary:
                 rows.extend(concept_rows)
         return tuple(_candidate(row) for row in rows)
 
-    def resolve(self, tag: str) -> TagCandidate | None:
+    def resolve(
+        self,
+        tag: str,
+        *,
+        connection: sqlite3.Connection | None = None,
+    ) -> TagCandidate | None:
         """Resolve only an exact canonical/form/alias without concept scanning."""
         if not isinstance(tag, str) or not tag.strip():
             return None
+        if connection is None:
+            return self.resolve_many((tag,))[0]
         display = " ".join(tag.strip().lower().lstrip("@").split())
         canonical = display.replace(" ", "_")
-        with self.connect() as connection:
-            row = connection.execute(
+        row = connection.execute(
                 """
                 SELECT t.canonical, t.anima_form, t.category, t.usage_count,
                        t.source, t.verification_status,
@@ -159,6 +168,24 @@ class AnimaTagDictionary:
             ).fetchone()
         return _candidate(row) if row is not None else None
 
+    def resolve_many(self, tags: tuple[str, ...]) -> tuple[TagCandidate | None, ...]:
+        if not isinstance(tags, tuple) or not all(isinstance(tag, str) for tag in tags):
+            raise TypeError("tags must be a tuple of strings")
+        stat = self.database_path.stat()
+        prefix = (str(self.database_path), stat.st_size, stat.st_mtime_ns)
+        keys = [(*prefix, " ".join(tag.strip().lower().split())) for tag in tags]
+        missing = [index for index, key in enumerate(keys) if key not in _RESOLUTION_CACHE]
+        if missing:
+            with self.connect() as connection:
+                for index in missing:
+                    _cache_resolution(keys[index], self.resolve(tags[index], connection=connection))
+        result: list[TagCandidate | None] = []
+        for key in keys:
+            value = _RESOLUTION_CACHE[key]
+            _RESOLUTION_CACHE.move_to_end(key)
+            result.append(value)
+        return tuple(result)
+
 
 def _candidate(row: sqlite3.Row) -> TagCandidate:
     return TagCandidate(
@@ -171,3 +198,13 @@ def _candidate(row: sqlite3.Row) -> TagCandidate:
         match_kind=row["match_kind"],
         confidence=float(row["confidence"]),
     )
+
+
+def _cache_resolution(
+    key: tuple[str, int, int, str],
+    value: TagCandidate | None,
+) -> None:
+    _RESOLUTION_CACHE[key] = value
+    _RESOLUTION_CACHE.move_to_end(key)
+    while len(_RESOLUTION_CACHE) > _RESOLUTION_CACHE_LIMIT:
+        _RESOLUTION_CACHE.popitem(last=False)

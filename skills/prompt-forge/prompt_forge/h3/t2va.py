@@ -51,15 +51,16 @@ def author_h3_t2va_prompt(request: H3T2VAAuthoringRequest) -> PromptArtifact:
         )
     except BudgetPolicyError:
         hard_codes.append("timeline")
+        safe_duration = _safe_duration(request.duration_seconds)
         safe_shots = max(
             1,
             min(
                 request.shot_count if isinstance(request.shot_count, int) else 1,
-                1 + floor((float(request.duration_seconds) - 1) / 3),
+                1 + floor((safe_duration - 1) / 3),
             ),
         )
         budget = plan_h3_t2va_budget(
-            request.duration_seconds,
+            safe_duration,
             safe_shots,
             dialogue_tokens,
         )
@@ -215,6 +216,12 @@ def _render_overhead_conflict(actual: int, quality_limit: int) -> dict[str, obje
         "user_choices": [],
         "sacrificed_facts": [],
     }
+
+
+def _safe_duration(value: float) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return 2.0
+    return min(15.0, max(2.0, float(value)))
 
 
 def _artifact(

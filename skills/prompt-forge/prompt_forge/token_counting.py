@@ -7,6 +7,7 @@ import json
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -114,10 +115,13 @@ class TokenCounter:
                     "chat_template.json does not match tokenizer_config.json"
                 )
 
-        try:
-            tokenizer = Tokenizer.from_file(str(snapshot_dir / "tokenizer.json"))
-        except Exception as exc:  # tokenizers exposes several backend exception types
-            raise TokenizerIntegrityError("tokenizer.json could not be loaded") from exc
+        tokenizer_hash = dict(normalized_hashes).get("tokenizer.json")
+        if tokenizer_hash is None:
+            raise TokenizerIntegrityError("tokenizer.json is missing from the manifest")
+        tokenizer = _load_native_tokenizer(
+            str((snapshot_dir / "tokenizer.json").resolve()),
+            tokenizer_hash,
+        )
 
         manifest = TokenizerManifest(
             snapshot_id=snapshot_id,
@@ -210,3 +214,13 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+@lru_cache(maxsize=2)
+def _load_native_tokenizer(path: str, verified_sha256: str) -> Tokenizer:
+    """Reuse only a backend whose exact file hash was verified by the caller."""
+    del verified_sha256
+    try:
+        return Tokenizer.from_file(path)
+    except Exception as exc:  # tokenizers exposes several backend exception types
+        raise TokenizerIntegrityError("tokenizer.json could not be loaded") from exc

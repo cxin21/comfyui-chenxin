@@ -98,6 +98,13 @@ def test_count_many_counts_the_actual_concatenated_text(
     assert anima_counter.count_many(parts) == anima_counter.count("".join(parts))
 
 
+def test_verified_load_reuses_the_native_tokenizer_without_skipping_integrity() -> None:
+    snapshot = KNOWLEDGE_ROOT / "anima-qwen3-0.6b"
+    first = TokenCounter.load(snapshot, expected_model="anima-qwen3-0.6b")
+    second = TokenCounter.load(snapshot, expected_model="anima-qwen3-0.6b")
+    assert first._tokenizer is second._tokenizer
+
+
 def test_unknown_or_modified_snapshot_fails_closed(tmp_path: Path) -> None:
     source = KNOWLEDGE_ROOT / "anima-qwen3-0.6b"
     snapshot = tmp_path / "snapshot"
