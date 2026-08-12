@@ -4,6 +4,21 @@ All notable changes to comfyui-chenxin are documented here. Format follows [Keep
 
 ## [Unreleased] — current state on disk
 
+### prompt-forge docs sync (2026-08-12) — v0.1.18
+
+- Bump 0.1.17 → 0.1.18 so the MCP tool contract + aesthetic quality gate
+  (commit `98eeae4`, landed after v0.1.17 was installed) actually reach the
+  installed plugin cache.
+- Root cause: docs/content changed after v0.1.17 shipped without a version
+  bump, so `claude plugin update` (version-keyed) saw "already at the latest
+  version (0.1.17)" and the runtime-loaded `SKILL.md` stayed on the
+  library-API era — missing the request schema, the `origin` enum, the
+  one-tag-per-segment rule, and the aesthetic quality gate. Authoring against
+  the stale doc failed with `FactLedgerError` / `invalid_protocol_tag`.
+- Rule going forward: any change to `skills/*/SKILL.md` or the authoring
+  contract must bump the plugin version, or `claude plugin update` cannot
+  deliver it.
+
 ### MCP server registration fix (2026-08-10) — v0.1.6
 
 - **Switch MCP server config from `.claude-plugin/plugin.json` (which the
