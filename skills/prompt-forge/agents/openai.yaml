@@ -1,0 +1,4 @@
+interface:
+  display_name: "Prompt Forge"
+  short_description: "高质量 Anima 与 MiniMax-H3 提示词"
+  default_prompt: "Use $prompt-forge to author and audit a production-ready model-native prompt."

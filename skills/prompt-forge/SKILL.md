@@ -1,37 +1,50 @@
+---
+name: prompt-forge
+description: Author and audit high-quality model-native prompts for exactly Anima still images, MiniMax-H3 text-to-video-with-audio, and MiniMax-H3 reference-to-video-with-audio. Use whenever Codex must turn creative intent into an Anima or MiniMax-H3 production prompt, calculate its exact token budget, preserve subject/reference ownership, or return a verified PromptArtifact for camera-image or camera-video.
+---
+
 # Prompt Forge
 
-Prompt Forge is an LLM-first authoring and audit skill for high-quality image and video prompts. It produces a model-specific `PromptArtifact`; it does not invent a generic prompt language and it does not rewrite authored prompts through a deterministic projector.
+Author creative content with the LLM. Use deterministic code only for exact counting, bounded Anima tag retrieval, trace-preserving compression, objective audit, artifact hashing, benchmark reporting, and release verification.
 
-## Operating contract
+## Select one path
 
-1. Identify the exact production profile before writing: checkpoint family, task type, reference count, duration, and workflow identity.
-2. Author the prompt directly in the target model's dialect. Preserve creative intent, shot logic, subject identity, spatial relations, lighting, sound, and temporal causality.
-3. Use the profile's native structure. Anima uses weighted tags and concise natural language; MiniMax-H3 uses its official section grammar and timestamped shot logic.
-4. Run objective lint only after authoring. Lint may reject malformed syntax, unsupported fields, impossible references, or invalid timing. It must never add creative content.
-5. Return a `PromptArtifact` containing the exact authored prompt, profile identity, runtime bindings, lint result, assumptions, and provenance.
+- Use `author_anima_prompt` for Anima T2I or I2I still images. Read [references/anima.md](references/anima.md) before authoring.
+- Use `author_h3_t2va_prompt` for MiniMax-H3 text-to-video-with-audio. Read [references/minimax-h3.md](references/minimax-h3.md) before authoring.
+- Use `author_h3_ref2va_prompt` for MiniMax-H3 reference-to-video-with-audio with one or three ordered input images. Read [references/minimax-h3.md](references/minimax-h3.md) before authoring.
 
-## Supported production profiles
+Do not choose a path from a model selector, infer a fourth path, or build a generic grammar. Stop if the requested production model is not one of these paths.
 
-- `anima.miaomiao-harem.anima-1.5`: Anima 1.5 checkpoint used by the fixed camera-image workflow; supports T2I and I2I.
-- `minimax-h3.base.t2va`: MiniMax-H3 T2VA text-to-video; no reference images and no negative prompt.
-- `minimax-h3.base.ref2va`: MiniMax-H3 Ref2VA image/reference-to-video; 1–3 reference images and no negative prompt.
+## Authoring method
 
-Do not substitute a generic profile, silently coerce a profile id, or infer a video dialect from free-form prose. If the exact production profile is unknown, stop and request it.
+1. Extract every explicit requirement into an immutable fact ledger. Give each fact a stable ID, owner, dimension, origin, and lock state. Treat user facts as protected even when they are not locked.
+2. Resolve conflicts before writing. Never silently merge two owners, weaken a negation, alter exact dialogue or visible text, or invent a reference.
+3. Calculate the path-specific target, soft, quality, and physical limits with the exact offline tokenizer. Read [references/artifact-and-budgets.md](references/artifact-and-budgets.md).
+4. Author directly in the selected model's native fields. Write visible and audible facts before aesthetic polish. Express identity, count, ownership, spatial relations, actions, state changes, camera behavior, sound, and landing states concretely.
+5. Link every authored segment to the facts it renders. Do not emit opaque prose with no fact provenance.
+6. If above the soft limit, apply the ordered A+B compression method: exact dedupe, equal-fact semantic dedupe, model-native structure extraction, protected lexical compression, then removal of lowest-utility agent embellishment.
+7. Never truncate a prompt or remove a protected fact. If protected content remains above the quality limit, return `budget_conflict` with causes and user choices.
+8. Run the model-specific hard audit after authoring. A script may reject syntax, references, ownership, timing, dialogue, sound separation, context, token limits, or artifact integrity; scripts do not infer intent or rewrite creative content.
+9. Return the immutable `prompt_artifact`. Only `production_ready` artifacts expose executable prompt text. Camera skills reject every other status and every artifact whose hash or exact-token verification is invalid.
 
-## Prompt quality rules
+## Quality hierarchy
 
-- Write concrete visible or audible facts before style adjectives.
-- Resolve subject identity, count, pose, location, camera, action, and result before adding polish.
-- For video, define what changes over time, when it changes, how the camera moves, and what remains stable.
-- Keep one coherent visual language. Avoid contradictory camera, lighting, lens, motion, or style instructions.
-- Treat dialogue as timed audio with a speaker, language, exact words, delivery, and audible environment.
-- Do not add unsupported negative prompts, parameter syntax, LoRAs, or node names to the prompt text.
+Prioritize in this order:
 
-## Files
+1. user-locked facts, exact dialogue, visible text, negation, count, ownership, reference identity, and action results;
+2. model adherence and executable temporal/reference structure;
+3. subject and scene coherence;
+4. composition, camera, lighting, motion, sound, and style;
+5. optional embellishment.
 
-- `prompt_forge/`: contract, profile loading, lint, and artifact creation.
-- `profiles/`: exact model/workflow profiles; each profile is explicit and versioned.
-- `scripts/`: narrow objective checks for CI or release validation; scripts do not author or rewrite prompts.
-- `tests/`: contract and dialect regression tests.
+Additional tokens must add non-redundant information. Never pad toward a target.
 
-The execution skills consume the artifact's `prompt` and `asset_bindings`. They do not consume legacy `draft`, `dialect_id`, or `PromptPackage` fields.
+## Script boundary
+
+Use scripts to build and verify knowledge assets, count exact tokens, query the Anima dictionary, benchmark deterministic artifacts, prepare generation-pair manifests, and verify a release. The scripts do not select aesthetic concepts, decide story beats, invent shots, resolve ambiguous intent, or write final prompt prose.
+
+Production authoring is offline and side-effect free. Maintainer acquisition scripts are the only network boundary. Do not run ComfyUI, discover workflows, choose checkpoints, or apply local checkpoint/LoRA knowledge from this skill.
+
+## Output boundary
+
+Read [references/artifact-and-budgets.md](references/artifact-and-budgets.md) for formulas and exact artifact fields. Pass the complete serialized artifact under `envelope.prompt_artifact`; never copy only its prompt text into a camera request.
