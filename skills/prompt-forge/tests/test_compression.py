@@ -240,6 +240,40 @@ def test_budget_conflict_reports_mandatory_optional_causes_and_user_choices() ->
     assert conflict.sacrificed_facts == ()
 
 
+def test_conflict_names_unlinkable_mixed_segments() -> None:
+    ledger = FactLedger(
+        (
+            fact("protected_f", origin="user_locked"),
+            fact("agent_f", origin="agent_embellishment"),
+        )
+    )
+    result = compress_to_budget(
+        segments=(
+            segment(
+                "mixed",
+                "a long protected and agent bound segment that is over budget",
+                "protected_f",
+                "agent_f",
+            ),
+        ),
+        ledger=ledger,
+        counter=WordCounter(),  # type: ignore[arg-type]
+        soft_limit=2,
+        quality_limit=3,
+        structure="anima",
+    )
+    assert result.status == "budget_conflict"
+    assert result.conflict is not None
+    assert result.conflict.mandatory_tokens == result.conflict.actual_tokens
+    assert isinstance(result.conflict.user_choices, tuple)
+    assert any(
+        choice.choice == "unlink_segment_mixed_from_protected_fact"
+        and choice.facts_affected == ("protected_f",)
+        and choice.estimated_saving > 0
+        for choice in result.conflict.user_choices
+    )
+
+
 def test_invalid_limits_and_structure_are_rejected() -> None:
     with pytest.raises(ValueError):
         compress_to_budget(

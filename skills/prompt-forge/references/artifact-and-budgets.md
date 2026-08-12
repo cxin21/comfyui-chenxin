@@ -1,5 +1,9 @@
 # Exact budgets and PromptArtifact contract
 
+> Operational sizing guide — worked examples, the negative spending order, and reading a
+> budget conflict — is [budget-ruler.md](budget-ruler.md). This file holds the canonical
+> formulas and the artifact contract.
+
 ## Dynamic targets
 
 Use exact offline tokenizers pinned by repository revision and SHA-256.

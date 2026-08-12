@@ -382,7 +382,7 @@ def _build_conflict(
         )
         for dimension, items in sorted(by_dimension_segments.items())
     )
-    choices = tuple(
+    choices = list(
         UserChoice(
             choice=f"simplify_{cause.dimension}",
             estimated_saving=max(1, ceil_third(cause.tokens)),
@@ -390,6 +390,29 @@ def _build_conflict(
         )
         for cause in causes
     )
+    # Mixed segments (an agent fact and a protected fact on the same segment)
+    # are the author's real escape hatch: unlinking the segment from the
+    # protected fact moves its tokens into the compressible pool. Name them
+    # explicitly so a conflict never forces the author to touch protected facts.
+    for segment in mandatory:
+        facts = tuple(ledger.get(fact_id) for fact_id in segment.fact_ids)
+        protected = tuple(
+            fact.fact_id for fact in facts if fact.origin != "agent_embellishment"
+        )
+        agent = tuple(
+            fact.fact_id for fact in facts if fact.origin == "agent_embellishment"
+        )
+        if not protected or not agent:
+            continue
+        choices.append(
+            UserChoice(
+                choice=f"unlink_segment_{segment.segment_id}_from_protected_fact",
+                estimated_saving=max(
+                    1, ceil_third(_count_segments(counter, [segment], structure))
+                ),
+                facts_affected=protected,
+            )
+        )
     return BudgetConflict(
         actual_tokens=actual,
         quality_limit=quality_limit,
@@ -397,7 +420,7 @@ def _build_conflict(
         agent_optional_tokens=max(0, actual - mandatory_tokens),
         excess_tokens=actual - quality_limit,
         protected_causes=causes,
-        user_choices=choices,
+        user_choices=tuple(choices),
     )
 
 

@@ -4,6 +4,26 @@ All notable changes to comfyui-chenxin are documented here. Format follows [Keep
 
 ## [Unreleased] — current state on disk
 
+### prompt-forge rewrite: methodology-first + one-pass audit (2026-08-13) — v0.1.19
+
+- **SKILL.md rewritten as a methodology spine and split** into four focused references:
+  `authoring-contract`, `budget-ruler`, `dictionary-preflight`, `audit-and-recovery`. Docs now
+  teach authoring rules — one tag per segment in **both** streams, reserved namespaces, and
+  attribution — instead of pointing at code behavior. Fixes doc-vs-implementation drift that
+  made comma-separated negative segments look valid and produced `invalid_protocol_tag`.
+- **One-pass audit**: a `budget_conflict` build now runs the tag audit too, so an over-budget
+  build surfaces every hard-gate code (budget + protocol) in a single compile instead of
+  serial rounds of fix-and-recompile.
+- **Conflict escape hatch**: `budget_conflict.user_choices` now names mixed agent/protected
+  segments as `unlink_segment_<id>_from_protected_fact`, so an author can free tokens without
+  weakening protected facts — previously the only offered choice was simplifying protected
+  dimensions.
+- **Benchmark baseline regenerated**: the 90-case baseline recorded pre-LF-normalization
+  artifact hashes; prompts are byte-identical, hashes refreshed after the tokenizer manifest
+  pinning (v0.1.17).
+- Doc-contract test asserts the three `task` values (`anima` / `h3_t2va` / `h3_ref2va`)
+  instead of the legacy `author_*_prompt` function names, and guards the four new references.
+
 ### prompt-forge docs sync (2026-08-12) — v0.1.18
 
 - Bump 0.1.17 → 0.1.18 so the MCP tool contract + aesthetic quality gate

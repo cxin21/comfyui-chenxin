@@ -175,6 +175,57 @@ def test_protected_content_over_quality_limit_returns_budget_conflict() -> None:
     assert artifact.sacrificed_facts == ()
 
 
+def test_budget_conflict_surfaces_protocol_errors_in_one_pass() -> None:
+    huge = " ".join(f"visibleconcept{i}" for i in range(1000))
+    artifact = author_anima_prompt(
+        request(
+            (
+                fact("huge", huge, origin="user_locked"),
+                fact("style", "style", origin="user_locked"),
+            ),
+            (segment("huge", "general", huge, "huge"),),
+            complexity=Complexity(20, 20, 20, 20, 0),
+            negative=(
+                AuthoredSegment(
+                    "neg_bad", "official_quality_baseline",
+                    "score_4, score_5", ("style",), 5, 2, 1,
+                ),
+            ),
+        )
+    )
+    assert artifact.status == "budget_conflict"
+    assert artifact.prompt is None
+    codes = set(artifact.audit["hard_gate_codes"])
+    assert "token_quality_limit" in codes
+    assert "invalid_protocol_tag" in codes
+    assert artifact.audit["negative"] is not None
+    assert any(
+        finding["code"] == "invalid_protocol_tag"
+        for finding in artifact.audit["negative"]["findings"]
+    )
+
+
+def test_budget_conflict_reports_preflight_field_errors() -> None:
+    huge = " ".join(f"visibleconcept{i}" for i in range(1000))
+    artifact = author_anima_prompt(
+        request(
+            (
+                fact("huge", huge, origin="user_locked"),
+                fact("style", "style", origin="user_locked"),
+            ),
+            (
+                segment("huge", "general", huge, "huge"),
+                segment("badfield", "bogus_field", "scar", "style"),
+            ),
+            complexity=Complexity(20, 20, 20, 20, 0),
+        )
+    )
+    assert artifact.status == "budget_conflict"
+    codes = set(artifact.audit["hard_gate_codes"])
+    assert "token_quality_limit" in codes
+    assert "unsupported_positive_field" in codes
+
+
 def test_negative_prompt_uses_its_own_budget_and_token_report() -> None:
     facts = (
         fact("positive", "1girl", dimension="count"),

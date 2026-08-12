@@ -130,8 +130,39 @@ def author_anima_prompt(request: AnimaAuthoringRequest) -> PromptArtifact:
         "negative": _token_report(budget.negative, negative_tokens),
     }
     compression = (*positive_result.operations, *negative_result.operations)
+
+    # Audit the compressed streams *before* the budget-conflict short-circuit.
+    # Protocol findings are compression-independent, so an over-budget build
+    # still surfaces every hard error in one pass instead of forcing the author
+    # to fix the budget first and only then discover the next gate.
+    positive_audit = audit_anima_prompt(
+        tuple(segment.text for segment in compressed_tags),
+        " ".join(segment.text for segment in compressed_bridges),
+        ledger,
+    )
+    negative_audit = (
+        audit_anima_prompt(
+            tuple(segment.text for segment in negative_result.segments),
+            "",
+            ledger,
+        )
+        if negative_result.segments
+        else None
+    )
+    audit_error_codes = _audit_error_codes(positive_audit, negative_audit)
+
     conflict = positive_result.conflict or negative_result.conflict
     if conflict is not None:
+        conflict_codes = list(
+            dict.fromkeys(
+                ("token_quality_limit", *hard_codes, *audit_error_codes)
+                + (
+                    ("positive_negative_contradiction",)
+                    if _contradicts(compressed_tags, negative_result.segments)
+                    else ()
+                )
+            )
+        )
         return _artifact(
             status="budget_conflict",
             request=request,
@@ -140,32 +171,15 @@ def author_anima_prompt(request: AnimaAuthoringRequest) -> PromptArtifact:
             token_report=token_report,
             audit={
                 "release_blocking": True,
-                "hard_gate_codes": ["token_quality_limit"],
-                "positive": None,
-                "negative": None,
+                "hard_gate_codes": conflict_codes,
+                "positive": _audit_payload(positive_audit),
+                "negative": _audit_payload(negative_audit) if negative_audit else None,
             },
             compression=compression,
             conflict=asdict(conflict),
         )
 
-    positive_audit = audit_anima_prompt(
-        tuple(segment.text for segment in compressed_tags),
-        " ".join(segment.text for segment in compressed_bridges),
-        ledger,
-    )
-    negative_audit = audit_anima_prompt(
-        tuple(segment.text for segment in negative_result.segments),
-        "",
-        ledger,
-    ) if negative_result.segments else None
-    for report in (positive_audit, negative_audit):
-        if report is None:
-            continue
-        hard_codes.extend(
-            finding.code
-            for finding in report.findings
-            if finding.severity == "error" or finding.code == "possible_binding_conflict"
-        )
+    hard_codes.extend(audit_error_codes)
     if _contradicts(compressed_tags, negative_result.segments):
         hard_codes.append("positive_negative_contradiction")
     if positive_tokens > budget.positive.quality_limit:
@@ -256,6 +270,23 @@ def _audit_payload(report: AnimaAuditReport) -> dict[str, object]:
         "entries": [asdict(entry) for entry in report.entries],
         "findings": [asdict(finding) for finding in report.findings],
     }
+
+
+def _audit_error_codes(
+    positive: AnimaAuditReport,
+    negative: AnimaAuditReport | None,
+) -> list[str]:
+    """Collect release-blocking finding codes across both audited streams."""
+    codes: list[str] = []
+    for report in (positive, negative):
+        if report is None:
+            continue
+        codes.extend(
+            finding.code
+            for finding in report.findings
+            if finding.severity == "error" or finding.code == "possible_binding_conflict"
+        )
+    return list(dict.fromkeys(codes))
 
 
 def _contradicts(

@@ -9,6 +9,10 @@ DOCUMENTS = (
     ROOT / "skills" / "prompt-forge" / "references" / "anima.md",
     ROOT / "skills" / "prompt-forge" / "references" / "minimax-h3.md",
     ROOT / "skills" / "prompt-forge" / "references" / "artifact-and-budgets.md",
+    ROOT / "skills" / "prompt-forge" / "references" / "authoring-contract.md",
+    ROOT / "skills" / "prompt-forge" / "references" / "budget-ruler.md",
+    ROOT / "skills" / "prompt-forge" / "references" / "dictionary-preflight.md",
+    ROOT / "skills" / "prompt-forge" / "references" / "audit-and-recovery.md",
     ROOT / "skills" / "camera-image" / "SKILL.md",
     ROOT / "skills" / "camera-multiview" / "SKILL.md",
     ROOT / "skills" / "camera-video" / "SKILL.md",
@@ -49,12 +53,8 @@ def test_documentation_has_one_greenfield_prompt_contract() -> None:
 
 def test_skill_documents_exactly_three_paths_and_script_boundary() -> None:
     text = (ROOT / "skills" / "prompt-forge" / "SKILL.md").read_text(encoding="utf-8")
-    for author in (
-        "author_anima_prompt",
-        "author_h3_t2va_prompt",
-        "author_h3_ref2va_prompt",
-    ):
-        assert author in text
+    for task in ("anima", "h3_t2va", "h3_ref2va"):
+        assert task in text
     assert "scripts do not" in text
     assert "exact offline tokenizer" in text
     assert "protected fact" in text

@@ -1,5 +1,11 @@
 # Anima authoring dialect
 
+> The tool-enforced contract — one tag per segment (both streams), reserved namespaces,
+> attribution, fields, weights — is [authoring-contract.md](authoring-contract.md).
+> Preflight your tags against the dictionary before compiling:
+> [dictionary-preflight.md](dictionary-preflight.md). This file is the dialect: the model's
+> native form and ordering.
+
 ## Native form
 
 Build the positive prompt in this order:
