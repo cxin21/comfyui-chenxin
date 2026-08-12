@@ -1,66 +1,44 @@
-# Lighting — Anima tag vocabulary
+# Lighting
 
-> Lighting is the single biggest determinant of mood. Every term below describes
-> both **quality** (soft / hard) and **direction** (from where). Do not write only
-> `warm light` — the model needs the direction, the hardness, and the source.
+> 光影是情绪最大的杠杆。每一条标签同时编码"质感（软/硬）"和"方向（光从哪里来）"——只写 `warm light` 是没用的，模型需要知道光的硬度、方向与光源类型。
 
-## Quality (hardness / softness)
+## 核心公式
+> 用 Quality（光质）× Direction（方向）× Source（光源类型）三轴决定氛围底色，Special（特殊光效）按场景需要挂接。
 
-| term | visual effect | use when | avoid when |
-|---|---|---|---|
-| `cinematic lighting` | dramatic, filmic, evocative | most narrative scenes — default choice | flat illustration, anime chibi |
-| `dramatic lighting` | sharp shadows, contrast, theatrical | noir, tension, villain | soft slice-of-life |
-| `soft lighting` | diffused, gentle, low contrast | romance, beauty, commercial | horror, action |
-| `hard lighting` | defined shadow edges, stark | crime, fashion, intensity | beauty, tenderness |
-| `volumetric lighting` | light visible in atmosphere (fog, dust, smoke) | cinematic atmosphere | clean studio |
-| `god rays` / `sunbeam` | shafted light from above, sacred or dramatic | forests, cathedrals, fantasy | flat indoor |
+## 变体维度表
 
-## Direction (where the light comes from)
+| 维度 | 可选标签 |
+|---|---|
+| Quality（光质） | `cinematic lighting` / `dramatic lighting` / `soft lighting` / `hard lighting` / `volumetric lighting` / `god rays` |
+| Direction（方向） | `backlighting` / `rim light` / `side lighting` / `from below` / `top lighting` / `front lighting` |
+| Source（光源） | `golden hour` / `blue hour` / `sunlight` / `dappled sunlight` / `moonlight` / `candlelight` / `neon lights` / `studio lighting` / `ambient light` |
+| Special（特殊） | `chiaroscuro` / `silhouette` / `lens flare` / `bloom` / `reflections` / `partially shadowed` |
 
-| term | visual effect | use when | avoid when |
-|---|---|---|---|
-| `backlighting` | light from behind subject | silhouette, halo, glow | face must read clearly |
-| `rim light` | edge halo separating subject from background | cinematic, hero shots | flat graphic compositions |
-| `side lighting` | half-shadow, sculpting | drama, character, film noir | beauty shots needing symmetry |
-| `from below` | under-lighting, theatrical menace | horror, villain, threat | soft emotional scenes |
-| `top lighting` | overhead, downward | formal, theatrical, sterile | natural outdoor |
-| `front lighting` | flat, even | commercial, product, ID | cinematic, mood |
+## 氛围链
+`ambient light` → `soft lighting` → `cinematic lighting` → `dramatic lighting` → `chiaroscuro`
 
-## Time / atmosphere of source
+(从无明确光源到极致明暗对比，光影戏剧张力随链长递增。)
 
-| term | visual effect | use when | avoid when |
-|---|---|---|---|
-| `golden hour` | warm low sun, long shadows, romance | sunset, romance, nostalgia | night, indoors |
-| `blue hour` | cool blue pre-dawn or post-dusk | melancholy, calm, atmospheric | sunny day |
-| `sunlight` | bright clear day | outdoor, daylight scenes | night, interior |
-| `dappled sunlight` | light through leaves, broken | forest, peaceful, summer | interior, night |
-| `moonlight` | cool low illumination, mystery | night scenes, romance, melancholy | day scenes |
-| `candlelight` | warm flickering intimate glow | historical, romance, ritual | bright outdoor |
-| `neon lights` | saturated color from signage | cyberpunk, urban, night | pastoral, daytime |
-| `studio lighting` | controlled, neutral | fashion, character sheet, product | environmental storytelling |
-| `ambient light` | environment-only, no clear source | soft realism, slice-of-life | dramatic scenes |
+## 使用提示
+- Quality 只选一个：`soft lighting` + `hard lighting` 是矛盾对，模型会随机选其一。
+- Source 默认搭配一个 Quality：`golden hour` 自带暖软光，`moonlight` 自带冷蓝光，但显式写 `cinematic lighting` + `golden hour` 仍可叠加。
+- Direction 与 Quality 独立：`rim light` 是方向而非软硬，可以挂任何光质。
+- `volumetric lighting` 与 `fog` / `dust` 共用效果最佳——没有空气介质，看不见光束。
+- `chiaroscuro` 是 Baroque / Renaissance 戏剧化光影的命名短语，等价于极致 `dramatic lighting` + `partially shadowed`。
 
-## Special (named patterns or effects)
+## 法典验证场景
+### 场景 A — 文艺复兴肖像
+tags: `chiaroscuro`, `side lighting`, `partially shadowed`
+备注: 经典油画戏剧光影，半脸明亮半脸阴影。
 
-| term | visual effect | use when | avoid when |
-|---|---|---|---|
-| `chiaroscuro` | strong contrast, deep shadows, Renaissance drama | baroque, classical, intense portraits | bright modern |
-| `silhouette` | subject as pure dark shape | mystery, drama, sunset | you need to see the face |
-| `lens flare` | bright artifacts from light source | cinematic, vintage, sci-fi | clean documentary |
-| `bloom` | bright areas bleed light | magical, dreamy, ethereal | realistic, documentary |
-| `reflections` | light bouncing off surface | wet streets, glass, water, mirror | matte dry surfaces |
-| `partially shadowed` | one half lit, other in dark | split, dual mood, character complexity | uniform brightness |
+### 场景 B — 黄金时刻人像
+tags: `soft lighting`, `rim light`, `golden hour`
+备注: 逆光 + 暖低太阳光，典型户外浪漫照。
 
-## Co-use notes
+### 场景 C — 赛博朋克街道
+tags: `cinematic lighting`, `backlighting`, `neon lights`
+备注: 背光剪影加霓虹主光源，城市夜景主体被色光勾边。
 
-- `cinematic lighting` is a default umbrella that subsumes most contrast setups;
-  pair with a direction (e.g. `cinematic lighting, side lighting`) for clarity.
-- Avoid stacking `soft lighting` + `hard lighting`; pick one quality.
-- Lighting is **not** palette — do not write `warm light` as a substitute for
-  `golden hour` and skip `palette.md`.
-
-## Citation format
-
-`knowledge/aesthetics/lighting.md#<cluster>:<term>`,
-e.g. `lighting.md#quality:cinematic_lighting` or
-`lighting.md#direction:rim_light`.
+### 场景 D — 林间圣光
+tags: `god rays`, `volumetric lighting`, `dappled sunlight`
+备注: 森林或教堂中由上方穿透的光束，常带神秘感或神圣感。
