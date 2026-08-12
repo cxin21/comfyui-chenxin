@@ -59,4 +59,6 @@ Use the bundled read-only `knowledge/anima/tags.sqlite`. It contains the full lo
 
 Do not scrape at runtime, add a user tag overlay, or use a local checkpoint/LoRA vocabulary layer. Maintainers update the dictionary only by acquiring pinned source snapshots, passing the redistribution gate, rebuilding twice byte-identically, updating the manifest, and rerunning the release verifier.
 
+## Token limit
+
 The image model's physical tokenizer limit is 32,768 tokens. Prompt Forge uses much smaller calibrated quality limits; physical capacity is not a recommendation to fill the context.

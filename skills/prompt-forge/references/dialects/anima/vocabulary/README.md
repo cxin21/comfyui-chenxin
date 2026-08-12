@@ -1,5 +1,7 @@
 # Anima vocabulary
 
+## Positioning
+
 Anima's complete tag vocabulary knowledge — every tag the model has learned to render. **This is a dictionary, not a creation instruction.** The dictionary does not judge how its words are used.
 
 ## Files
