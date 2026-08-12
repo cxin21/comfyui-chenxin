@@ -1,0 +1,66 @@
+{
+  "t2va": {
+    "formula": {
+      "base": 140,
+      "per_duration_second": 20,
+      "per_additional_shot": 70,
+      "target_min": 180,
+      "target_max": 900,
+      "duration_min": 2,
+      "duration_max": 15,
+      "seconds_per_additional_shot": 3
+    },
+    "limits": {
+      "soft_multiplier": 1.25,
+      "quality_multiplier": 1.60,
+      "quality_cap": 1200,
+      "hard_limit": 262144
+    },
+    "fields": [
+      {"name": "fixed_structure_and_labels", "recommended_min_share": 0.03, "recommended_max_share": 0.05, "hard_max_share": 0.05},
+      {"name": "integrated_multimodal_description", "recommended_min_share": 0.72, "recommended_max_share": 0.82, "hard_max_share": 0.82},
+      {"name": "overall_soundscape", "recommended_min_share": 0.08, "recommended_max_share": 0.12, "hard_max_share": 0.12},
+      {"name": "non_diegetic_music", "recommended_min_share": 0.03, "recommended_max_share": 0.08, "hard_max_share": 0.08},
+      {"name": "safety_margin", "recommended_min_share": 0.05, "recommended_max_share": 0.05, "hard_max_share": 0.05}
+    ],
+    "per_shot_fields": [
+      {"name": "opening_state_and_composition", "recommended_min_share": 0.20, "recommended_max_share": 0.25, "hard_max_share": 0.25},
+      {"name": "subject_action_and_state_change", "recommended_min_share": 0.30, "recommended_max_share": 0.40, "hard_max_share": 0.40},
+      {"name": "camera_motion", "recommended_min_share": 0.10, "recommended_max_share": 0.15, "hard_max_share": 0.15},
+      {"name": "synchronous_sound_and_dialogue", "recommended_min_share": 0.10, "recommended_max_share": 0.20, "hard_max_share": 0.20},
+      {"name": "action_result_and_landing", "recommended_min_share": 0.10, "recommended_max_share": 0.15, "hard_max_share": 0.15}
+    ],
+    "borrowing_order": ["non_diegetic_music", "overall_soundscape", "integrated_multimodal_description"],
+    "non_lendable_buckets": ["exact_dialogue", "subject_identity", "subject_count", "user_locked_facts"]
+  },
+  "ref2va": {
+    "formula": {
+      "base": 420,
+      "per_reference": 90,
+      "per_duration_second": 24,
+      "per_additional_shot": 80,
+      "target_min": 650,
+      "target_max": 1600,
+      "duration_min": 2,
+      "duration_max": 15,
+      "seconds_per_additional_shot": 3
+    },
+    "limits": {
+      "soft_multiplier": 1.25,
+      "quality_multiplier": 1.60,
+      "quality_cap": 2400,
+      "hard_limit": 262144
+    },
+    "fields": [
+      {"name": "subject_definitions", "recommended_min_share": 0.12, "recommended_max_share": 0.18, "hard_max_share": 0.18},
+      {"name": "summary", "recommended_min_share": 0.03, "recommended_max_share": 0.05, "hard_max_share": 0.05},
+      {"name": "retention_analysis", "recommended_min_share": 0.10, "recommended_max_share": 0.16, "hard_max_share": 0.16},
+      {"name": "detailed_description", "recommended_min_share": 0.52, "recommended_max_share": 0.64, "hard_max_share": 0.64},
+      {"name": "overall_soundscape", "recommended_min_share": 0.05, "recommended_max_share": 0.08, "hard_max_share": 0.08},
+      {"name": "non_diegetic_music", "recommended_min_share": 0.02, "recommended_max_share": 0.05, "hard_max_share": 0.05},
+      {"name": "safety_margin", "recommended_min_share": 0.05, "recommended_max_share": 0.05, "hard_max_share": 0.05}
+    ],
+    "borrowing_order": ["non_diegetic_music", "overall_soundscape", "summary", "retention_analysis", "detailed_description"],
+    "non_lendable_buckets": ["subject_identity", "reference_identity", "user_locked_facts"]
+  }
+}
