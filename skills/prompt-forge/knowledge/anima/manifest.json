@@ -1,0 +1,55 @@
+{
+  "builder_sha256": "e010a792878667e1987f6e61320d1ce335f22f09a1b2bfae1d5f0c220adaf122",
+  "dictionary_version": "anima-tags-2026-08-12",
+  "precedence": [
+    "official_anima_rule",
+    "gelbooru_canonical",
+    "danbooru_compatibility_alias"
+  ],
+  "row_counts": {
+    "aliases": 36725,
+    "tags": 1376178
+  },
+  "schema_version": 1,
+  "source_ids": [
+    "gelbooru-tags-full-2026-06-11",
+    "danbooru-compatibility-2025-09-01-pt20",
+    "prompt-forge-anima-protocol-v1"
+  ],
+  "sources": [
+    {
+      "acquired_at": "2026-08-12T08:30:00+08:00",
+      "kind": "gelbooru_jsonl",
+      "license_spdx": "Apache-2.0",
+      "license_url": "https://huggingface.co/datasets/DraconicDragon/Gelbooru-Tags-Full_2026-06-11/blob/4dd87da139254abc9f18d2da04ee7b6b691d4e63/README.md",
+      "redistribution_allowed": true,
+      "revision": "4dd87da139254abc9f18d2da04ee7b6b691d4e63",
+      "sha256": "ba99cbd800f9e3a0779a24026a9951b90c2918ef9f334b9c97697499effa3c41",
+      "source_id": "gelbooru-tags-full-2026-06-11",
+      "source_url": "https://huggingface.co/datasets/DraconicDragon/Gelbooru-Tags-Full_2026-06-11/tree/4dd87da139254abc9f18d2da04ee7b6b691d4e63"
+    },
+    {
+      "acquired_at": "2026-08-12T08:30:00+08:00",
+      "kind": "danbooru_csv",
+      "license_spdx": "Unlicense",
+      "license_url": "https://github.com/DraconicDragon/dbr-e621-lists-archive/blob/ed33402095747b1f12e00c9201218ce997f0906b/LICENSE",
+      "redistribution_allowed": true,
+      "revision": "ed33402095747b1f12e00c9201218ce997f0906b",
+      "sha256": "200b8b90bccada9417be163c7e8deb2f56aa36e112d3b938e29c20734e063732",
+      "source_id": "danbooru-compatibility-2025-09-01-pt20",
+      "source_url": "https://github.com/DraconicDragon/dbr-e621-lists-archive/blob/ed33402095747b1f12e00c9201218ce997f0906b/tag-lists/danbooru/danbooru_2025-09-01_pt20-ia-dd.csv"
+    },
+    {
+      "acquired_at": "2026-08-12T08:30:00+08:00",
+      "kind": "anima_protocol",
+      "license_spdx": "MIT",
+      "license_url": "https://github.com/cxin21/comfyui-chenxin/blob/main/LICENSE",
+      "redistribution_allowed": true,
+      "revision": "protocol-v1@anima-f7382c4bf9d7ffe4ceea593a0adbb470c56dd79b",
+      "sha256": "d08600a03d499ff8001020047fb6237d476751975014fd8d49d5a7f620627a86",
+      "source_id": "prompt-forge-anima-protocol-v1",
+      "source_url": "https://huggingface.co/circlestone-labs/Anima/blob/f7382c4bf9d7ffe4ceea593a0adbb470c56dd79b/README.md"
+    }
+  ],
+  "sqlite_sha256": "4401b7e78340acb4da3cc7b5b082d394c0a42139172b6557d8abe2a77000407d"
+}
