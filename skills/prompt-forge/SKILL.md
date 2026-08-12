@@ -1,6 +1,6 @@
 ---
 name: prompt-forge
-description: Author and audit high-quality model-native prompts for exactly Anima still images, MiniMax-H3 text-to-video-with-audio, and MiniMax-H3 reference-to-video-with-audio. Use whenever Codex must turn creative intent into an Anima or MiniMax-H3 production prompt, calculate its exact token budget, preserve subject/reference ownership, or return a verified PromptArtifact for camera-image or camera-video.
+description: Author and audit high-quality model-native prompts for exactly Anima still images, MiniMax-H3 text-to-video-with-audio, and MiniMax-H3 reference-to-video-with-audio. Use whenever Codex must turn creative intent into an Anima or MiniMax-H3 production prompt, calculate its exact token budget, preserve subject/reference ownership, or return a verified PromptArtifact for camera-image or camera-video. The verified PromptArtifact is consumed only by camera-image (anima) and camera-video (h3_t2va / h3_ref2va); camera-multiview uses a fixed-prompt Flux2-Klein workflow and does NOT take a PromptArtifact.
 ---
 
 # Prompt Forge

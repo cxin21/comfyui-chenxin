@@ -91,7 +91,10 @@ def main() -> None:
             "For camera-image/video, the envelope contains exactly one complete Prompt Forge artifact:\n"
             "  envelope = {\"prompt_artifact\": <production_ready artifact>}\n"
             "For camera-multiview, envelope = {}.\n"
-            "  config = {\"image_size\": {\"width\": 1200, \"height\": 800}}"
+            "  config = {\"image_size\": {\"width\": 1200, \"height\": 800}}\n"
+            "FORBIDDEN in both envelope and config (these belong to the camera skill, not here):\n"
+            "  workflow, node, hash, gpu, execution, mode, runtime, profile, camera,\n"
+            "  lens, lora, loras, checkpoint, sampler, seed, steps, cfg, denoise."
         ),
         input_schema={
             "type": "object",
@@ -127,7 +130,10 @@ def main() -> None:
             "For camera-video (t2v / i2v / multi-i2v) stages:\n"
             "  envelope = {\"prompt_artifact\": <production_ready H3 artifact>}\n"
             "  config = {\"duration\": 8.0, \"reference_image_1\": \"/path/to/img.png\"}\n"
-            "  CRITICAL: `duration` is a JSON number (8.0), NOT a string (\"8.0\")."
+            "  CRITICAL: `duration` is a JSON number (8.0), NOT a string (\"8.0\").\n"
+            "FORBIDDEN in both envelope and config (these belong to the camera skill, not here):\n"
+            "  workflow, node, hash, gpu, execution, mode, runtime, profile, camera,\n"
+            "  lens, lora, loras, checkpoint, sampler, seed, steps, cfg, denoise."
         ),
         input_schema={
             "type": "object",
