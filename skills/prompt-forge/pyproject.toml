@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "comfyui-chenxin-prompt-forge"
+version = "0.1.0"
+description = "Offline model-native prompt authoring audits for Anima and MiniMax-H3"
+requires-python = ">=3.10"
+dependencies = [
+  "tokenizers==0.23.1",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=9,<10",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["prompt_forge*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "--basetemp=../../.pytest-tmp"

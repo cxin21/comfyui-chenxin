@@ -164,6 +164,19 @@ PYEOF
   STAGED_VERSION="$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1],encoding="utf-8"))["version"])' "$STAGING/.codex-plugin/plugin.json")"
   [ "$STAGED_VERSION" = "$VERSION" ] || die "Staged version [$STAGED_VERSION] does not match directory version [$VERSION]."
   [ -d "$STAGING/skills" ] || die "Staged skills/ missing."
+  PROMPT_FORGE_ROOT="$STAGING/skills/prompt-forge"
+  for asset in \
+    "pyproject.toml" \
+    "knowledge/tokenizers/anima-qwen3-0.6b/manifest.json" \
+    "knowledge/tokenizers/anima-qwen3-0.6b/tokenizer.json" \
+    "knowledge/tokenizers/h3-qwen3-vl/manifest.json" \
+    "knowledge/tokenizers/h3-qwen3-vl/tokenizer.json" \
+    "knowledge/tokenizers/h3-qwen3-vl/chat_template.json" \
+    "knowledge/tokenizers/h3-qwen3-vl/LICENSE" \
+    "knowledge/tokenizers/h3-qwen3-vl/NOTICE"
+  do
+    [ -f "$PROMPT_FORGE_ROOT/$asset" ] || die "Staged Prompt Forge asset missing: $asset"
+  done
 
   mkdir -p "$CACHE_ROOT"
   case "$(cd "$(dirname "$CACHE_ROOT")" && pwd)" in
@@ -180,7 +193,7 @@ PYEOF
   step "installed plugin at $TARGET"
 
   step "pip-installing mcp_server + skills (so the host finds comfyui-chenxin-mcp-server)"
-  for pkg_src in "$TARGET/mcp_server" "$TARGET/skills/camera-image" "$TARGET/skills/camera-multiview" "$TARGET/skills/camera-video"; do
+  for pkg_src in "$TARGET/mcp_server" "$TARGET/skills/prompt-forge" "$TARGET/skills/camera-image" "$TARGET/skills/camera-multiview" "$TARGET/skills/camera-video"; do
     if [ -f "$pkg_src/pyproject.toml" ]; then
       if ! "$PY" -m pip install -e "$pkg_src" --quiet 2>/dev/null; then
         die "pip install -e $pkg_src failed. Re-run without -e is fine; -e gives live source edits."

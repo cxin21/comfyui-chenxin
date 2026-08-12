@@ -160,6 +160,22 @@ if (-not $SkipCodex) {
     $staged = Get-Content $stagedPlugin -Raw | ConvertFrom-Json
     if ([string]$staged.version -ne $version) { Die "Staged version [$($staged.version)] does not match directory." }
     if (-not (Test-Path (Join-Path $stagingRoot 'skills'))) { Die 'Staged skills/ missing.' }
+    $promptForgeRoot = Join-Path $stagingRoot 'skills\prompt-forge'
+    $requiredPromptForgeAssets = @(
+        'pyproject.toml',
+        'knowledge\tokenizers\anima-qwen3-0.6b\manifest.json',
+        'knowledge\tokenizers\anima-qwen3-0.6b\tokenizer.json',
+        'knowledge\tokenizers\h3-qwen3-vl\manifest.json',
+        'knowledge\tokenizers\h3-qwen3-vl\tokenizer.json',
+        'knowledge\tokenizers\h3-qwen3-vl\chat_template.json',
+        'knowledge\tokenizers\h3-qwen3-vl\LICENSE',
+        'knowledge\tokenizers\h3-qwen3-vl\NOTICE'
+    )
+    foreach ($asset in $requiredPromptForgeAssets) {
+        if (-not (Test-Path (Join-Path $promptForgeRoot $asset))) {
+            Die "Staged Prompt Forge asset missing: $asset"
+        }
+    }
 
     if (Test-Path $cacheRoot) {
         $existing = @(Get-ChildItem $cacheRoot -Directory -Force -ErrorAction SilentlyContinue)
@@ -196,6 +212,7 @@ if (-not $SkipCodex) {
     }
     $installPkgs = @(
         @{ Name = 'mcp_server';     Src = Join-Path $target 'mcp_server' },
+        @{ Name = 'prompt-forge';   Src = Join-Path $target 'skills\prompt-forge' },
         @{ Name = 'camera-image';    Src = Join-Path $target 'skills\camera-image' },
         @{ Name = 'camera-multiview';Src = Join-Path $target 'skills\camera-multiview' },
         @{ Name = 'camera-video';    Src = Join-Path $target 'skills\camera-video' }
