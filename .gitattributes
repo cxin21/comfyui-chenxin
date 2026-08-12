@@ -1,3 +1,4 @@
 skills/prompt-forge/knowledge/anima/tags.sqlite filter=lfs diff=lfs merge=lfs -text
 skills/prompt-forge/knowledge/anima/*.json text eol=lf
+skills/prompt-forge/knowledge/tokenizers/** text eol=lf
 skills/prompt-forge/scripts/build_anima_dictionary.py text eol=lf

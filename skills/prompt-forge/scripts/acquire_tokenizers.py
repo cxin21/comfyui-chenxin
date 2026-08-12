@@ -10,13 +10,17 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
 from tokenizers import Tokenizer
+
+
+def _copy_lf(source: Path, destination: Path) -> None:
+    data = source.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    destination.write_bytes(data)
 
 
 @dataclass(frozen=True)
@@ -122,7 +126,7 @@ def _acquire(spec: SnapshotSpec, destination: Path) -> None:
             source = checkout / source_name
             if not source.is_file():
                 raise RuntimeError(f"pinned source file is missing: {source_name}")
-            shutil.copy2(source, destination / destination_name)
+            _copy_lf(source, destination / destination_name)
 
     if spec.notice is not None:
         (destination / "NOTICE").write_text(spec.notice, encoding="utf-8", newline="")
