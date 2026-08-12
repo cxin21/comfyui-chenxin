@@ -1,96 +1,92 @@
-# Anti-patterns — what an aesthetic prompt must NOT contain
+# Anti-patterns
 
-> This file is the **override** layer in `precedence`. If a prompt contains any
-> of the patterns below, fix it before shipping, regardless of what the other
-> five layers say. Aesthetic quality is determined as much by **exclusion** as
-> by inclusion.
+> 反模式层是 precedence 中的覆写层。一旦提示词命中下表任一模式，必须在编译前移除——不管其他五层怎么写。美学质量一半靠排除法决定。
 
-## A. Empty intensifiers (the model ignores them; they waste tokens)
+## 核心公式
+> 反模式 = 空泛强化词 + 矛盾搭配 + 模型学坏的指纹标签。一律以具体可替换的 tag pair 描述，每一行给出"错在哪 + 换什么"。
 
-| anti-pattern | why it's wrong | what to do instead |
+## 变体维度表
+
+| 类别 | 禁止模式 | 正确替换 |
 |---|---|---|
-| `beautiful`, `gorgeous`, `stunning`, `pretty`, `lovely` | zero semantic signal; the model already defaults toward pretty | drop; use specific aesthetic tags (`cinematic lighting`, `bokeh`) |
-| `highly detailed`, `ultra detailed`, `extremely detailed` | vague; no subject, region, or texture specified | specify what detail (`intricate lace collar`, `filigree embroidery`) |
-| `atmospheric`, `a lot of atmosphere` | un-nameable | name the atmosphere (`fog`, `volumetric lighting`, `dust`) |
-| `masterpiece`, `masterful`, `amazing` | identical issue | drop |
-| `intricate`, `ornate` (alone) | doesn't say what is intricate | `intricate lacework on collar`, `ornate brass filigree` |
-| `professional`, `professional photography` (alone) | not a render cue | specify the render medium (`photo (medium)`, `35mm`) |
-| `award-winning`, `prize-winning` | not a render cue | drop or replace with the actual aesthetic family |
+| 光线描述 | `sunlight` | `dappled sunlight` 或 `golden hour`（指定光源类型） |
+| 光线描述 | `moonlight` | 移除或换 `blue hour`（冷调光源） |
+| 光线描述 | `dim light` | `low contrast` + `ambient light`（声明对比度+环境光） |
+| 光线描述 | `candlelight` | 改写为 `warm color` + `partially shadowed`（描述色彩与明暗） |
+| 光线描述 | `neon light` / `neon lights` | 改写为 `cyberpunk`（cultural 调色板） |
+| 光线描述 | `streetlights` | `neon lights` 或 `urban night` 整体氛围 |
+| 光影技术 | `backlighting` | 描述结果（`silhouette`）而非技术名 |
+| 光影技术 | `rim light` | 改写为 `partially shadowed`（光影效果） |
+| 光影技术 | `warm lighting` | `warm color` + 光源（`golden hour`） |
+| 光影技术 | `cool lighting` | `cool color` + 光源（`moonlight`/`blue hour`） |
+| 光影技术 | `golden hour glow` | `golden hour`（标准命名） |
+| 光影技术 | `soft lighting` | `soft lighting` 仅可单独写，禁止堆叠；与 `hard lighting` 互斥 |
+| 色调描述 | `warm tone` | `warm color`（标准命名） |
+| 色调描述 | `cool tone` | `cool color`（标准命名） |
+| 色调描述 | `sepia` | 单独可接受，但优先用 Grade 维度声明 |
+| 色调描述 | `blue tone` | `cool color` + `blue hour` |
+| 色调描述 | `amber tone` | `warm color` + `golden hour` |
+| 光学现象 | `god rays` | 仅在需要光束效果时使用，不可与 `sunlight` 叠加 |
+| 光学现象 | `light rays` | 同 `god rays`，归入 Special 光效层 |
+| 光学现象 | `light particles` | `Particle` 维度中已有，专门用于氛围细节 |
+| 光学现象 | `volumetric light beams` | `volumetric lighting`（标准命名） |
+| 光学现象 | `tyndall effect` | `volumetric lighting`（更通用） |
+| 发光描述 | `glowing` | 改写为具体光源（`embers` / `lens flare`） |
+| 发光描述 | `illuminated` | 删除或换具体光源 |
+| 发光描述 | `lit` | 同 `illuminated` |
+| 发光描述 | `backlit` | 同 `backlighting`，用结果描述（`silhouette`） |
+| 发光描述 | `spotlight` | 改写为 `top lighting`（方向描述） |
+| 发光描述 | `flash` | 删除或改为 `lens flare`（光学现象） |
+| 空泛强化词 | `beautiful` / `gorgeous` / `stunning` / `pretty` / `lovely` | 删除；用具体美学标签代替 |
+| 空泛强化词 | `highly detailed` / `ultra detailed` | 指定细节对象（`intricate lace collar`） |
+| 空泛强化词 | `masterpiece` / `masterful` / `amazing` | 删除 |
+| 空泛强化词 | `intricate` / `ornate`（单独） | 指定装饰对象（`intricate lacework on collar`） |
+| 空泛强化词 | `professional`（单独） | 指定渲染介质（`photo (medium)`） |
+| 空泛强化词 | `award-winning` / `prize-winning` | 删除或换为具体风格家族 |
+| 分辨率噱头 | `8k` / `4k` / `2k` / `uhd`（单独） | 删除或组合意图（`highres` 为官方质量标签） |
+| 分辨率噱头 | `high resolution` / `high quality`（单独） | `highres` |
+| 平台标记 | `trending on artstation` / `trending on pixiv` | 删除（画廊引流指纹） |
+| 平台标记 | `featured on pixiv` / `fanbox` / `patreon` | 删除 |
+| 模型低质指纹 | `simple background`（无补偿标签） | `detailed background` 或具体环境标签 |
+| 模型低质指纹 | `bad anatomy` / `bad hands`（positive 中） | 删除 |
+| 模型低质指纹 | `watermark` / `signature`（positive 中） | 删除 |
+| 模型低质指纹 | `lowres` / `worst quality` / `low quality`（positive 中） | 这些标签只能出现在 negative 流 |
+| 模型低质指纹 | `score_4` / `score_5` / `score_6`（positive 中） | 同上，移到 negative |
+| 矛盾搭配 | `cinematic lighting` + `flat color` + `cel shading` | 选一边：`cinematic lighting` + `illustration` |
+| 矛盾搭配 | `monochrome` + `pastel color` + `vivid color` | 选一个 Grade |
+| 矛盾搭配 | `low contrast` + `high contrast` | 选一极 |
+| 矛盾搭配 | `warm color` + `cool color`（无背景） | 选一边；冷暖对比靠光源 |
+| 矛盾搭配 | `soft lighting` + `hard lighting` | 选一种光质 |
+| 矛盾搭配 | `low angle` + `high angle` | 选一个角度 |
+| 矛盾搭配 | `centered` + `rule of thirds` | 选一种布局 |
+| 矛盾搭配 | `shallow depth of field` + `panoramic` | 浅焦不可全景 |
+| 矛盾搭配 | `photo (medium)` + `painting` + `watercolor` + `sketch` | 只选一个介质 |
+| 矛盾搭配 | `cyberpunk` + `pastel color`（无中介风格） | 风格统一或换题材 |
+| 重量语法 | `(cinematic lighting:1.3)` 强调权重 | 删除；Anima 不稳定支持 Danbooru 权重 |
+| 重复伪强化 | 同一标签写两遍 | 删除重复 |
+| 堆叠过度 | 同一段中 5+ 光照标签 | 选 2-3 个互补项 |
+| 末尾残留 | 末尾 `...` 或 `--` 等非标签符号 | 删除；audit 将拒绝 |
 
-## B. Empty scale / resolution tags (only meaningful with context)
+## 使用提示
+- 光线类标签（§13.6 起源）一律视为禁忌：模型内部已有光影处理能力，写出来反而污染画面。
+- §13.6 唯一豁免：环境天气（`rain` / `snow` / `fog` / `steam` / `stormy` / `dust particles` / `underwater`）和 §12.3 中明确的时辰/大气标签。
+- `monochrome` 内部包含光线信息，写 `monochrome` 时不要再加 `soft lighting` 等光质标签。
+- 凡包含"绝对/极致/完美"等评价词的形容词（`stunning`、`masterpiece`）一律删除。
+- 矛盾对消解优先级：先选符合用户意图的术语，再删除另一项，不要简单保留两者。
 
-| anti-pattern | why it's wrong | what to do instead |
-|---|---|---|
-| `8k`, `4k`, `2k`, `uhd` (alone) | the image is not 8k; this is gallery bait | drop or combine with intent (`highres` is in the official tag set and actually does something) |
-| `high resolution`, `high quality` (alone) | vague | `highres` (official quality tag) |
-| `photorealistic` (alone, without render-medium + lighting) | model averages to default render | pair with `photo (medium), cinematic lighting, depth of field` |
+## 法典验证场景
+### 场景 A — 黄金时刻逆光人像（合规版）
+tags: `golden hour`, `warm color`, `partially shadowed`, `silhouette`
+备注: 用 Grade/Cultural + 描述光影结果的标签，避免 §13.6 禁忌光线词。
 
-## C. Platform-name drop tags (gallery pandering)
+### 场景 B — 黄金时刻逆光人像（违规版）
+tags: `sunlight`, `backlighting`, `rim light`, `golden hour glow`, `warm tone`, `beautiful`
+修正: 删除 `sunlight` / `backlighting` / `rim light` / `golden hour glow` / `warm tone` / `beautiful`，改用场景 A 版本。
 
-| anti-pattern | why it's wrong |
-|---|---|
-| `trending on artstation`, `trending on pixiv`, `featured on pixiv`, `fanbox`, `patreon` | these were gallery-promotion tags in early SD communities; the model has learned them as **style fingerprints for low-effort art**, not as quality signals |
+### 场景 C — 雨夜都市（合规版）
+tags: `cyberpunk`, `cool color`, `high contrast`, `rain`, `bokeh`
+备注: 利用 §13.6 豁免的环境天气（`rain`）+ 调色板与光影结果标签。
 
-## D. Contradictions the model cannot reconcile
-
-| anti-pattern | contradiction |
-|---|---|
-| `cinematic lighting` + `flat color` + `cel shading` (with no medium tag) | cinematic ≠ cel; drop one or pick `illustration` explicitly |
-| `monochrome` + `pastel color` + `vivid color` | three palette grades, pick one |
-| `low contrast` + `high contrast` | exclusive |
-| `warm color` + `cool color` (alone, no context) | choose one temperature or move it to lighting (`golden hour` vs `moonlight`) |
-| `soft lighting` + `hard lighting` | exclusive |
-| `low angle` + `high angle` | exclusive (composition) |
-| `centered` + `rule of thirds` (both as primary layout) | exclusive (composition) |
-| `shallow depth of field` + `panoramic` | panoramic implies deep focus |
-| `photo (medium)` + `painting` + `watercolor` + `sketch` | choose ONE render medium |
-| `cyberpunk` + `pastel color` (with no mediating style) | genre-vs-palette mismatch |
-
-## E. Tags the Anima model learned as low-effort
-
-These tags **do** appear in training data, but they cluster with quick
-sketches / lower-quality renders:
-
-- `simple background`, `plain background` (with no compensating tags) — the
-  prompt reads as "I didn't bother with environment". Use `detailed background`
-  if you want effort.
-- `bad anatomy`, `bad hands` in **positive** — they sometimes appear as tags
-  in adversarial training. Drop.
-- `watermark`, `signature` (in positive, unless the user wants a watermarked
-  reference image) — drop.
-- `lowres`, `worst quality`, `low quality`, `score_4`, `score_5`, `score_6`
-  in **positive** — those belong in the negative stream only.
-
-## F. Recipes that look clever but degrade quality
-
-| anti-pattern | why |
-|---|---|
-| `(cinematic lighting:1.3)`-style emphasis weights | Anima does not use Danbooru `::` weights reliably in a clean way; emphasis tags add noise without consistent effect |
-| repeating the same tag twice to "double it" | treated as duplicate semantics; audit flags |
-| stacking 5+ lighting tags in one segment | layered excess; pick 2–3 complementary terms |
-| trailing the prompt with `...` or `--` or any non-tag punctuation | the audit rejects or misreads them |
-
-## G. Stacking the same layer with overlapping tags
-
-- Two palette terms: drop one
-- Two lighting qualities: drop one
-- Two angles: drop one
-- Two render mediums: drop one
-
-## Override behavior
-
-If your authored prompt contains any pattern in section A, B, or C, the
-authoring method requires you to **remove it before compiling**, even if the
-resulting prompt is shorter. Empty intensifiers are worse than absent content.
-
-If your prompt contains any pattern in section D, **resolve the contradiction
-first** — pick the term that fits the user's intent and discard the other.
-
-If section E or F applies, drop the offending tag and keep everything else.
-
-## Citation
-
-When you explicitly remove an anti-pattern during authoring, log it as an
-`agent_embellishment` fact whose `source_ref` is
-`anti-patterns.md#<section>:<pattern>` (e.g.
-`anti-patterns.md#A:empty_intensifiers`) — this makes the removal auditable.
+### 场景 D — 雨夜都市（违规版）
+tags: `neon lights`, `streetlights`, `warm lighting`, `cool lighting`, `atmospheric`
+修正: 删除光线技术词，保留 `cyberpunk` + `rain`，`atmospheric` 替换为 `rain` + `fog`。
