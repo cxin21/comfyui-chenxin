@@ -17,16 +17,32 @@ from camera_image.runtime.source_workflow import prepare_temporary_workflow
 
 
 def compile_prompt_gate(config) -> dict:
+    """Resolve the prompt before workflow use.
+
+    If config.prompt_ref is set, fetch and verify the BuildLog
+    server-side. Otherwise trust config.prompt (the LLM carried the
+    prompt directly across turns; the build was already validated when
+    compile_anima_artifact was first called).
+    """
     from comfyui_chenxin_mcp.engine.prompt_forge import validate_prompt_artifact
 
-    return validate_prompt_artifact(config.prompt_artifact, expected_task="anima")
+    if config.prompt_ref is not None:
+        return validate_prompt_artifact(
+            config.prompt_ref,
+            expected_task="anima",
+        )
+    return dict(config.prompt)
 
 
 def validate_envelope(envelope: dict) -> list[str]:
-    if set(envelope) != {"prompt_artifact"}:
-        return ["envelope must contain exactly prompt_artifact"]
-    if not isinstance(envelope["prompt_artifact"], dict):
-        return ["envelope.prompt_artifact must be an object"]
+    if set(envelope) - {"prompt", "prompt_ref"}:
+        return [f"envelope may contain only prompt and prompt_ref, got {sorted(set(envelope))}"]
+    if "prompt" not in envelope:
+        return ["envelope must contain exactly prompt"]
+    if not isinstance(envelope["prompt"], dict):
+        return ["envelope.prompt must be an object"]
+    if "prompt_ref" in envelope and not isinstance(envelope["prompt_ref"], str):
+        return ["envelope.prompt_ref must be a string when present"]
     return []
 
 

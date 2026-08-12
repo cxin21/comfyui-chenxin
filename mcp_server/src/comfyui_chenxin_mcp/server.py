@@ -22,6 +22,7 @@ from .engine.prompt_forge import (
     author_h3_ref2va,
     validate_prompt_artifact,
 )
+from .engine import build_log
 
 
 # Default upstream comfyui-mcp version. Mirrors install.ps1/install.sh and
@@ -304,24 +305,25 @@ def main() -> None:
 
     # ----- Authoring tools: build a verified PromptArtifact -----
     # These close the gap surfaced in session 5ba39012: callers had no
-    # way to produce the artifact camera-* consumes without writing a
+    # way to produce the prompt camera-* consumes without writing a
     # Python build script. Each tool coerces a plain JSON request into
-    # the matching typed dataclass, runs author_*_prompt(), then re-validates
-    # via validate_prompt_artifact so the returned dict is guaranteed
-    # production_ready with a content hash. The caller passes the result
-    # back via envelope={"prompt_artifact": <dict>} to run_skill.
+    # the matching typed dataclass and runs author_*(). The full audit
+    # trail is stored server-side in the BuildLog registry; the tool
+    # returns a slim {ref_id, prompt, metadata} dict. The caller carries
+    # the 32-char ref_id (or the prompt dict) and passes it back via
+    # envelope={"prompt": <dict>, "prompt_ref": <ref_id>} to run_skill.
 
     @server.tool(
         name="compile_anima_artifact",
         description=(
-            "Build a verified Anima PromptArtifact from a JSON request.\n"
+            "Build a verified Anima prompt and register its BuildLog.\n"
             "Use when the goal is an Anima still image and the caller can "
             "express it as a list of locked facts + positive/negative "
             "AuthoredSegments + Complexity (subjects / explicit_relations / "
             "complex_actions / environment_clusters / natural_language_bridges).\n"
-            "Returns the exact artifact dict that camera-image / t2i-camera "
-            "consumes via envelope={\"prompt_artifact\": <result>}. "
-            "Same shape as validate_prompt_artifact's output."
+            "Returns {ref_id, prompt, metadata}. Pass ref_id (and/or the "
+            "prompt dict) back to camera-image via envelope={\"prompt\": ..., "
+            "\"prompt_ref\": ...}."
         ),
         input_schema={
             "type": "object",
@@ -342,20 +344,24 @@ def main() -> None:
     )
     async def compile_anima(request: dict) -> dict:
         req = _coerce_anima_request(request)
-        # The bridge function returns a dict (artifact.to_dict() already
-        # applied); validate_prompt_artifact takes the dict and re-verifies.
-        artifact_dict = author_anima(req)
-        return validate_prompt_artifact(artifact_dict, expected_task="anima")
+        slim = author_anima(req)  # returns {ref_id, prompt}
+        meta = build_log.metadata(slim["ref_id"]) or {}
+        return {
+            "ref_id": slim["ref_id"],
+            "prompt": slim["prompt"],
+            "metadata": meta,
+        }
 
     @server.tool(
         name="compile_h3_t2va_artifact",
         description=(
-            "Build a verified MiniMax-H3 text-to-video-with-audio PromptArtifact.\n"
+            "Build a verified MiniMax-H3 text-to-video-with-audio prompt.\n"
             "Use for camera-video t2v-video stages (no reference images). "
             "Caller supplies facts + duration_seconds + shot_count + a single "
             "integrated_multimodal_description (with [Shot 1]...[Shot N] "
             "markers and At MM:SS.mmm cut timestamps) + optional "
-            "overall_soundscape + non_diegetic_music."
+            "overall_soundscape + non_diegetic_music. Returns "
+            "{ref_id, prompt, metadata}."
         ),
         input_schema={
             "type": "object",
@@ -375,20 +381,25 @@ def main() -> None:
     )
     async def compile_h3_t2va(request: dict) -> dict:
         req = _coerce_h3_t2va_request(request)
-        artifact_dict = author_h3_t2va(req)
-        return validate_prompt_artifact(artifact_dict, expected_task="h3_t2va")
+        slim = author_h3_t2va(req)
+        meta = build_log.metadata(slim["ref_id"]) or {}
+        return {
+            "ref_id": slim["ref_id"],
+            "prompt": slim["prompt"],
+            "metadata": meta,
+        }
 
     @server.tool(
         name="compile_h3_ref2va_artifact",
         description=(
-            "Build a verified MiniMax-H3 reference-to-video-with-audio "
-            "PromptArtifact.\n"
+            "Build a verified MiniMax-H3 reference-to-video-with-audio prompt.\n"
             "Use for camera-video i2v-video / multi-i2v-video stages (one or "
             "three reference images). Caller supplies facts + duration_seconds + "
             "shot_count + references (list of {reference_id: 'Picture N', owner, "
             "resized_width, resized_height}) + subject_definitions + summary + "
             "retention_analysis + detailed_description + optional soundscape/music. "
-            "All 'Picture N' labels in the text must resolve to ordered references."
+            "All 'Picture N' labels in the text must resolve to ordered references. "
+            "Returns {ref_id, prompt, metadata}."
         ),
         input_schema={
             "type": "object",
@@ -409,8 +420,13 @@ def main() -> None:
     )
     async def compile_h3_ref2va(request: dict) -> dict:
         req = _coerce_h3_ref2va_request(request)
-        artifact_dict = author_h3_ref2va(req)
-        return validate_prompt_artifact(artifact_dict, expected_task="h3_ref2va")
+        slim = author_h3_ref2va(req)
+        meta = build_log.metadata(slim["ref_id"]) or {}
+        return {
+            "ref_id": slim["ref_id"],
+            "prompt": slim["prompt"],
+            "metadata": meta,
+        }
     async def list_tools() -> dict:
         return {
             "skills": [
@@ -418,6 +434,81 @@ def main() -> None:
                 for sd in skills
             ]
         }
+
+    @server.tool(
+        name="get_build_audit",
+        description=(
+            "Return the full server-side BuildLog (audit trail) for a "
+            "compile_*_artifact call by ref id. Includes facts, trace, "
+            "token_report, audit, compression, conflict, and sha256. "
+            "Use only when the caller needs to inspect the build process; "
+            "for runtime execution the prompt ref id is enough."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "ref_id": {
+                    "type": "string",
+                    "description": "The 32-character ref id returned by a compile_*_artifact call.",
+                },
+            },
+            "required": ["ref_id"],
+            "additionalProperties": False,
+        },
+    )
+    async def get_build_audit(ref_id: str) -> dict:
+        log = build_log.get(ref_id)
+        if log is None:
+            raise ValueError(f"unknown BuildLog ref_id: {ref_id!r}")
+        return log
+
+    @server.tool(
+        name="get_build_metadata",
+        description=(
+            "Return a small summary of a BuildLog (ref id, task, status, "
+            "sha256 prefix, token count, fact count, compression count, "
+            "has_conflict). Use this to decide whether a stored build is "
+            "production_ready without paying the cost of the full audit log."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "ref_id": {
+                    "type": "string",
+                    "description": "The 32-character ref id returned by a compile_*_artifact call.",
+                },
+            },
+            "required": ["ref_id"],
+            "additionalProperties": False,
+        },
+    )
+    async def get_build_metadata(ref_id: str) -> dict:
+        meta = build_log.metadata(ref_id)
+        if meta is None:
+            raise ValueError(f"unknown BuildLog ref_id: {ref_id!r}")
+        return meta
+
+    @server.tool(
+        name="delete_prompt_artifact",
+        description=(
+            "Remove a BuildLog from the server-side registry. Use to free "
+            "memory when a build is no longer needed. Returns true if "
+            "the ref was present, false otherwise."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "ref_id": {
+                    "type": "string",
+                    "description": "The 32-character ref id returned by a compile_*_artifact call.",
+                },
+            },
+            "required": ["ref_id"],
+            "additionalProperties": False,
+        },
+    )
+    async def delete_prompt_artifact(ref_id: str) -> dict:
+        return {"deleted": build_log.delete(ref_id)}
 
     @server.tool(
         name="describe_config",
@@ -445,8 +536,10 @@ def main() -> None:
             "Dry-run validation: same envelope + config shape as run_skill, returns "
             "{ok, errors}. Use this BEFORE run_skill to surface field errors without "
             "spending GPU time.\n"
-            "For camera-image/video, the envelope contains exactly one complete Prompt Forge artifact:\n"
-            "  envelope = {\"prompt_artifact\": <production_ready artifact>}\n"
+            "For camera-image and camera-video, the envelope carries the model-native prompt:\n"
+            "  envelope = {\"prompt\": <prompt dict from compile_*_artifact>}\n"
+            "  e.g. for anima: envelope = {\"prompt\": {\"positive\": \"...\", \"negative\": \"...\"}}\n"
+            "  e.g. for h3_t2va / h3_ref2va: envelope = {\"prompt\": {\"text\": \"...\"}}\n"
             "For camera-multiview, envelope = {}.\n"
             "  config = {\"image_size\": {\"width\": 1200, \"height\": 800}}\n"
             "FORBIDDEN in both envelope and config (these belong to the camera skill, not here):\n"
@@ -476,16 +569,16 @@ def main() -> None:
             "Pre-flight: validate_config is run first; on validation failure the run is "
             "aborted before any GPU time is spent and the response carries the full error list.\n"
             "On runtime failure, payload.error_category is one of:\n"
-            "  prompt_forge_input   — fix the PromptArtifact input\n"
+            "  prompt_forge_input   — fix the prompt_artifact input\n"
             "  engine_build         — server-side bug, file an issue\n"
             "  comfyui_runtime      — ComfyUI rejected the workflow, check model/queue/connection\n"
             "  unknown              — unclassified; treat as engine_build\n"
-            "For camera-image/video, envelope = {\"prompt_artifact\": <production_ready artifact>}.\n"
+            "For camera-image/video, envelope = {\"prompt\": <prompt dict from compile_*_artifact>}.\n"
             "For camera-multiview, envelope = {} because its fixed graph has no prompt input.\n"
             "For camera-image, config may contain image_size and runtime tunables.\n"
             "For full schema call describe_config(skill=\"camera-image\", stage=\"t2i-camera\").\n"
             "For camera-video (t2v / i2v / multi-i2v) stages:\n"
-            "  envelope = {\"prompt_artifact\": <production_ready H3 artifact>}\n"
+            "  envelope = {\"prompt\": {\"text\": \"<the H3 production prompt>\"}}\n"
             "  config = {\"duration\": 8.0, \"reference_image_1\": \"/path/to/img.png\"}\n"
             "  CRITICAL: `duration` is a JSON number (8.0), NOT a string (\"8.0\").\n"
             "FORBIDDEN in both envelope and config (these belong to the camera skill, not here):\n"

@@ -1,5 +1,13 @@
-"""Strict Prompt Forge authoring bridge and artifact-consumption gate."""
+"""Strict Prompt Forge authoring bridge.
 
+author_* build a PromptArtifact, register it in the server-side
+BuildLog registry, and return only a slim {ref_id, prompt} dict.
+Callers carry the 32-character ref id across turns; they fetch the
+full audit log on demand via build_log.get(ref_id).
+
+This replaces the earlier "return the full 14-field artifact dict"
+pattern that forced the LLM to carry the certificate as a payload.
+"""
 from __future__ import annotations
 
 import hashlib
@@ -7,6 +15,9 @@ import json
 import sys
 from pathlib import Path
 from typing import Any
+
+from . import build_log
+from .build_log import register as _register_build
 
 
 PROMPT_FORGE_ROOT = (
@@ -24,12 +35,6 @@ _PROMPT_KEYS = {
     "h3_t2va": frozenset({"text"}),
     "h3_ref2va": frozenset({"text"}),
 }
-_ARTIFACT_KEYS = frozenset({
-    "artifact_version", "status", "task", "model", "prompt", "facts",
-    "trace", "token_report", "audit", "compression", "conflict",
-    "sacrificed_facts", "token_count_verified", "knowledge_manifest_sha256",
-    "artifact_sha256",
-})
 
 
 def _ensure_prompt_forge_on_path() -> None:
@@ -43,122 +48,151 @@ def _ensure_prompt_forge_on_path() -> None:
         sys.path.insert(0, root)
 
 
+def _build_to_slim(artifact_dict: dict[str, Any]) -> dict[str, Any]:
+    """Register the full artifact in the BuildLog registry and return
+    only the slim {ref_id, prompt} dict that callers carry.
+    """
+    ref_id = _register_build(
+        artifact_version=artifact_dict.get("artifact_version", 1),
+        task=artifact_dict["task"],
+        model=artifact_dict["model"],
+        prompt=artifact_dict["prompt"],
+        facts=tuple(artifact_dict["facts"] or ()),
+        trace=dict(artifact_dict["trace"] or {}),
+        token_report=dict(artifact_dict["token_report"] or {}),
+        audit=dict(artifact_dict["audit"] or {}),
+        compression=tuple(artifact_dict["compression"] or ()),
+        conflict=artifact_dict.get("conflict"),
+        sacrificed_facts=tuple(artifact_dict.get("sacrificed_facts") or ()),
+        token_count_verified=bool(artifact_dict.get("token_count_verified", False)),
+        knowledge_manifest_sha256=str(artifact_dict.get("knowledge_manifest_sha256", "")),
+        artifact_sha256=str(artifact_dict.get("artifact_sha256", "")),
+        status=str(artifact_dict.get("status", "")),
+    )
+    return {
+        "ref_id": ref_id,
+        "prompt": artifact_dict["prompt"],
+    }
+
+
 def author_anima(request: Any) -> dict[str, Any]:
     _ensure_prompt_forge_on_path()
     from prompt_forge import author_anima_prompt
-
-    return author_anima_prompt(request).to_dict()
+    return _build_to_slim(author_anima_prompt(request).to_dict())
 
 
 def author_h3_t2va(request: Any) -> dict[str, Any]:
     _ensure_prompt_forge_on_path()
     from prompt_forge import author_h3_t2va_prompt
-
-    return author_h3_t2va_prompt(request).to_dict()
+    return _build_to_slim(author_h3_t2va_prompt(request).to_dict())
 
 
 def author_h3_ref2va(request: Any) -> dict[str, Any]:
     _ensure_prompt_forge_on_path()
     from prompt_forge import author_h3_ref2va_prompt
-
-    return author_h3_ref2va_prompt(request).to_dict()
+    return _build_to_slim(author_h3_ref2va_prompt(request).to_dict())
 
 
 def validate_prompt_artifact(
-    artifact: Any,
+    ref_id: str,
     *,
     expected_task: str,
     expected_reference_count: int | None = None,
     expected_duration: float | None = None,
-) -> dict[str, Any]:
-    """Return an exact production artifact or fail closed without coercion."""
+) -> dict[str, str]:
+    """Resolve a BuildLog ref id and return its prompt dict or fail closed.
+
+    The BuildLog must exist, have `status == production_ready`, match
+    the expected_task, pass task-specific content checks, and have a
+    valid content hash. Returns the resolved prompt dict on success.
+    """
     if expected_task not in _MODELS:
         raise ValueError(f"unsupported Prompt Forge task: {expected_task!r}")
-    if not isinstance(artifact, dict):
-        raise TypeError("prompt_artifact must be an object")
-    unknown = set(artifact) - _ARTIFACT_KEYS
-    missing = _ARTIFACT_KEYS - set(artifact)
-    if unknown or missing:
+    log = build_log.get(ref_id)
+    if log is None:
+        raise ValueError(f"unknown BuildLog ref_id: {ref_id!r}")
+    if log["status"] != "production_ready":
+        raise ValueError(f"BuildLog {ref_id} status is {log['status']!r}, not production_ready")
+    if log["task"] != expected_task:
         raise ValueError(
-            f"prompt_artifact has unknown fields {sorted(unknown)} or missing fields {sorted(missing)}"
+            f"BuildLog {ref_id} task is {log['task']!r}, expected {expected_task!r}"
         )
-    if artifact["artifact_version"] != 1:
-        raise ValueError("prompt_artifact.artifact_version must be 1")
-    if artifact["status"] != "production_ready":
-        raise ValueError("prompt_artifact.status must be production_ready")
-    if artifact["task"] != expected_task:
-        raise ValueError(
-            f"prompt_artifact.task must be {expected_task!r}, got {artifact['task']!r}"
-        )
-    if artifact["model"] != _MODELS[expected_task]:
-        raise ValueError("prompt_artifact.model does not match its task")
-    if artifact["token_count_verified"] is not True:
-        raise ValueError("prompt_artifact.token_count_verified must be true")
-    if artifact["sacrificed_facts"] != []:
-        raise ValueError("prompt_artifact.sacrificed_facts must be empty")
-    if artifact["conflict"] is not None:
-        raise ValueError("production prompt_artifact cannot contain a conflict")
-    prompt = artifact["prompt"]
+    if log["model"] != _MODELS[expected_task]:
+        raise ValueError(f"BuildLog {ref_id} model does not match its task")
+    if log["token_count_verified"] is not True:
+        raise ValueError(f"BuildLog {ref_id} token_count_verified is false")
+    if log["sacrificed_facts"]:
+        raise ValueError(f"BuildLog {ref_id} has non-empty sacrificed_facts")
+    if log["conflict"] is not None:
+        raise ValueError(f"BuildLog {ref_id} has unresolved conflict")
+    prompt = log["prompt"]
     if not isinstance(prompt, dict) or set(prompt) != _PROMPT_KEYS[expected_task]:
-        raise ValueError("prompt_artifact.prompt has the wrong model-native fields")
+        raise ValueError(f"BuildLog {ref_id} prompt has the wrong model-native fields")
     if any(not isinstance(value, str) for value in prompt.values()):
-        raise ValueError("prompt_artifact prompt values must be strings")
+        raise ValueError(f"BuildLog {ref_id} prompt values must be strings")
     required_text = prompt["positive"] if expected_task == "anima" else prompt["text"]
     if not required_text.strip():
-        raise ValueError("prompt_artifact executable prompt must be non-empty")
-    knowledge_hash = artifact["knowledge_manifest_sha256"]
-    if not isinstance(knowledge_hash, str) or len(knowledge_hash) != 64:
-        raise ValueError("prompt_artifact knowledge hash must be SHA-256")
-    expected_hash = _artifact_hash(artifact)
-    if artifact["artifact_sha256"] != expected_hash:
-        raise ValueError("prompt_artifact content hash is invalid")
+        raise ValueError(f"BuildLog {ref_id} executable prompt must be non-empty")
+    if len(log["knowledge_manifest_sha256"]) != 64:
+        raise ValueError(f"BuildLog {ref_id} knowledge hash must be SHA-256")
+    expected_hash = _log_hash(log)
+    if log["artifact_sha256"] != expected_hash:
+        raise ValueError(f"BuildLog {ref_id} content hash is invalid")
     if expected_task == "h3_ref2va":
-        _validate_reference_context(artifact, expected_reference_count)
+        _validate_reference_context(log, expected_reference_count)
     elif expected_reference_count not in (None, 0):
         raise ValueError("non-reference task cannot bind reference images")
     if expected_task.startswith("h3_") and expected_duration is not None:
-        _validate_duration(artifact, expected_duration)
-    return artifact
+        _validate_duration(log, expected_duration)
+    return prompt
 
 
-def _artifact_hash(artifact: dict[str, Any]) -> str:
-    base = {key: value for key, value in artifact.items() if key != "artifact_sha256"}
+def _log_hash(log: dict[str, Any]) -> str:
+    # Hash the stored content excluding the two bookkeeping fields
+    # (ref_id and the stored artifact_sha256 itself) so the stored
+    # artifact_sha256 is the digest of everything else — matching the
+    # create_prompt_artifact semantics from the prompt-forge library.
+    base = {
+        key: value
+        for key, value in log.items()
+        if key not in ("ref_id", "artifact_sha256")
+    }
     raw = json.dumps(base, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 def _validate_reference_context(
-    artifact: dict[str, Any],
+    log: dict[str, Any],
     expected_reference_count: int | None,
 ) -> None:
-    audit = artifact.get("audit")
+    audit = log.get("audit")
     references = audit.get("reference_context") if isinstance(audit, dict) else None
     if not isinstance(references, list) or not references:
-        raise ValueError("Ref2VA prompt_artifact requires verified reference_context")
+        raise ValueError("Ref2VA BuildLog requires verified reference_context")
     if expected_reference_count is not None and len(references) != expected_reference_count:
-        raise ValueError("prompt_artifact reference count does not match the execution stage")
+        raise ValueError("BuildLog reference count does not match the execution stage")
     for index, reference in enumerate(references, start=1):
         if not isinstance(reference, dict):
-            raise ValueError("prompt_artifact reference_context entries must be objects")
+            raise ValueError("BuildLog reference_context entries must be objects")
         if set(reference) != {"reference_id", "owner", "resized_width", "resized_height"}:
-            raise ValueError("prompt_artifact reference_context fields are invalid")
+            raise ValueError("BuildLog reference_context fields are invalid")
         if reference["reference_id"] != f"Picture {index}":
-            raise ValueError("prompt_artifact reference order is invalid")
+            raise ValueError("BuildLog reference order is invalid")
         if not isinstance(reference["owner"], str) or not reference["owner"].strip():
-            raise ValueError("prompt_artifact reference owner is invalid")
+            raise ValueError("BuildLog reference owner is invalid")
         for dimension in ("resized_width", "resized_height"):
             value = reference[dimension]
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-                raise ValueError("prompt_artifact reference dimensions are invalid")
+                raise ValueError("BuildLog reference dimensions are invalid")
 
 
-def _validate_duration(artifact: dict[str, Any], expected_duration: float) -> None:
+def _validate_duration(log: dict[str, Any], expected_duration: float) -> None:
     if isinstance(expected_duration, bool) or not isinstance(expected_duration, (int, float)):
         raise TypeError("expected H3 duration must be numeric")
-    audit = artifact.get("audit")
+    audit = log.get("audit")
     shots = audit.get("shots") if isinstance(audit, dict) else None
     if not isinstance(shots, list) or not shots:
-        raise ValueError("H3 prompt_artifact requires an audited shot timeline")
+        raise ValueError("H3 BuildLog requires an audited shot timeline")
     final_end = shots[-1].get("end_seconds") if isinstance(shots[-1], dict) else None
     if not isinstance(final_end, (int, float)) or float(final_end) != float(expected_duration):
-        raise ValueError("prompt_artifact duration does not match execution duration")
+        raise ValueError("BuildLog duration does not match execution duration")

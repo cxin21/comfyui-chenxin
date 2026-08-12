@@ -53,10 +53,12 @@ def validate_config(
         errors.extend(envelope_errors)
     else:
         envelope_errors = []
-        if set(envelope) != {"prompt_artifact"}:
-            errors.append("envelope must contain exactly prompt_artifact")
-        elif not isinstance(envelope["prompt_artifact"], dict):
-            errors.append("envelope.prompt_artifact must be an object")
+        if set(envelope) - {"prompt", "prompt_ref"}:
+            errors.append(
+                f"envelope may contain only prompt and prompt_ref, got {sorted(set(envelope))}"
+            )
+        elif not isinstance(envelope.get("prompt"), dict):
+            errors.append("envelope.prompt must be an object")
 
     if not envelope_errors:
         try:

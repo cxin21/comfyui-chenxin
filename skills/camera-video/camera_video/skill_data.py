@@ -11,27 +11,38 @@ from .runtime.source_workflow import prepare_workflow
 
 
 def compile_prompt_gate(config) -> dict:
-    """Validate the complete model-native artifact before workflow use."""
+    """Resolve the prompt before workflow use.
+
+    If config.prompt_ref is set, fetch and verify the BuildLog
+    server-side. Otherwise trust config.prompt directly.
+    """
     from comfyui_chenxin_mcp.engine.prompt_forge import validate_prompt_artifact
 
     reference_count = sum(
         bool(getattr(config, f"reference_image_{index}", None))
         for index in range(1, 4)
     )
-    return validate_prompt_artifact(
-        config.prompt_artifact,
-        expected_task="h3_ref2va" if reference_count else "h3_t2va",
-        expected_reference_count=reference_count,
-        expected_duration=config.duration,
-    )
+    if config.prompt_ref is not None:
+        return validate_prompt_artifact(
+            config.prompt_ref,
+            expected_task="h3_ref2va" if reference_count else "h3_t2va",
+            expected_reference_count=reference_count,
+            expected_duration=config.duration,
+        )
+    # No ref id; trust the caller's prompt directly.
+    return dict(config.prompt)
 
 
 def validate_envelope(envelope: dict) -> list[str]:
     """Validate the video envelope boundary before config construction."""
-    if set(envelope) != {"prompt_artifact"}:
-        return ["envelope must contain exactly prompt_artifact"]
-    if not isinstance(envelope["prompt_artifact"], dict):
-        return ["envelope.prompt_artifact must be an object"]
+    if set(envelope) - {"prompt", "prompt_ref"}:
+        return [f"envelope may contain only prompt and prompt_ref, got {sorted(set(envelope))}"]
+    if "prompt" not in envelope:
+        return ["envelope must contain exactly prompt"]
+    if not isinstance(envelope["prompt"], dict):
+        return ["envelope.prompt must be an object"]
+    if "prompt_ref" in envelope and not isinstance(envelope["prompt_ref"], str):
+        return ["envelope.prompt_ref must be a string when present"]
     return []
 
 

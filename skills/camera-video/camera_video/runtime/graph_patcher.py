@@ -15,15 +15,19 @@ def apply_run_config(graph: dict[str, Any], stage: str, config: RunConfig) -> di
     from comfyui_chenxin_mcp.engine.prompt_forge import validate_prompt_artifact
 
     reference_count = len(IMAGE_FIELDS.get(stage, ()))
-    artifact = validate_prompt_artifact(
-        config.prompt_artifact,
-        expected_task="h3_ref2va" if reference_count else "h3_t2va",
-        expected_reference_count=reference_count,
-        expected_duration=config.duration,
-    )
+    expected_task = "h3_ref2va" if reference_count else "h3_t2va"
+    if config.prompt_ref is not None:
+        prompt = validate_prompt_artifact(
+            config.prompt_ref,
+            expected_task=expected_task,
+            expected_reference_count=reference_count,
+            expected_duration=config.duration,
+        )
+    else:
+        prompt = dict(config.prompt)
     spec = scene_spec(stage)
     result = deepcopy(graph)
-    result[str(spec["prompt_node"])]["inputs"]["value"] = artifact["prompt"]["text"]
+    result[str(spec["prompt_node"])]["inputs"]["value"] = prompt["text"]
     result[str(spec["duration_node"])]["inputs"]["value"] = config.duration
     for index, node_id in enumerate(spec.get("image_nodes", []), start=1):
         result[str(node_id)]["inputs"]["image"] = getattr(config, f"reference_image_{index}")
@@ -34,7 +38,7 @@ def describe_config(stage: str) -> dict[str, Any]:
     """Describe exactly the user-configurable surface for one video scene."""
     spec = scene_spec(stage)
     fields: dict[str, dict[str, Any]] = {
-        "prompt_artifact": {
+        "prompt": {
             "type": "object",
             "required": True,
             "node_id": str(spec["prompt_node"]),

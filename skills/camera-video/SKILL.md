@@ -1,28 +1,28 @@
 ---
 name: camera-video
-description: Execute local ComfyUI MiniMax-H3 text-to-video-with-audio or one/three-image reference-to-video-with-audio using fixed release workflows. Use after prompt-forge has returned a production_ready h3_t2va or h3_ref2va prompt_artifact.
+description: Execute local ComfyUI MiniMax-H3 text-to-video-with-audio or one/three-image reference-to-video-with-audio using fixed release workflows. Use after prompt-forge has returned a model-native h3_t2va or h3_ref2va prompt (via compile_h3_t2va_artifact / compile_h3_ref2va_artifact).
 ---
 
 # Camera Video
 
-Consume one complete `prompt_artifact`; do not accept raw prompt text or author video fields here.
+Consume the model-native `prompt` dict from Prompt Forge; do not accept raw prompt text or author video fields here.
 
 ## Select one stage
 
-| Stage | Artifact task | Required config |
+| Stage | Prompt task | Required config |
 |---|---|---|
 | `t2v-video` | `h3_t2va` | numeric `duration` |
 | `i2v-video` | `h3_ref2va` | `duration`, `reference_image_1` |
 | `multi-i2v-video` | `h3_ref2va` | `duration`, `reference_image_1..3` |
 
-Call `describe_config`, `validate_config`, then `run_skill`. The envelope contains exactly `prompt_artifact`. `duration` is a JSON number from 2 through 15 and must equal the final audited shot end time. Reference count must equal the artifact's ordered `reference_context`; changing a picture's owner, order, or verified dimensions invalidates the artifact hash.
+Call `describe_config`, `validate_config`, then `run_skill`. The envelope contains the `prompt` dict (from compile_h3_*_artifact) and optional `prompt_ref`. `duration` is a JSON number from 2 through 15 and must equal the final audited shot end time. Reference count must equal the prompt's ordered reference set; changing a picture's owner, order, or verified dimensions invalidates the build.
 
 ## Execution
 
-1. Validate hash, version, production status, exact task/model, exact-token flag, prompt fields, conflict state, sacrificed facts, reference context, and duration.
+1. Resolve the prompt (direct dict, or via BuildLog ref if `prompt_ref` is given).
 2. Load the stage's hash-locked API graph from `camera_video/runtime/workflow_assets/manifest.json`.
 3. Upload required local images and write only returned filenames in strict order.
-4. Revalidate the artifact in the graph patcher, then write only its `text`, duration, and image filenames.
+4. Revalidate the prompt in the graph patcher, then write only its `text`, duration, and image filenames.
 5. Validate the project graph, ComfyUI graph, and local runtime.
 6. Enqueue once, wait for terminal history, download every saved MP4, and record byte count and SHA-256.
 

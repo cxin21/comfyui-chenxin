@@ -334,8 +334,12 @@ def apply_run_config(
     # 1. Prompts.
     from comfyui_chenxin_mcp.engine.prompt_forge import validate_prompt_artifact
 
-    artifact = validate_prompt_artifact(config.prompt_artifact, expected_task="anima")
-    prompt = artifact["prompt"]
+    if config.prompt_ref is not None:
+        prompt = validate_prompt_artifact(
+            config.prompt_ref, expected_task="anima"
+        )
+    else:
+        prompt = dict(config.prompt)
     _set_prompt(graph, "24", prompt["positive"].strip())
     _set_prompt(graph, "25", prompt["negative"].strip())
 
@@ -480,13 +484,13 @@ def describe_config(stage: str = STAGES.T2I) -> dict[str, Any]:
 
     # Special slots that don't map to NODE_FIELD_MAP.
     slots["positive"] = {
-        "source": "envelope.prompt_artifact.prompt.positive",
+        "source": "envelope.prompt.positive",
         "node": "24",
         "type": "ImpactWildcardProcessor",
         "required": True,
     }
     slots["negative"] = {
-        "source": "envelope.prompt_artifact.prompt.negative",
+        "source": "envelope.prompt.negative",
         "node": "25",
         "type": "ImpactWildcardProcessor",
         "required": True,

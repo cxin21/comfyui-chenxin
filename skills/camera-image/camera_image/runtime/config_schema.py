@@ -87,11 +87,16 @@ class GroupsConfig:
 class RunConfig:
     """Top-level config for patch_graph + run_t2i / run_i2i.
 
-    Mandatory: one complete Prompt Forge artifact.
+    Mandatory: the model-native prompt (positive + negative for Anima).
+    Optional prompt_ref: 32-character BuildLog ref id from
+    compile_anima_artifact; the gate resolves it server-side so callers
+    can carry only the ref across turns instead of the full artifact.
     All other fields are optional — fall through to workflow.json defaults when None.
     """
-    # prompt-forge gate (always required)
-    prompt_artifact: dict[str, Any]
+    # prompt-forge payload (required; comes from compile_anima_artifact)
+    prompt: dict[str, str]
+    # optional BuildLog ref id (gate verifies the ref is still production_ready)
+    prompt_ref: str | None = None
     # existing tunables
     camera: CameraConfig | None = None
     camera_extra: dict | None = None
@@ -113,19 +118,23 @@ class RunConfig:
     def from_envelope(cls, envelope: dict, **tunables) -> "RunConfig":
         """Build RunConfig from an envelope dict + tunable kwargs.
 
-        envelope contains exactly ``prompt_artifact``.
+        envelope must contain ``prompt`` (dict from compile_anima_artifact)
+        and may carry an optional ``prompt_ref`` (BuildLog ref id).
         tunables: camera (dict), camera_extra (dict), lora (dict),
                   groups (dict), sampling (dict), seed (int),
                   image_size (dict), reference_image (str), controlnet_image (str).
         """
         if not isinstance(envelope, dict):
             raise TypeError("envelope must be an object")
-        unknown_envelope = sorted(set(envelope) - {"prompt_artifact"})
+        unknown_envelope = sorted(set(envelope) - {"prompt", "prompt_ref"})
         if unknown_envelope:
             raise TypeError(f"unsupported envelope field(s): {unknown_envelope}")
-        prompt_artifact = envelope.get("prompt_artifact")
-        if not isinstance(prompt_artifact, dict):
-            raise TypeError("envelope.prompt_artifact must be an object")
+        prompt = envelope.get("prompt")
+        if not isinstance(prompt, dict):
+            raise TypeError("envelope.prompt must be an object")
+        prompt_ref = envelope.get("prompt_ref")
+        if prompt_ref is not None and (not isinstance(prompt_ref, str) or len(prompt_ref) == 0):
+            raise TypeError("envelope.prompt_ref must be a non-empty string when provided")
         unknown_tunables = sorted(set(tunables) - _ALLOWED_TUNABLES)
         if unknown_tunables:
             raise TypeError(f"unsupported camera-image config field(s): {unknown_tunables}")
@@ -142,9 +151,10 @@ class RunConfig:
         if isinstance(groups, dict):
             groups = GroupsConfig(**groups)
         if groups is not None and GROUPS.AREA_PROMPT in ((groups.g1 or []) + (groups.g2 or [])):
-            raise ValueError("regional prompt group is outside the PromptArtifact contract")
+            raise ValueError("regional prompt group is outside the prompt contract")
         return cls(
-            prompt_artifact=dict(prompt_artifact),
+            prompt=dict(prompt),
+            prompt_ref=prompt_ref,
             camera=camera,
             camera_extra=tunables.get("camera_extra"),
             lora=tunables.get("lora"),

@@ -69,10 +69,10 @@ def run_skill(
     run_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        # Step 1: validate PromptArtifact for prompt-consuming skills.
-        prompt_artifact = None
+        # Step 1: validate the model-native prompt for prompt-consuming skills.
+        prompt_gate_result = None
         if skill_data.prompt_gate_fn is not None:
-            prompt_artifact = skill_data.prompt_gate_fn(config)
+            prompt_gate_result = skill_data.prompt_gate_fn(config)
 
         # Step 2: upload stage_images.
         patch_config = config
@@ -162,6 +162,8 @@ def run_skill(
         }, 1
 
     duration_ms = int((time.monotonic() - started) * 1000)
+    # prompt_gate_fn returns the resolved model-native prompt dict.
+    # Record it (plus the optional BuildLog ref id) for reproducibility.
     run_record = {
         "schema_version": "2.0",
         "stage": stage,
@@ -169,12 +171,8 @@ def run_skill(
         "artifact": artifact,
         "duration_ms": duration_ms,
         "config": asdict(config),
-        "prompt_artifact_sha256": (
-            prompt_artifact["artifact_sha256"] if prompt_artifact is not None else None
-        ),
-        "prompt_artifact_audit": (
-            prompt_artifact["audit"] if prompt_artifact is not None else None
-        ),
+        "prompt": prompt_gate_result if prompt_gate_result is not None else None,
+        "prompt_ref": getattr(config, "prompt_ref", None),
     }
     (run_dir / "submitted-graph.json").write_text(
         json.dumps(graph, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -194,9 +192,8 @@ def run_skill(
         "artifact": artifact,
         "duration_ms": duration_ms,
         "run_record_path": str(run_dir / "run-record.json"),
-        "prompt_artifact_sha256": (
-            prompt_artifact["artifact_sha256"] if prompt_artifact is not None else None
-        ),
+        "prompt": prompt_gate_result if prompt_gate_result is not None else None,
+        "prompt_ref": getattr(config, "prompt_ref", None),
     }
     return payload, 0
 

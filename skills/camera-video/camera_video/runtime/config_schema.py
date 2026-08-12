@@ -29,7 +29,8 @@ ALLOWED_FIELDS = {
 
 @dataclass(frozen=True)
 class RunConfig:
-    prompt_artifact: dict[str, Any]
+    prompt: dict[str, str]
+    prompt_ref: str | None = None
     duration: float
     reference_image_1: str | None = None
     reference_image_2: str | None = None
@@ -41,12 +42,15 @@ class RunConfig:
     def from_envelope(cls, envelope: dict[str, Any], **tunables: Any) -> "RunConfig":
         if not isinstance(envelope, dict):
             raise TypeError("envelope must be an object")
-        unknown_envelope = sorted(set(envelope) - {"prompt_artifact"})
+        unknown_envelope = sorted(set(envelope) - {"prompt", "prompt_ref"})
         if unknown_envelope:
             raise TypeError(f"unsupported envelope field(s): {unknown_envelope}")
-        prompt_artifact = envelope.get("prompt_artifact")
-        if not isinstance(prompt_artifact, dict):
-            raise TypeError("envelope.prompt_artifact must be an object")
+        prompt = envelope.get("prompt")
+        if not isinstance(prompt, dict):
+            raise TypeError("envelope.prompt must be an object")
+        prompt_ref = envelope.get("prompt_ref")
+        if prompt_ref is not None and (not isinstance(prompt_ref, str) or len(prompt_ref) == 0):
+            raise TypeError("envelope.prompt_ref must be a non-empty string when present")
         unknown = sorted(set(tunables) - ALLOWED_FIELDS)
         if unknown:
             raise TypeError(
@@ -66,7 +70,8 @@ class RunConfig:
                 f"duration must be between 2 and 15 seconds, got {duration}"
             )
         return cls(
-            prompt_artifact=dict(prompt_artifact),
+            prompt=dict(prompt),
+            prompt_ref=prompt_ref,
             duration=duration,
             reference_image_1=tunables.get("reference_image_1"),
             reference_image_2=tunables.get("reference_image_2"),
