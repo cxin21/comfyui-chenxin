@@ -1,6 +1,6 @@
 ---
 name: camera-image
-description: Execute local ComfyUI Anima still-image production for text-to-image or image-to-image using the fixed camera-image workflow. Use after prompt-forge has returned a model-native Anima prompt (via compile_anima_artifact), including when the request needs camera controls, image size, ControlNet, or camera-owned LoRA execution settings.
+description: Execute local ComfyUI Anima still-image production for text-to-image or image-to-image using the fixed camera-image workflow. Use after prompt-forge has returned a model-native Anima prompt (via compile_prompt_artifact with task="anima"), including when the request needs camera controls, image size, ControlNet, or camera-owned LoRA execution settings.
 ---
 
 # Camera Image
@@ -23,7 +23,7 @@ Call `describe_config`, then `validate_config`, then `run_skill`. Pass the envel
 }
 ```
 
-The `prompt` dict is the `prompt` field returned by `compile_anima_artifact`. You may also pass an optional `prompt_ref` (the 32-character BuildLog ref id) instead of or alongside the prompt; when present, the server resolves and re-verifies it.
+The `prompt` dict is the `prompt` field returned by `compile_prompt_artifact` with `task="anima"`. You may also pass an optional `prompt_ref` (the 32-character BuildLog ref id) instead of or alongside the prompt; when present, the server resolves and re-verifies it.
 
 ## Fixed execution boundary
 

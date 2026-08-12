@@ -1,14 +1,24 @@
-# MCP PromptArtifact bridge
+# MCP Prompt Forge bridge
 
-The MCP bridge has two responsibilities: expose the three explicit Prompt Forge author calls to Python consumers, and validate complete artifacts before camera execution. It does not convert raw prompt prose into a request and does not infer a task.
+The MCP bridge has two responsibilities: expose Prompt Forge authoring as a
+single parameterized tool, and gate camera execution against a verified build.
+It does not convert raw prompt prose into a request and does not infer a task.
 
-## Authoring calls
+## Authoring tool
 
-- `author_anima(request)`
-- `author_h3_t2va(request)`
-- `author_h3_ref2va(request)`
+One tool covers every authoring task — the surface does not grow per model:
 
-Each accepts its exact frozen request type and returns canonical artifact JSON.
+- `compile_prompt_artifact(task, request)` — build a verified model-native
+  prompt and register its BuildLog.
+
+`task` is one of `anima` | `h3_t2va` | `h3_ref2va`. The request shape is
+task-specific (see the tool description or the prompt-forge skill). The tool
+returns a slim `{ref_id, prompt, metadata}` dict; the full audit trail lives
+server-side in the BuildLog registry, keyed by the 32-character `ref_id`.
+
+Adding a model adds a `_TASKS` entry in
+`mcp_server/src/comfyui_chenxin_mcp/engine/prompt_forge.py` and a coerce
+function in `server.py` — never a new MCP tool.
 
 ## Camera boundary
 
@@ -16,13 +26,25 @@ Each accepts its exact frozen request type and returns canonical artifact JSON.
 
 ```json
 {
-  "envelope": {"prompt_artifact": {"...": "complete artifact"}},
+  "envelope": {"prompt": {"...": "model-native prompt"}, "prompt_ref": "32-char ref id"},
   "config": {"...": "camera-owned runtime settings"}
 }
 ```
 
-The envelope contains exactly `prompt_artifact`. Validation fails for unknown or missing artifact fields, non-production status, task/model mismatch, false token verification, nonempty sacrificed facts, conflicts, wrong model-native prompt keys, malformed knowledge hash, changed content hash, mismatched reference count/order/owner/dimensions, or changed H3 duration.
+The envelope contains exactly `prompt` (and optionally `prompt_ref`). When a
+ref id is given, the server resolves the BuildLog and re-runs the full
+verification (status production_ready, task/model match, token verification,
+no sacrificed facts, no conflict, correct model-native prompt keys, valid
+knowledge hash, unchanged content hash, matching reference count/order/owner/
+dimensions, and matching H3 duration) before executing. Without a ref id the
+prompt dict is trusted as already-built and validated.
 
-Camera graph patchers re-run the same validator before extracting artifact text. There is no second prompt source and no direct-patcher bypass.
+Camera graph patchers re-run the same gate (`compile_prompt_gate`) before
+extracting prompt text. There is no second prompt source and no
+direct-patcher bypass.
 
-The shared execution engine records the artifact SHA-256 and audit, uploads declared assets, validates the exact graph and local runtime, enqueues once, waits for terminal history, downloads outputs, and records output SHA-256. Prompt Forge remains offline and ignorant of graph nodes and execution settings.
+The shared execution engine records the resolved prompt (and optional
+`prompt_ref`) in the run record, uploads declared assets, validates the exact
+graph and local runtime, enqueues once, waits for terminal history, downloads
+outputs, and records output SHA-256. Prompt Forge remains offline and
+ignorant of graph nodes and execution settings.

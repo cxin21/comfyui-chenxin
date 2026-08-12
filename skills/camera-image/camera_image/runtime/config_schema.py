@@ -89,11 +89,11 @@ class RunConfig:
 
     Mandatory: the model-native prompt (positive + negative for Anima).
     Optional prompt_ref: 32-character BuildLog ref id from
-    compile_anima_artifact; the gate resolves it server-side so callers
+    compile_prompt_artifact; the gate resolves it server-side so callers
     can carry only the ref across turns instead of the full artifact.
     All other fields are optional — fall through to workflow.json defaults when None.
     """
-    # prompt-forge payload (required; comes from compile_anima_artifact)
+    # prompt-forge payload (required; comes from compile_prompt_artifact)
     prompt: dict[str, str]
     # optional BuildLog ref id (gate verifies the ref is still production_ready)
     prompt_ref: str | None = None
@@ -118,7 +118,7 @@ class RunConfig:
     def from_envelope(cls, envelope: dict, **tunables) -> "RunConfig":
         """Build RunConfig from an envelope dict + tunable kwargs.
 
-        envelope must contain ``prompt`` (dict from compile_anima_artifact)
+        envelope must contain ``prompt`` (dict from compile_prompt_artifact)
         and may carry an optional ``prompt_ref`` (BuildLog ref id).
         tunables: camera (dict), camera_extra (dict), lora (dict),
                   groups (dict), sampling (dict), seed (int),

@@ -70,9 +70,10 @@ def test_prompt_free_skill_executes_without_a_compatibility_artifact(tmp_path) -
 
     assert code == 0
     assert payload["accepted"] is True
-    assert payload["prompt_artifact_sha256"] is None
+    assert payload["prompt"] is None
+    assert payload["prompt_ref"] is None
     run_record = json.loads(
         next((tmp_path / "runs").glob("fixed_*/run-record.json")).read_text(encoding="utf-8")
     )
-    assert run_record["prompt_artifact_sha256"] is None
-    assert run_record["prompt_artifact_audit"] is None
+    assert run_record["prompt"] is None
+    assert run_record["prompt_ref"] is None

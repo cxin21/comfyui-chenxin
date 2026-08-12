@@ -30,8 +30,8 @@ ALLOWED_FIELDS = {
 @dataclass(frozen=True)
 class RunConfig:
     prompt: dict[str, str]
-    prompt_ref: str | None = None
     duration: float
+    prompt_ref: str | None = None
     reference_image_1: str | None = None
     reference_image_2: str | None = None
     reference_image_3: str | None = None

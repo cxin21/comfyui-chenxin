@@ -17,9 +17,7 @@ from .engine.validate import validate_config
 from .engine.execute import run_skill
 from .engine.skill_data import SkillData
 from .engine.prompt_forge import (
-    author_anima,
-    author_h3_t2va,
-    author_h3_ref2va,
+    author_prompt,
     validate_prompt_artifact,
 )
 from .engine import build_log
@@ -286,6 +284,16 @@ def _coerce_h3_ref2va_request(payload: dict) -> _pf_contracts.H3Ref2VAAuthoringR
     )
 
 
+# Task → JSON-to-typed-request coercion. The single compile_prompt_artifact
+# tool dispatches here, so adding a model adds one registry entry (plus a
+# _TASKS entry in engine/prompt_forge.py) without growing the MCP surface.
+_COERCERS: dict[str, Any] = {
+    "anima": _coerce_anima_request,
+    "h3_t2va": _coerce_h3_t2va_request,
+    "h3_ref2va": _coerce_h3_ref2va_request,
+}
+
+
 def main() -> None:
     server = Server(name="comfyui-chenxin-mcp", version="0.2.0")
     skills = discover_skills()
@@ -303,143 +311,87 @@ def main() -> None:
             ]
         }
 
-    # ----- Authoring tools: build a verified PromptArtifact -----
-    # These close the gap surfaced in session 5ba39012: callers had no
-    # way to produce the prompt camera-* consumes without writing a
-    # Python build script. Each tool coerces a plain JSON request into
-    # the matching typed dataclass and runs author_*(). The full audit
-    # trail is stored server-side in the BuildLog registry; the tool
-    # returns a slim {ref_id, prompt, metadata} dict. The caller carries
-    # the 32-char ref_id (or the prompt dict) and passes it back via
-    # envelope={"prompt": <dict>, "prompt_ref": <ref_id>} to run_skill.
+    # ----- Authoring tool: build a verified PromptArtifact -----
+    # The single compile_prompt_artifact tool closes the gap surfaced in
+    # session 5ba39012: callers had no way to produce the prompt camera-*
+    # consumes without writing a Python build script. `task` selects a
+    # _COERCERS entry (JSON → typed dataclass) and the matching prompt_forge
+    # author pipeline. The full audit trail is stored server-side in the
+    # BuildLog registry; the tool returns a slim {ref_id, prompt, metadata}
+    # dict. The caller carries the 32-char ref_id (or the prompt dict) and
+    # passes it back via envelope={"prompt": <dict>, "prompt_ref": <ref_id>}
+    # to run_skill. Adding a model adds a _COERCERS + _TASKS entry — never a
+    # new MCP tool.
 
     @server.tool(
-        name="compile_anima_artifact",
+        name="compile_prompt_artifact",
         description=(
-            "Build a verified Anima prompt and register its BuildLog.\n"
-            "Use when the goal is an Anima still image and the caller can "
-            "express it as a list of locked facts + positive/negative "
-            "AuthoredSegments + Complexity (subjects / explicit_relations / "
-            "complex_actions / environment_clusters / natural_language_bridges).\n"
-            "Returns {ref_id, prompt, metadata}. Pass ref_id (and/or the "
-            "prompt dict) back to camera-image via envelope={\"prompt\": ..., "
+            "Build a verified model-native prompt and register its BuildLog.\n"
+            "task selects the authoring pipeline; the request shape differs per task:\n"
+            "  anima     — Anima still image. request: facts (list[Fact]), "
+            "positive_segments (list[AuthoredSegment]), complexity (Complexity), "
+            "negative_segments (optional), exclusion_groups (optional, default 0).\n"
+            "  h3_t2va   — MiniMax-H3 text-to-video-with-audio (no references). "
+            "request: facts, duration_seconds, shot_count, "
+            "integrated_multimodal_description (with [Shot 1]...[Shot N] markers "
+            "and At MM:SS.mmm cut timestamps), overall_soundscape (optional), "
+            "non_diegetic_music (optional).\n"
+            "  h3_ref2va — MiniMax-H3 reference-to-video-with-audio (one or three "
+            "ordered images). request: facts, duration_seconds, shot_count, "
+            "references (list of {reference_id: 'Picture N', owner, "
+            "resized_width, resized_height}), subject_definitions, summary, "
+            "retention_analysis, detailed_description, overall_soundscape "
+            "(optional), non_diegetic_music (optional). All 'Picture N' labels in "
+            "the text must resolve to ordered references.\n"
+            "Returns {ref_id, prompt, metadata}. Pass ref_id (and/or the prompt "
+            "dict) back to run_skill via envelope={\"prompt\": ..., "
             "\"prompt_ref\": ...}."
         ),
         input_schema={
             "type": "object",
             "properties": {
+                "task": {
+                    "type": "string",
+                    "enum": list(_COERCERS),
+                    "description": (
+                        "Which Prompt Forge authoring pipeline to run "
+                        f"({', '.join(sorted(_COERCERS))})."
+                    ),
+                },
                 "request": {
                     "type": "object",
                     "description": (
-                        "AnimaAuthoringRequest fields: facts (list[Fact]), "
-                        "positive_segments (list[AuthoredSegment]), complexity "
-                        "(Complexity), negative_segments (list[AuthoredSegment], "
-                        "optional), exclusion_groups (int, optional, default 0)."
+                        "Task-specific authoring request. The required and "
+                        "optional fields depend on `task`; see the tool "
+                        "description for the per-task shape."
                     ),
                 },
             },
-            "required": ["request"],
+            "required": ["task", "request"],
             "additionalProperties": False,
         },
     )
-    async def compile_anima(request: dict) -> dict:
-        req = _coerce_anima_request(request)
-        slim = author_anima(req)  # returns {ref_id, prompt}
+    async def compile_prompt_artifact(task: str, request: dict) -> dict:
+        coerce = _COERCERS.get(task)
+        if coerce is None:
+            raise ValueError(
+                f"unsupported Prompt Forge task: {task!r}; "
+                f"supported: {sorted(_COERCERS)}"
+            )
+        req = coerce(request)
+        slim = author_prompt(task, req)  # returns {ref_id, prompt}
         meta = build_log.metadata(slim["ref_id"]) or {}
         return {
             "ref_id": slim["ref_id"],
             "prompt": slim["prompt"],
             "metadata": meta,
-        }
-
-    @server.tool(
-        name="compile_h3_t2va_artifact",
-        description=(
-            "Build a verified MiniMax-H3 text-to-video-with-audio prompt.\n"
-            "Use for camera-video t2v-video stages (no reference images). "
-            "Caller supplies facts + duration_seconds + shot_count + a single "
-            "integrated_multimodal_description (with [Shot 1]...[Shot N] "
-            "markers and At MM:SS.mmm cut timestamps) + optional "
-            "overall_soundscape + non_diegetic_music. Returns "
-            "{ref_id, prompt, metadata}."
-        ),
-        input_schema={
-            "type": "object",
-            "properties": {
-                "request": {
-                    "type": "object",
-                    "description": (
-                        "H3T2VAAuthoringRequest fields: facts, duration_seconds, "
-                        "shot_count, integrated_multimodal_description, "
-                        "overall_soundscape (optional), non_diegetic_music (optional)."
-                    ),
-                },
-            },
-            "required": ["request"],
-            "additionalProperties": False,
-        },
-    )
-    async def compile_h3_t2va(request: dict) -> dict:
-        req = _coerce_h3_t2va_request(request)
-        slim = author_h3_t2va(req)
-        meta = build_log.metadata(slim["ref_id"]) or {}
-        return {
-            "ref_id": slim["ref_id"],
-            "prompt": slim["prompt"],
-            "metadata": meta,
-        }
-
-    @server.tool(
-        name="compile_h3_ref2va_artifact",
-        description=(
-            "Build a verified MiniMax-H3 reference-to-video-with-audio prompt.\n"
-            "Use for camera-video i2v-video / multi-i2v-video stages (one or "
-            "three reference images). Caller supplies facts + duration_seconds + "
-            "shot_count + references (list of {reference_id: 'Picture N', owner, "
-            "resized_width, resized_height}) + subject_definitions + summary + "
-            "retention_analysis + detailed_description + optional soundscape/music. "
-            "All 'Picture N' labels in the text must resolve to ordered references. "
-            "Returns {ref_id, prompt, metadata}."
-        ),
-        input_schema={
-            "type": "object",
-            "properties": {
-                "request": {
-                    "type": "object",
-                    "description": (
-                        "H3Ref2VAAuthoringRequest fields: facts, duration_seconds, "
-                        "shot_count, references, subject_definitions, summary, "
-                        "retention_analysis, detailed_description, "
-                        "overall_soundscape (optional), non_diegetic_music (optional)."
-                    ),
-                },
-            },
-            "required": ["request"],
-            "additionalProperties": False,
-        },
-    )
-    async def compile_h3_ref2va(request: dict) -> dict:
-        req = _coerce_h3_ref2va_request(request)
-        slim = author_h3_ref2va(req)
-        meta = build_log.metadata(slim["ref_id"]) or {}
-        return {
-            "ref_id": slim["ref_id"],
-            "prompt": slim["prompt"],
-            "metadata": meta,
-        }
-    async def list_tools() -> dict:
-        return {
-            "skills": [
-                {"name": sd.name, "stages": list(sd.stages), "output_type": sd.output_type}
-                for sd in skills
-            ]
         }
 
     @server.tool(
         name="get_build_audit",
         description=(
             "Return the full server-side BuildLog (audit trail) for a "
-            "compile_*_artifact call by ref id. Includes facts, trace, "
+            "compile_prompt_artifact call by ref id. Includes facts, trace, "
             "token_report, audit, compression, conflict, and sha256. "
             "Use only when the caller needs to inspect the build process; "
             "for runtime execution the prompt ref id is enough."
@@ -449,7 +401,7 @@ def main() -> None:
             "properties": {
                 "ref_id": {
                     "type": "string",
-                    "description": "The 32-character ref id returned by a compile_*_artifact call.",
+                    "description": "The 32-character ref id returned by a compile_prompt_artifact call.",
                 },
             },
             "required": ["ref_id"],
@@ -475,7 +427,7 @@ def main() -> None:
             "properties": {
                 "ref_id": {
                     "type": "string",
-                    "description": "The 32-character ref id returned by a compile_*_artifact call.",
+                    "description": "The 32-character ref id returned by a compile_prompt_artifact call.",
                 },
             },
             "required": ["ref_id"],
@@ -489,7 +441,7 @@ def main() -> None:
         return meta
 
     @server.tool(
-        name="delete_prompt_artifact",
+        name="delete_prompt_build",
         description=(
             "Remove a BuildLog from the server-side registry. Use to free "
             "memory when a build is no longer needed. Returns true if "
@@ -500,14 +452,14 @@ def main() -> None:
             "properties": {
                 "ref_id": {
                     "type": "string",
-                    "description": "The 32-character ref id returned by a compile_*_artifact call.",
+                    "description": "The 32-character ref id returned by a compile_prompt_artifact call.",
                 },
             },
             "required": ["ref_id"],
             "additionalProperties": False,
         },
     )
-    async def delete_prompt_artifact(ref_id: str) -> dict:
+    async def delete_prompt_build(ref_id: str) -> dict:
         return {"deleted": build_log.delete(ref_id)}
 
     @server.tool(
@@ -537,7 +489,7 @@ def main() -> None:
             "{ok, errors}. Use this BEFORE run_skill to surface field errors without "
             "spending GPU time.\n"
             "For camera-image and camera-video, the envelope carries the model-native prompt:\n"
-            "  envelope = {\"prompt\": <prompt dict from compile_*_artifact>}\n"
+            "  envelope = {\"prompt\": <prompt dict from compile_prompt_artifact>}\n"
             "  e.g. for anima: envelope = {\"prompt\": {\"positive\": \"...\", \"negative\": \"...\"}}\n"
             "  e.g. for h3_t2va / h3_ref2va: envelope = {\"prompt\": {\"text\": \"...\"}}\n"
             "For camera-multiview, envelope = {}.\n"
@@ -569,11 +521,11 @@ def main() -> None:
             "Pre-flight: validate_config is run first; on validation failure the run is "
             "aborted before any GPU time is spent and the response carries the full error list.\n"
             "On runtime failure, payload.error_category is one of:\n"
-            "  prompt_forge_input   — fix the prompt_artifact input\n"
+            "  prompt_forge_input   — fix the prompt-forge request input\n"
             "  engine_build         — server-side bug, file an issue\n"
             "  comfyui_runtime      — ComfyUI rejected the workflow, check model/queue/connection\n"
             "  unknown              — unclassified; treat as engine_build\n"
-            "For camera-image/video, envelope = {\"prompt\": <prompt dict from compile_*_artifact>}.\n"
+            "For camera-image/video, envelope = {\"prompt\": <prompt dict from compile_prompt_artifact>}.\n"
             "For camera-multiview, envelope = {} because its fixed graph has no prompt input.\n"
             "For camera-image, config may contain image_size and runtime tunables.\n"
             "For full schema call describe_config(skill=\"camera-image\", stage=\"t2i-camera\").\n"

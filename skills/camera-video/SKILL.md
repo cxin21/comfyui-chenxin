@@ -1,6 +1,6 @@
 ---
 name: camera-video
-description: Execute local ComfyUI MiniMax-H3 text-to-video-with-audio or one/three-image reference-to-video-with-audio using fixed release workflows. Use after prompt-forge has returned a model-native h3_t2va or h3_ref2va prompt (via compile_h3_t2va_artifact / compile_h3_ref2va_artifact).
+description: Execute local ComfyUI MiniMax-H3 text-to-video-with-audio or one/three-image reference-to-video-with-audio using fixed release workflows. Use after prompt-forge has returned a model-native h3_t2va or h3_ref2va prompt (via compile_prompt_artifact with task="h3_t2va" / task="h3_ref2va").
 ---
 
 # Camera Video
@@ -15,7 +15,7 @@ Consume the model-native `prompt` dict from Prompt Forge; do not accept raw prom
 | `i2v-video` | `h3_ref2va` | `duration`, `reference_image_1` |
 | `multi-i2v-video` | `h3_ref2va` | `duration`, `reference_image_1..3` |
 
-Call `describe_config`, `validate_config`, then `run_skill`. The envelope contains the `prompt` dict (from compile_h3_*_artifact) and optional `prompt_ref`. `duration` is a JSON number from 2 through 15 and must equal the final audited shot end time. Reference count must equal the prompt's ordered reference set; changing a picture's owner, order, or verified dimensions invalidates the build.
+Call `describe_config`, `validate_config`, then `run_skill`. The envelope contains the `prompt` dict (from `compile_prompt_artifact`) and optional `prompt_ref`. `duration` is a JSON number from 2 through 15 and must equal the final audited shot end time. Reference count must equal the prompt's ordered reference set; changing a picture's owner, order, or verified dimensions invalidates the build.
 
 ## Execution
 

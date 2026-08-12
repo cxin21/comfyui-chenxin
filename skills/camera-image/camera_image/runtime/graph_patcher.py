@@ -19,7 +19,7 @@ the source of truth for converting widget values to API inputs; we
 only need to write the right index.
 
 Order:
-1.  Prompts (24/25) from ``config.prompt_artifact``.
+1.  Prompts (24/25) from ``config.prompt``.
 2.  Camera (583) + camera_extra (585).
 3.  LoRA (26/66).
 4.  Sampling (50/51), seed (65), image_size (68/71).
@@ -318,7 +318,7 @@ def apply_run_config(
     only writes the *values*.
 
     Order:
-    1.  Prompts (24/25) from ``config.prompt_artifact`` after revalidation.
+    1.  Prompts (24/25) from ``config.prompt`` after revalidation.
     2.  Camera (583) + camera_extra (585).
     3.  LoRA (26/66).
     4.  Sampling (50/51), seed (65), image_size (68/71).

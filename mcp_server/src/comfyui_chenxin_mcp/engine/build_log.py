@@ -4,7 +4,7 @@ A BuildLog is the full audit trail (facts, trace, token report, audit,
 compression, conflict, sha256) produced by the prompt_forge author
 pipeline. It lives here, server-side, keyed by a random 32-character
 ref id. Camera skills do not consume it directly — they consume the
-extracted `prompt` dict passed back from compile_*_artifact. Inspect
+extracted `prompt` dict passed back from compile_prompt_artifact. Inspect
 BuildLogs via `get_build_audit(ref_id)` (full) or
 `get_build_metadata(ref_id)` (summary).
 

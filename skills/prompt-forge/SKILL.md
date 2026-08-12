@@ -47,4 +47,4 @@ Production authoring is offline and side-effect free. Maintainer acquisition scr
 
 ## Output boundary
 
-Read [references/artifact-and-budgets.md](references/artifact-and-budgets.md) for formulas and exact artifact fields. Pass the complete serialized artifact under `envelope.prompt_artifact`; never copy only its prompt text into a camera request.
+Read [references/artifact-and-budgets.md](references/artifact-and-budgets.md) for formulas and exact artifact fields. Pass the production-ready `prompt` dict (from `compile_prompt_artifact`) under `envelope.prompt`, optionally with its `prompt_ref`; never copy only its prompt text into a camera request.

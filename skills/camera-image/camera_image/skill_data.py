@@ -22,7 +22,7 @@ def compile_prompt_gate(config) -> dict:
     If config.prompt_ref is set, fetch and verify the BuildLog
     server-side. Otherwise trust config.prompt (the LLM carried the
     prompt directly across turns; the build was already validated when
-    compile_anima_artifact was first called).
+    compile_prompt_artifact was first called).
     """
     from comfyui_chenxin_mcp.engine.prompt_forge import validate_prompt_artifact
 

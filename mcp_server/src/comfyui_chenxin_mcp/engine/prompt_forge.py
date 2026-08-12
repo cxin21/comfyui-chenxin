@@ -25,15 +25,27 @@ PROMPT_FORGE_ROOT = (
     / "skills"
     / "prompt-forge"
 )
-_MODELS = {
-    "anima": "circlestone-labs/Anima",
-    "h3_t2va": "MiniMaxAI/MiniMax-H3",
-    "h3_ref2va": "MiniMaxAI/MiniMax-H3",
-}
-_PROMPT_KEYS = {
-    "anima": frozenset({"positive", "negative"}),
-    "h3_t2va": frozenset({"text"}),
-    "h3_ref2va": frozenset({"text"}),
+# One registry per authoring task: the release model, the model-native
+# prompt keys it produces, and the authoring symbol exposed by the
+# prompt-forge package. Adding a new model means adding one entry here,
+# plus the coerce function in server.py — the MCP tool surface does not
+# grow.
+_TASKS: dict[str, dict[str, Any]] = {
+    "anima": {
+        "model": "circlestone-labs/Anima",
+        "prompt_keys": frozenset({"positive", "negative"}),
+        "author": "author_anima_prompt",
+    },
+    "h3_t2va": {
+        "model": "MiniMaxAI/MiniMax-H3",
+        "prompt_keys": frozenset({"text"}),
+        "author": "author_h3_t2va_prompt",
+    },
+    "h3_ref2va": {
+        "model": "MiniMaxAI/MiniMax-H3",
+        "prompt_keys": frozenset({"text"}),
+        "author": "author_h3_ref2va_prompt",
+    },
 }
 
 
@@ -75,22 +87,23 @@ def _build_to_slim(artifact_dict: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def author_anima(request: Any) -> dict[str, Any]:
+def author_prompt(task: str, request: Any) -> dict[str, Any]:
+    """Run one Prompt Forge authoring task and return its slim BuildLog.
+
+    `task` is a key of ``_TASKS`` (anima | h3_t2va | h3_ref2va). The
+    matching ``author_<task>_prompt`` symbol is resolved from the
+    prompt-forge package, so a new model needs only a ``_TASKS`` entry.
+    """
+    if task not in _TASKS:
+        raise ValueError(
+            f"unsupported Prompt Forge task: {task!r}; supported: {sorted(_TASKS)}"
+        )
     _ensure_prompt_forge_on_path()
-    from prompt_forge import author_anima_prompt
-    return _build_to_slim(author_anima_prompt(request).to_dict())
+    import importlib
 
-
-def author_h3_t2va(request: Any) -> dict[str, Any]:
-    _ensure_prompt_forge_on_path()
-    from prompt_forge import author_h3_t2va_prompt
-    return _build_to_slim(author_h3_t2va_prompt(request).to_dict())
-
-
-def author_h3_ref2va(request: Any) -> dict[str, Any]:
-    _ensure_prompt_forge_on_path()
-    from prompt_forge import author_h3_ref2va_prompt
-    return _build_to_slim(author_h3_ref2va_prompt(request).to_dict())
+    prompt_forge = importlib.import_module("prompt_forge")
+    author_fn = getattr(prompt_forge, _TASKS[task]["author"])
+    return _build_to_slim(author_fn(request).to_dict())
 
 
 def validate_prompt_artifact(
@@ -106,8 +119,10 @@ def validate_prompt_artifact(
     the expected_task, pass task-specific content checks, and have a
     valid content hash. Returns the resolved prompt dict on success.
     """
-    if expected_task not in _MODELS:
-        raise ValueError(f"unsupported Prompt Forge task: {expected_task!r}")
+    if expected_task not in _TASKS:
+        raise ValueError(
+            f"unsupported Prompt Forge task: {expected_task!r}; supported: {sorted(_TASKS)}"
+        )
     log = build_log.get(ref_id)
     if log is None:
         raise ValueError(f"unknown BuildLog ref_id: {ref_id!r}")
@@ -117,7 +132,7 @@ def validate_prompt_artifact(
         raise ValueError(
             f"BuildLog {ref_id} task is {log['task']!r}, expected {expected_task!r}"
         )
-    if log["model"] != _MODELS[expected_task]:
+    if log["model"] != _TASKS[expected_task]["model"]:
         raise ValueError(f"BuildLog {ref_id} model does not match its task")
     if log["token_count_verified"] is not True:
         raise ValueError(f"BuildLog {ref_id} token_count_verified is false")
@@ -126,7 +141,7 @@ def validate_prompt_artifact(
     if log["conflict"] is not None:
         raise ValueError(f"BuildLog {ref_id} has unresolved conflict")
     prompt = log["prompt"]
-    if not isinstance(prompt, dict) or set(prompt) != _PROMPT_KEYS[expected_task]:
+    if not isinstance(prompt, dict) or set(prompt) != _TASKS[expected_task]["prompt_keys"]:
         raise ValueError(f"BuildLog {ref_id} prompt has the wrong model-native fields")
     if any(not isinstance(value, str) for value in prompt.values()):
         raise ValueError(f"BuildLog {ref_id} prompt values must be strings")

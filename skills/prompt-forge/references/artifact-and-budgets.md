@@ -42,4 +42,4 @@ Never truncate tokens or remove protected facts. Return `budget_conflict` with p
 
 Every result is canonical JSON with version, status, exact task/model, model-native prompt or null, facts, rendering trace, token report, audit, compression operations, conflict or null, empty `sacrificed_facts`, exact-token verification, knowledge hash, and canonical artifact hash.
 
-`production_ready` requires a non-null prompt and every hard gate passing. `quality_rejected` and `budget_conflict` expose no executable prompt. Camera consumers accept the complete object only as `envelope.prompt_artifact`; they recompute the hash and validate status, task, model, token verification, reference context, and H3 duration before writing workflow nodes.
+`production_ready` requires a non-null prompt and every hard gate passing. `quality_rejected` and `budget_conflict` expose no executable prompt. Camera consumers take the model-native `prompt` dict (and optional `prompt_ref`) via `envelope.prompt`; with a ref id they resolve the BuildLog and revalidate status, task, model, token verification, reference context, and H3 duration before writing workflow nodes.

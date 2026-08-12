@@ -6,7 +6,7 @@ from camera_image.runtime.config_schema import RunConfig as ImageConfig
 from camera_image.skill_data import compile_prompt_gate as image_gate
 from camera_video.runtime.config_schema import RunConfig as VideoConfig
 from camera_video.skill_data import compile_prompt_gate as video_gate
-from prompt_forge import author_anima_prompt, author_h3_ref2va_prompt, author_h3_t2va_prompt
+from comfyui_chenxin_mcp.engine.prompt_forge import author_prompt
 from prompt_forge.contracts import (
     AnimaAuthoringRequest,
     AuthoredSegment,
@@ -32,7 +32,7 @@ def segment(segment_id: str, field: str, text: str, *fact_ids: str) -> AuthoredS
     return AuthoredSegment(segment_id, field, text, tuple(fact_ids), 5, 2, 1)
 
 
-def anima_artifact() -> dict:
+def anima_build() -> dict:
     request = AnimaAuthoringRequest(
         (fact("count", "1girl", dimension="count"), fact("hair", "blue hair")),
         (
@@ -41,10 +41,10 @@ def anima_artifact() -> dict:
         ),
         Complexity(1, 0, 0, 0, 0),
     )
-    return author_anima_prompt(request).to_dict()
+    return author_prompt("anima", request)  # {ref_id, prompt}
 
 
-def t2va_artifact() -> dict:
+def t2va_build() -> dict:
     request = H3T2VAAuthoringRequest(
         (fact("action", "the ball rolls and stops", dimension="action_result"),),
         5,
@@ -58,10 +58,10 @@ def t2va_artifact() -> dict:
             ),
         ),
     )
-    return author_h3_t2va_prompt(request).to_dict()
+    return author_prompt("h3_t2va", request)
 
 
-def ref2va_artifact(reference_count: int) -> dict:
+def ref2va_build(reference_count: int) -> dict:
     references = tuple(
         H3ReferenceImage(f"Picture {index}", f"subject_{index}", 1024, 1024)
         for index in range(1, reference_count + 1)
@@ -111,17 +111,23 @@ def ref2va_artifact(reference_count: int) -> dict:
             ),
         ),
     )
-    return author_h3_ref2va_prompt(request).to_dict()
+    return author_prompt("h3_ref2va", request)
 
 
-def test_camera_image_t2i_and_i2i_consume_real_anima_artifact() -> None:
-    artifact = anima_artifact()
-    assert image_gate(ImageConfig.from_envelope({"prompt_artifact": artifact}))["status"] == "production_ready"
-    assert image_gate(
-        ImageConfig.from_envelope(
-            {"prompt_artifact": artifact}, reference_image="reference.png"
-        )
-    )["task"] == "anima"
+def test_camera_image_t2i_and_i2i_consume_real_anima_build() -> None:
+    slim = anima_build()
+    config = ImageConfig.from_envelope(
+        {"prompt": slim["prompt"], "prompt_ref": slim["ref_id"]}
+    )
+    resolved = image_gate(config)
+    assert set(resolved) == {"positive", "negative"}
+    assert resolved["positive"].strip()
+    # i2i path resolves the same build with a reference image tunable.
+    config_i2i = ImageConfig.from_envelope(
+        {"prompt": slim["prompt"], "prompt_ref": slim["ref_id"]},
+        reference_image="reference.png",
+    )
+    assert image_gate(config_i2i)["positive"] == resolved["positive"]
 
 
 @pytest.mark.parametrize(
@@ -139,20 +145,26 @@ def test_camera_image_t2i_and_i2i_consume_real_anima_artifact() -> None:
         ),
     ],
 )
-def test_camera_video_consumes_real_task_matched_artifacts(
+def test_camera_video_consumes_real_task_matched_builds(
     reference_count: int,
     images: dict[str, str],
 ) -> None:
-    artifact = t2va_artifact() if reference_count == 0 else ref2va_artifact(reference_count)
+    slim = t2va_build() if reference_count == 0 else ref2va_build(reference_count)
     config = VideoConfig.from_envelope(
-        {"prompt_artifact": artifact}, duration=5, **images
+        {"prompt": slim["prompt"], "prompt_ref": slim["ref_id"]},
+        duration=5,
+        **images,
     )
-    assert video_gate(config)["status"] == "production_ready"
+    resolved = video_gate(config)
+    assert set(resolved) == {"text"}
+    assert resolved["text"].strip()
 
 
 def test_camera_video_rejects_execution_duration_change() -> None:
+    slim = t2va_build()
     config = VideoConfig.from_envelope(
-        {"prompt_artifact": t2va_artifact()}, duration=8
+        {"prompt": slim["prompt"], "prompt_ref": slim["ref_id"]},
+        duration=8,
     )
     with pytest.raises(ValueError, match="duration"):
         video_gate(config)
