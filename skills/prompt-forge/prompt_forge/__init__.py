@@ -20,9 +20,10 @@ def author_anima_prompt(request: _contracts.AnimaAuthoringRequest) -> PromptArti
     return _author(request)
 
 
-def author_h3_t2va_prompt(request: _contracts.H3T2VAAuthoringRequest) -> NoReturn:
-    del request
-    raise NotImplementedError("H3 T2VA authoring is implemented in Task 10")
+def author_h3_t2va_prompt(request: _contracts.H3T2VAAuthoringRequest) -> PromptArtifact:
+    from .h3.t2va import author_h3_t2va_prompt as _author
+
+    return _author(request)
 
 
 def author_h3_ref2va_prompt(request: _contracts.H3Ref2VAAuthoringRequest) -> NoReturn:

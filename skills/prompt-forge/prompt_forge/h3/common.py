@@ -168,6 +168,38 @@ def audit_sound_music_separation(soundscape: str, music: str) -> None:
         raise H3AuditError("dialogue must not appear in non_diegetic_music")
 
 
+def audit_shot_execution(shots: tuple[Shot, ...], ledger: FactLedger) -> None:
+    for shot in shots[1:]:
+        if re.match(
+            r"(?i)^(?:the camera|the shot|camera|shot)\s+"
+            r"(?:cuts|transitions|changes|switches)\s+to\b",
+            shot.text,
+        ) is None:
+            raise H3AuditError(
+                f"Shot {shot.number} cut must declare a model-native transition and new view"
+            )
+    for previous, current in zip(shots, shots[1:]):
+        if _semantic_shot(previous.text) == _semantic_shot(current.text):
+            raise H3AuditError(
+                f"Shot {current.number} cut adds no new information or state"
+            )
+    for shot in shots:
+        lower = shot.camera_motion.lower()
+        if "static shot" in lower and re.search(
+            r"\b(?:push|pull|pan|truck|tilt|track|zoom|arc)\w*\b",
+            lower,
+        ):
+            raise H3AuditError(
+                f"Shot {shot.number} contains contradictory camera motion"
+            )
+    combined = " ".join(shot.text for shot in shots)
+    for fact in ledger.facts:
+        if fact.dimension == "action_result" and fact.value not in combined:
+            raise H3AuditError(
+                f"action result fact {fact.fact_id} has no explicit landing state"
+            )
+
+
 def visual_tokens(reference: H3ReferenceImage) -> int:
     width = reference.resized_width
     height = reference.resized_height
@@ -261,3 +293,7 @@ def audit_reference_labels(
 def _sentences(text: str) -> list[str]:
     parts = [part.strip() for part in re.split(r"(?<=[.!?])\s+", text) if part.strip()]
     return parts or [text.strip()]
+
+
+def _semantic_shot(text: str) -> str:
+    return " ".join(re.findall(r"[a-z0-9]+", text.lower()))
