@@ -1,69 +1,44 @@
-# Mood / texture — Anima tag vocabulary
+# Mood / Texture
 
-> Mood describes the **feeling** of the image (melancholy, joy, dread).
-> Texture describes the **surface quality** (grain, mist, embers).
-> These two clusters often co-occur but answer different questions:
-> mood = how it feels; texture = what the air/surface looks like.
+> 情绪回答"画面感觉如何"，质感回答"空气和表面看起来怎样"。两者经常共现但分工不同：mood 是情绪基调，texture 是物质层叠加。
 
-## Mood (emotional register)
+## 核心公式
+> Mood（情绪基调）× Atmosphere（空气介质）× Surface（表面材质）× Particle（粒子细节）四层自由叠加，但 Mood 内只取一个词，Texture 三层可同时挂。
 
-| term | what it produces | use when | avoid when |
-|---|---|---|---|
-| `melancholic` / `melancholy` | wistful sadness, longing | rain, twilight, reflection | upbeat, energetic |
-| `dramatic` | high stakes, intensity | action, conflict, climax | calm, slice-of-life |
-| `epic` | grand, sweeping, mythic | battle, journey, monumental | intimate, quiet |
-| `serene` / `peaceful` | calm, balanced, calm | pastoral, meditation | tension, action |
-| `lonely` / `solitary` | single figure, isolated | introspection, journey | crowded scenes |
-| `romantic` | tenderness, intimacy | couple, soft light, closeness | action |
-| `mysterious` | hidden, unknown, suspense | fog, shadow, partial reveal | clarity, daylight |
-| `cheerful` / `happy` | bright, smiling, energy | celebration, festival | noir, horror |
-| `nostalgic` | memory, soft, faded | vintage, recollection | futuristic cutting-edge |
-| `ethereal` / `dreamy` | floating, soft, otherworldly | fantasy, surreal | documentary realism |
-| `ominous` / `grim` | threat, foreboding | horror, villain, storm | playful scenes |
+## 变体维度表
 
-## Atmosphere (air and light interaction)
+| 维度 | 可选标签 |
+|---|---|
+| Mood（情绪） | `melancholic` / `dramatic` / `epic` / `serene` / `lonely` / `romantic` / `mysterious` / `cheerful` / `nostalgic` / `ethereal` / `ominous` |
+| Atmosphere（空气） | `fog` / `smoke` / `rain` / `snow` / `wind` / `dust` / `embers` |
+| Surface（表面） | `wet` / `frost` / `cracks` / `worn` / `polished` / `matte` / `lace` / `silk` / `velvet` / `leather` |
+| Particle（粒子） | `sakura petals` / `petals` / `leaves` / `ash` / `bubbles` / `light particles` |
 
-| term | what it produces | use when | avoid when |
-|---|---|---|---|
-| `fog` / `misty` | diffuse atmospheric haze | mystery, distance, depth | close-up clear |
-| `smoke` | visible particulate plume | fire, action, cigarette | clean air scenes |
-| `rain` | falling water, wet surfaces | melancholy, drama, romance | clear skies |
-| `snow` | falling flakes, white coverage | winter, holiday, isolation | tropical, summer |
-| `wind` / `windy` | blown hair, fabric, leaves | dynamic, motion, weather | static indoor |
-| `dust` / `dusty` | suspended particulate, ruined atmosphere | post-apocalyptic, desert, abandoned | clean modern interior |
-| `embers` / `sparks` | glowing particles from fire/energy | magical, intense, mechanical | calm scenes |
+## 氛围链
+`cheerful` → `romantic` → `nostalgic` → `melancholic` → `ominous`
 
-## Surface texture (object-level)
+(从明亮欢快到阴沉威胁，情绪强度沿链递增。)
 
-| term | what it produces | use when | avoid when |
-|---|---|---|---|
-| `wet` / `rain-soaked` | reflective water on surface | rainy street, glass, asphalt | dry indoor |
-| `frost` / `frosted` | ice crystal coating | winter, cold, breath | tropical, warm |
-| `cracks` / `cracked` | visible fracture | ruin, age, story | pristine new |
-| `worn` / `weathered` | aged, eroded | vintage, history | new, fresh |
-| `polished` | reflective, mirror-like | luxury, sleek, tech | rustic, worn |
-| `matte` / `flat` | non-reflective | soft, modern, product | wet, glossy |
-| `lace` / `silk` / `velvet` / `leather` | fabric cue | fashion, character, costume | generic |
+## 使用提示
+- Mood 维度互斥：`melancholic` + `cheerful` 是情绪矛盾，模型将随机选其一。
+- Atmosphere 可叠加：`fog` + `dust` 读作废墟；`rain` + `neon lights` 读作都市夜景。
+- Surface 是物体绑定而非场景：`wet` 描述地面或街道，`cracks` 描述墙面或皮肤——同一主体只挂一个 Surface。
+- Particle 与 Atmosphere 独立：粒子是浮在空气中的细节，气氛是整体的空气介质。
+- `ethereal` 比 `dreamy` 更空灵超脱，适合奇幻场景而非日常叙事。
 
-## Particles / details in air
+## 法典验证场景
+### 场景 A — 雨夜独行
+tags: `melancholic`, `rain`, `wet`, `ash`
+备注: 雨中湿地面 + 飘灰，孤独忧郁氛围。
 
-| term | what it produces | use when | avoid when |
-|---|---|---|---|
-| `sakura petals` / `cherry blossoms` | pink petals floating | spring, romantic, melancholy | winter, desert |
-| `petals` | generic petals | garden, romantic | indoor, sterile |
-| `leaves` | falling green leaves | autumn, forest, decay | summer beach |
-| `ash` / `falling ash` | grey particulate | post-apocalyptic, fire, ruin | clean modern |
-| `bubbles` | soap/water bubbles | underwater, dreamy, bath | gritty realism |
-| `light particles` / `floating light` | motes, magic dust | magical, ethereal, fantasy | documentary |
+### 场景 B — 春日告白
+tags: `romantic`, `wind`, `sakura petals`, `silk`
+备注: 微风飘樱 + 丝绸衣物，柔和浪漫。
 
-## Co-use rules
+### 场景 C — 战后废墟
+tags: `ominous`, `dust`, `cracks`, `embers`
+备注: 扬尘 + 龟裂地表 + 余烬，末日战后氛围。
 
-- Mood is exclusive within a cluster: don't combine `melancholic` + `cheerful`.
-- Atmosphere textures may stack: `fog` + `dust` reads as abandoned; `rain` + `neon lights` reads as night city.
-- Surface textures are object-bound: `wet` describes the ground, `cracked` describes a wall; one subject = one texture per scene unless intentional.
-
-## Citation format
-
-`knowledge/aesthetics/mood-texture.md#<cluster>:<term>`,
-e.g. `mood-texture.md#mood:melancholic` or
-`mood-texture.md#atmosphere:fog`.
+### 场景 D — 雪夜温泉
+tags: `serene`, `snow`, `steam`, `frost`
+备注: 飘雪 + 蒸汽 + 霜花，和平静谧。
