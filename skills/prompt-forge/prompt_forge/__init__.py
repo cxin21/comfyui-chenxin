@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import NoReturn
-
 from . import contracts as _contracts
 from .artifacts import PromptArtifact
 
@@ -26,6 +24,7 @@ def author_h3_t2va_prompt(request: _contracts.H3T2VAAuthoringRequest) -> PromptA
     return _author(request)
 
 
-def author_h3_ref2va_prompt(request: _contracts.H3Ref2VAAuthoringRequest) -> NoReturn:
-    del request
-    raise NotImplementedError("H3 Ref2VA authoring is implemented in Task 11")
+def author_h3_ref2va_prompt(request: _contracts.H3Ref2VAAuthoringRequest) -> PromptArtifact:
+    from .h3.ref2va import author_h3_ref2va_prompt as _author
+
+    return _author(request)
