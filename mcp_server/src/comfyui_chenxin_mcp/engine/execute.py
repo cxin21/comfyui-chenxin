@@ -169,7 +169,8 @@ def run_skill(
         "artifact": artifact,
         "duration_ms": duration_ms,
         "config": asdict(config),
-        "prompt_artifact_lint": package.get("lint", {}),
+        "prompt_artifact_sha256": package["artifact_sha256"],
+        "prompt_artifact_audit": package["audit"],
     }
     (run_dir / "submitted-graph.json").write_text(
         json.dumps(graph, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -189,7 +190,7 @@ def run_skill(
         "artifact": artifact,
         "duration_ms": duration_ms,
         "run_record_path": str(run_dir / "run-record.json"),
-        "prompt_forge_lint": package.get("lint", {}),
+        "prompt_artifact_sha256": package["artifact_sha256"],
     }
     return payload, 0
 

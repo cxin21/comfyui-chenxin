@@ -24,6 +24,12 @@ from dataclasses import dataclass
 from typing import Any
 
 
+_ALLOWED_TUNABLES = frozenset({
+    "camera", "camera_extra", "lora", "groups", "sampling", "seed",
+    "image_size", "reference_image", "controlnet_image",
+})
+
+
 @dataclass(frozen=True)
 class CameraConfig:
     """Maps to node 583 (CameraAngleNode).
@@ -81,13 +87,11 @@ class GroupsConfig:
 class RunConfig:
     """Top-level config for patch_graph + run_t2i / run_i2i.
 
-    Mandatory: evidence (dict) + prompt (dict, must contain "positive" and "negative").
+    Mandatory: one complete Prompt Forge artifact.
     All other fields are optional — fall through to workflow.json defaults when None.
     """
     # prompt-forge gate (always required)
-    evidence: dict
-    profile_id: str
-    prompt: dict
+    prompt_artifact: dict[str, Any]
     # existing tunables
     camera: CameraConfig | None = None
     camera_extra: dict | None = None
@@ -105,20 +109,26 @@ class RunConfig:
     controlnet_image: str | None = None # t2i and i2i: local path (run_t2i/run_i2i uploads via mcp.upload_image)
     # region prompts (区域提示词 G1): per-channel text written to nodes 3/4/5.
     # Required (validated by Rule) when 区域提示词（G1） group is enabled.
-    red_prompt: str | None = None
-    green_prompt: str | None = None
-    blue_prompt: str | None = None
-
     @classmethod
     def from_envelope(cls, envelope: dict, **tunables) -> "RunConfig":
         """Build RunConfig from an envelope dict + tunable kwargs.
 
-        envelope must contain: evidence (dict), prompt (dict).
+        envelope contains exactly ``prompt_artifact``.
         tunables: camera (dict), camera_extra (dict), lora (dict),
                   groups (dict), sampling (dict), seed (int),
-                  image_size (dict), reference_image (str), controlnet_image (str),
-                  red_prompt (str), green_prompt (str), blue_prompt (str).
+                  image_size (dict), reference_image (str), controlnet_image (str).
         """
+        if not isinstance(envelope, dict):
+            raise TypeError("envelope must be an object")
+        unknown_envelope = sorted(set(envelope) - {"prompt_artifact"})
+        if unknown_envelope:
+            raise TypeError(f"unsupported envelope field(s): {unknown_envelope}")
+        prompt_artifact = envelope.get("prompt_artifact")
+        if not isinstance(prompt_artifact, dict):
+            raise TypeError("envelope.prompt_artifact must be an object")
+        unknown_tunables = sorted(set(tunables) - _ALLOWED_TUNABLES)
+        if unknown_tunables:
+            raise TypeError(f"unsupported camera-image config field(s): {unknown_tunables}")
         camera = tunables.get("camera")
         if isinstance(camera, dict):
             camera = CameraConfig(**camera)
@@ -131,10 +141,10 @@ class RunConfig:
         groups = tunables.get("groups")
         if isinstance(groups, dict):
             groups = GroupsConfig(**groups)
+        if groups is not None and GROUPS.AREA_PROMPT in ((groups.g1 or []) + (groups.g2 or [])):
+            raise ValueError("regional prompt group is outside the PromptArtifact contract")
         return cls(
-            evidence=envelope.get("evidence", {}),
-            profile_id=envelope.get("profile_id", ""),
-            prompt=envelope.get("prompt", {}),
+            prompt_artifact=dict(prompt_artifact),
             camera=camera,
             camera_extra=tunables.get("camera_extra"),
             lora=tunables.get("lora"),
@@ -144,9 +154,6 @@ class RunConfig:
             image_size=image_size,
             reference_image=tunables.get("reference_image"),
             controlnet_image=tunables.get("controlnet_image"),
-            red_prompt=tunables.get("red_prompt"),
-            green_prompt=tunables.get("green_prompt"),
-            blue_prompt=tunables.get("blue_prompt"),
         )
 
 

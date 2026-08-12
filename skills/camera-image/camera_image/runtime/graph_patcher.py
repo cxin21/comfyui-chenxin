@@ -19,7 +19,7 @@ the source of truth for converting widget values to API inputs; we
 only need to write the right index.
 
 Order:
-1.  Prompts (24/25) from ``config.prompt`` (Prompt Forge artifact).
+1.  Prompts (24/25) from ``config.prompt_artifact``.
 2.  Camera (583) + camera_extra (585).
 3.  LoRA (26/66).
 4.  Sampling (50/51), seed (65), image_size (68/71).
@@ -318,7 +318,7 @@ def apply_run_config(
     only writes the *values*.
 
     Order:
-    1.  Prompts (24/25) from ``config.prompt`` (prompt-forge-validated).
+    1.  Prompts (24/25) from ``config.prompt_artifact`` after revalidation.
     2.  Camera (583) + camera_extra (585).
     3.  LoRA (26/66).
     4.  Sampling (50/51), seed (65), image_size (68/71).
@@ -332,17 +332,16 @@ def apply_run_config(
     enabled_g1, _ = compute_enabled_groups(stage, config.groups)
 
     # 1. Prompts.
-    _set_prompt(graph, "24", config.prompt["positive"].strip())
-    _set_prompt(graph, "25", (config.prompt.get("negative") or "").strip())
+    from comfyui_chenxin_mcp.engine.prompt_forge import validate_prompt_artifact
+
+    artifact = validate_prompt_artifact(config.prompt_artifact, expected_task="anima")
+    prompt = artifact["prompt"]
+    _set_prompt(graph, "24", prompt["positive"].strip())
+    _set_prompt(graph, "25", prompt["negative"].strip())
 
     # 1b. Region prompts (Red/Green/Blue) — only when the G1 group is on.
     if GROUPS.AREA_PROMPT in enabled_g1:
-        if config.red_prompt is not None:
-            _set_region_prompt(graph, "red", config.red_prompt)
-        if config.green_prompt is not None:
-            _set_region_prompt(graph, "green", config.green_prompt)
-        if config.blue_prompt is not None:
-            _set_region_prompt(graph, "blue", config.blue_prompt)
+        raise ValueError("regional prompt group is outside the PromptArtifact contract")
 
     # 2. Camera + camera_extra.
     if config.camera:
@@ -481,13 +480,13 @@ def describe_config(stage: str = STAGES.T2I) -> dict[str, Any]:
 
     # Special slots that don't map to NODE_FIELD_MAP.
     slots["positive"] = {
-        "source": "envelope.prompt.positive",
+        "source": "envelope.prompt_artifact.prompt.positive",
         "node": "24",
         "type": "ImpactWildcardProcessor",
         "required": True,
     }
     slots["negative"] = {
-        "source": "envelope.prompt.negative",
+        "source": "envelope.prompt_artifact.prompt.negative",
         "node": "25",
         "type": "ImpactWildcardProcessor",
         "required": True,

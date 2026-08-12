@@ -6,15 +6,24 @@ from copy import deepcopy
 from typing import Any
 
 from .assets import scene_spec
-from .config_schema import RunConfig
+from .config_schema import IMAGE_FIELDS, RunConfig
 
 
 def apply_run_config(graph: dict[str, Any], stage: str, config: RunConfig) -> dict[str, Any]:
     """Return a graph with only the stage's declared inputs changed."""
     config.validate_stage(stage)
+    from comfyui_chenxin_mcp.engine.prompt_forge import validate_prompt_artifact
+
+    reference_count = len(IMAGE_FIELDS.get(stage, ()))
+    artifact = validate_prompt_artifact(
+        config.prompt_artifact,
+        expected_task="h3_ref2va" if reference_count else "h3_t2va",
+        expected_reference_count=reference_count,
+        expected_duration=config.duration,
+    )
     spec = scene_spec(stage)
     result = deepcopy(graph)
-    result[str(spec["prompt_node"])]["inputs"]["value"] = config.prompt
+    result[str(spec["prompt_node"])]["inputs"]["value"] = artifact["prompt"]["text"]
     result[str(spec["duration_node"])]["inputs"]["value"] = config.duration
     for index, node_id in enumerate(spec.get("image_nodes", []), start=1):
         result[str(node_id)]["inputs"]["image"] = getattr(config, f"reference_image_{index}")
@@ -25,8 +34,8 @@ def describe_config(stage: str) -> dict[str, Any]:
     """Describe exactly the user-configurable surface for one video scene."""
     spec = scene_spec(stage)
     fields: dict[str, dict[str, Any]] = {
-        "prompt": {
-            "type": "string",
+        "prompt_artifact": {
+            "type": "object",
             "required": True,
             "node_id": str(spec["prompt_node"]),
             "node_title": "Input Text (Prompt)",

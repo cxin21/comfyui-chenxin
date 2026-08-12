@@ -17,44 +17,17 @@ from camera_image.runtime.source_workflow import prepare_temporary_workflow
 
 
 def compile_prompt_gate(config) -> dict:
-    from comfyui_chenxin_mcp.engine.prompt_forge import forge_prompt
+    from comfyui_chenxin_mcp.engine.prompt_forge import validate_prompt_artifact
 
-    operation = "i2i" if config.reference_image else "t2i"
-    return forge_prompt(
-        prompt=config.prompt.get("positive", ""),
-        negative=config.prompt.get("negative"),
-        profile_id=config.profile_id,
-        operation=operation,
-        regional={
-            channel: getattr(config, f"{channel}_prompt")
-            for channel in ("red", "green", "blue")
-            if getattr(config, f"{channel}_prompt") is not None
-        },
-        evidence=config.evidence,
-        adapter_manifest=config.lora,
-    )
+    return validate_prompt_artifact(config.prompt_artifact, expected_task="anima")
 
 
 def validate_envelope(envelope: dict) -> list[str]:
-    errors: list[str] = []
-    if not isinstance(envelope.get("evidence"), dict):
-        errors.append("envelope.evidence must be an object")
-    if envelope.get("profile_id") != "anima.miaomiao-harem.anima-1.5":
-        errors.append("envelope.profile_id must be anima.miaomiao-harem.anima-1.5")
-    prompt = envelope.get("prompt")
-    if not isinstance(prompt, dict):
-        errors.append("envelope.prompt must be an object")
-    else:
-        for key in ("positive", "negative"):
-            if key not in prompt:
-                errors.append(f"envelope.prompt.{key} is required")
-            elif prompt[key] is not None and not isinstance(prompt[key], str):
-                errors.append(f"envelope.prompt.{key} must be a string or null")
-        if isinstance(prompt.get("positive"), str) and not prompt["positive"].strip():
-            errors.append("envelope.prompt.positive must be non-empty")
-    if "draft" in envelope or "dialect_id" in envelope:
-        errors.append("legacy prompt envelope fields are forbidden")
-    return errors
+    if set(envelope) != {"prompt_artifact"}:
+        return ["envelope must contain exactly prompt_artifact"]
+    if not isinstance(envelope["prompt_artifact"], dict):
+        return ["envelope.prompt_artifact must be an object"]
+    return []
 
 
 def get_skill_data() -> SkillData:
@@ -96,21 +69,6 @@ def get_skill_data() -> SkillData:
                 direction="forward",
             ),
             # 区域提示词（G1） -> 3 text prompts (forward)
-            Rule(
-                condition=f"group:{GROUPS.AREA_PROMPT}",
-                implies="config:red_prompt",
-                direction="forward",
-            ),
-            Rule(
-                condition=f"group:{GROUPS.AREA_PROMPT}",
-                implies="config:green_prompt",
-                direction="forward",
-            ),
-            Rule(
-                condition=f"group:{GROUPS.AREA_PROMPT}",
-                implies="config:blue_prompt",
-                direction="forward",
-            ),
             # 添加签名（G1） <-> signature_image (bidirectional)
             Rule(
                 condition=f"group:{GROUPS.ADD_SIGNATURE}",

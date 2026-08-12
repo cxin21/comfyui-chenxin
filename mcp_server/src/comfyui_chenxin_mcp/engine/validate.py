@@ -51,17 +51,10 @@ def validate_config(
     if skill_data.envelope_validate_fn is not None:
         errors.extend(skill_data.envelope_validate_fn(envelope))
     else:
-        # Image skills use the shared positive/negative prompt contract.
-        prompt = envelope.get("prompt")
-        if not isinstance(prompt, dict):
-            errors.append("envelope.prompt must be an object (Prompt Artifact input)")
-        else:
-            for key in ("positive", "negative"):
-                val = prompt.get(key)
-                if key == "negative" and val is None:
-                    continue
-                if not isinstance(val, str) or (key == "positive" and not val.strip()):
-                    errors.append(f"envelope.prompt.{key} must be a valid string")
+        if set(envelope) != {"prompt_artifact"}:
+            errors.append("envelope must contain exactly prompt_artifact")
+        elif not isinstance(envelope["prompt_artifact"], dict):
+            errors.append("envelope.prompt_artifact must be an object")
 
     try:
         built = skill_data.build_config_fn(envelope, **config)

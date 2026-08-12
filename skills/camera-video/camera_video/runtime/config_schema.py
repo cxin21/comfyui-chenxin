@@ -20,7 +20,6 @@ IMAGE_FIELDS = {
     "multi-i2v-video": ("reference_image_1", "reference_image_2", "reference_image_3"),
 }
 ALLOWED_FIELDS = {
-    "prompt",
     "duration",
     "reference_image_1",
     "reference_image_2",
@@ -30,9 +29,7 @@ ALLOWED_FIELDS = {
 
 @dataclass(frozen=True)
 class RunConfig:
-    evidence: dict[str, Any]
-    profile_id: str
-    prompt: str
+    prompt_artifact: dict[str, Any]
     duration: float
     reference_image_1: str | None = None
     reference_image_2: str | None = None
@@ -42,24 +39,19 @@ class RunConfig:
 
     @classmethod
     def from_envelope(cls, envelope: dict[str, Any], **tunables: Any) -> "RunConfig":
-        if not isinstance(envelope.get("evidence"), dict):
-            raise TypeError("envelope.evidence must be an object")
-        profile_id = envelope.get("profile_id")
-        if not isinstance(profile_id, str) or not profile_id.strip():
-            raise TypeError("envelope.profile_id must be a non-empty string")
-        if "draft" in envelope or "dialect_id" in envelope:
-            raise ValueError("legacy prompt envelope fields are forbidden")
+        if not isinstance(envelope, dict):
+            raise TypeError("envelope must be an object")
+        unknown_envelope = sorted(set(envelope) - {"prompt_artifact"})
+        if unknown_envelope:
+            raise TypeError(f"unsupported envelope field(s): {unknown_envelope}")
+        prompt_artifact = envelope.get("prompt_artifact")
+        if not isinstance(prompt_artifact, dict):
+            raise TypeError("envelope.prompt_artifact must be an object")
         unknown = sorted(set(tunables) - ALLOWED_FIELDS)
         if unknown:
             raise TypeError(
                 f"unsupported camera-video config field(s): {unknown}; "
                 f"valid fields: {sorted(ALLOWED_FIELDS)}"
-            )
-        prompt = tunables.get("prompt")
-        if not isinstance(prompt, str) or not prompt.strip():
-            raise ValueError(
-                f"prompt must be a non-empty string, "
-                f"got {type(prompt).__name__}: {_truncate_repr(prompt, 60)}"
             )
         duration = tunables.get("duration")
         if isinstance(duration, bool) or not isinstance(duration, (int, float)):
@@ -74,9 +66,7 @@ class RunConfig:
                 f"duration must be between 2 and 15 seconds, got {duration}"
             )
         return cls(
-            evidence=dict(envelope.get("evidence") or {}),
-            profile_id=profile_id,
-            prompt=prompt,
+            prompt_artifact=dict(prompt_artifact),
             duration=duration,
             reference_image_1=tunables.get("reference_image_1"),
             reference_image_2=tunables.get("reference_image_2"),
@@ -90,6 +80,6 @@ class RunConfig:
         for field in IMAGE_FIELDS.get(stage, ()):
             if not getattr(self, field):
                 raise ValueError(f"{field} is required for {stage}")
-        for field in ALLOWED_FIELDS - required - {"prompt", "duration"}:
+        for field in ALLOWED_FIELDS - required - {"duration"}:
             if getattr(self, field) is not None:
                 raise ValueError(f"{field} is not allowed for {stage}")

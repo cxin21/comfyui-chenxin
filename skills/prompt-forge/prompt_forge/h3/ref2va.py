@@ -206,6 +206,7 @@ def author_h3_ref2va_prompt(request: H3Ref2VAAuthoringRequest) -> PromptArtifact
         "hard_gate_codes": hard_codes,
         "shots": [asdict(shot) for shot in shots],
         "official_field_order": list(_FIELD_ORDER),
+        "reference_context": [asdict(reference) for reference in request.references],
     }
     if hard_codes:
         return _artifact(
