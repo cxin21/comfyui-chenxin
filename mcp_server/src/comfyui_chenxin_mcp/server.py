@@ -16,6 +16,12 @@ from .engine.describe import describe_config
 from .engine.validate import validate_config
 from .engine.execute import run_skill
 from .engine.skill_data import SkillData
+from .engine.prompt_forge import (
+    author_anima,
+    author_h3_t2va,
+    author_h3_ref2va,
+    validate_prompt_artifact,
+)
 
 
 # Default upstream comfyui-mcp version. Mirrors install.ps1/install.sh and
@@ -45,6 +51,240 @@ def _find_skill(skills: list[SkillData], name: str) -> SkillData:
     raise ValueError(f"unknown skill: {name!r}; installed: {[s.name for s in skills]}")
 
 
+# ----- Authoring request coercion -----
+# These map a plain JSON request (caller writes dict, no Python needed) to
+# the typed dataclasses in prompt_forge.contracts. Field-by-field checks
+# surface a clear error path so the LLM can fix the input shape on the
+# first try instead of writing a build script and patching source.
+from .engine.prompt_forge import (
+    PROMPT_FORGE_ROOT as _PROMPT_FORGE_ROOT_FOR_CONTRACTS,
+)
+import importlib
+import sys as _sys
+if str(_PROMPT_FORGE_ROOT_FOR_CONTRACTS) not in _sys.path:
+    _sys.path.insert(0, str(_PROMPT_FORGE_ROOT_FOR_CONTRACTS))
+_pf_contracts = importlib.import_module("prompt_forge.contracts")
+
+
+def _coerce_facts(payload: object) -> tuple:
+    items = payload or ()
+    if not isinstance(items, (list, tuple)):
+        raise TypeError(
+            f"facts must be a list, got {type(items).__name__}"
+        )
+    out = []
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            raise TypeError(
+                f"facts[{index}] must be an object, got {type(item).__name__}"
+            )
+        for required in ("fact_id", "value", "origin", "owner", "dimension"):
+            if required not in item:
+                raise ValueError(
+                    f"facts[{index}] missing required field {required!r}"
+                )
+        out.append(_pf_contracts.Fact(
+            fact_id=str(item["fact_id"]).strip(),
+            value=str(item["value"]).strip(),
+            origin=item["origin"],
+            locked=bool(item.get("locked", False)),
+            owner=str(item["owner"]).strip(),
+            dimension=str(item["dimension"]).strip(),
+        ))
+    return tuple(out)
+
+
+def _coerce_segments(
+    payload: object, field: str, default_fact_ids: tuple = ()
+) -> tuple:
+    items = payload or ()
+    if not isinstance(items, (list, tuple)):
+        raise TypeError(
+            f"{field} must be a list, got {type(items).__name__}"
+        )
+    # Anima segment.field must be one of the canonical categories in
+    # _FIELD_RANK; we default positive_segments to 'subject_anchor' so
+    # LLM callers don't have to memorize the field vocabulary. Callers
+    # may pass `field` explicitly to override.
+    if field == "positive_segments":
+        default_field = "subject_anchor"
+    else:
+        default_field = "general"
+    out = []
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            raise TypeError(
+                f"{field}[{index}] must be an object, got {type(item).__name__}"
+            )
+        text = str(item.get("text", "")).strip()
+        if not text:
+            raise ValueError(f"{field}[{index}].text must be non-empty")
+        # fact_ids must be non-empty (validate_segments hard-gates this).
+        # If the caller omitted it, default to the entire request fact set
+        # so the segment references something auditable.
+        raw_fact_ids = item.get("fact_ids")
+        if raw_fact_ids is None or len(raw_fact_ids) == 0:
+            fact_ids = default_fact_ids
+        else:
+            fact_ids = tuple(str(x) for x in raw_fact_ids)
+        out.append(_pf_contracts.AuthoredSegment(
+            segment_id=str(item.get("segment_id", f"{field}-{index}")).strip(),
+            field=str(item.get("field", default_field)).strip(),
+            text=text,
+            fact_ids=fact_ids,
+            # Defaults must be positive + finite (validate_weights hard-gate).
+            priority=float(item.get("priority", 1.0)),
+            adherence_risk=float(item.get("adherence_risk", 0.5)),
+            source_confidence=float(item.get("source_confidence", 0.9)),
+        ))
+    return tuple(out)
+
+
+def _coerce_complexity(payload: object) -> _pf_contracts.Complexity:
+    if not isinstance(payload, dict):
+        raise TypeError(
+            f"complexity must be an object, got {type(payload).__name__}"
+        )
+    for required in (
+        "subjects", "explicit_relations", "complex_actions",
+        "environment_clusters", "natural_language_bridges",
+    ):
+        if required not in payload:
+            raise ValueError(f"complexity missing required field {required!r}")
+    return _pf_contracts.Complexity(
+        subjects=int(payload["subjects"]),
+        explicit_relations=int(payload["explicit_relations"]),
+        complex_actions=int(payload["complex_actions"]),
+        environment_clusters=int(payload["environment_clusters"]),
+        natural_language_bridges=int(payload["natural_language_bridges"]),
+    )
+
+
+def _coerce_references(payload: object) -> tuple:
+    items = payload or ()
+    if not isinstance(items, (list, tuple)):
+        raise TypeError(
+            f"references must be a list, got {type(items).__name__}"
+        )
+    out = []
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            raise TypeError(
+                f"references[{index}] must be an object, got {type(item).__name__}"
+            )
+        for required in ("reference_id", "owner", "resized_width", "resized_height"):
+            if required not in item:
+                raise ValueError(
+                    f"references[{index}] missing required field {required!r}"
+                )
+        out.append(_pf_contracts.H3ReferenceImage(
+            reference_id=str(item["reference_id"]).strip(),
+            owner=str(item["owner"]).strip(),
+            resized_width=int(item["resized_width"]),
+            resized_height=int(item["resized_height"]),
+        ))
+    return tuple(out)
+
+
+def _coerce_anima_request(payload: dict) -> _pf_contracts.AnimaAuthoringRequest:
+    if not isinstance(payload, dict):
+        raise TypeError(
+            f"anima request must be an object, got {type(payload).__name__}"
+        )
+    if "facts" not in payload or "positive_segments" not in payload or "complexity" not in payload:
+        raise ValueError(
+            "anima request requires: facts, positive_segments, complexity"
+        )
+    facts = _coerce_facts(payload["facts"])
+    fact_ids = tuple(fact.fact_id for fact in facts)
+    return _pf_contracts.AnimaAuthoringRequest(
+        facts=facts,
+        positive_segments=_coerce_segments(
+            payload["positive_segments"], "positive_segments", default_fact_ids=fact_ids
+        ),
+        complexity=_coerce_complexity(payload["complexity"]),
+        negative_segments=_coerce_segments(
+            payload.get("negative_segments"), "negative_segments", default_fact_ids=fact_ids
+        ),
+        exclusion_groups=int(payload.get("exclusion_groups", 0)),
+    )
+
+
+def _coerce_h3_t2va_request(payload: dict) -> _pf_contracts.H3T2VAAuthoringRequest:
+    if not isinstance(payload, dict):
+        raise TypeError(
+            f"h3_t2va request must be an object, got {type(payload).__name__}"
+        )
+    for required in ("facts", "duration_seconds", "shot_count", "integrated_multimodal_description"):
+        if required not in payload:
+            raise ValueError(f"h3_t2va request requires: {required}")
+    if not isinstance(payload["integrated_multimodal_description"], (list, tuple)):
+        raise TypeError(
+            "integrated_multimodal_description must be a list of segment objects"
+        )
+    facts = _coerce_facts(payload["facts"])
+    fact_ids = tuple(fact.fact_id for fact in facts)
+    return _pf_contracts.H3T2VAAuthoringRequest(
+        facts=facts,
+        duration_seconds=float(payload["duration_seconds"]),
+        shot_count=int(payload["shot_count"]),
+        integrated_multimodal_description=_coerce_segments(
+            payload["integrated_multimodal_description"],
+            "integrated_multimodal_description",
+            default_fact_ids=fact_ids,
+        ),
+        overall_soundscape=_coerce_segments(
+            payload.get("overall_soundscape", []), "overall_soundscape", default_fact_ids=fact_ids
+        ),
+        non_diegetic_music=_coerce_segments(
+            payload.get("non_diegetic_music", []), "non_diegetic_music", default_fact_ids=fact_ids
+        ),
+    )
+
+
+def _coerce_h3_ref2va_request(payload: dict) -> _pf_contracts.H3Ref2VAAuthoringRequest:
+    if not isinstance(payload, dict):
+        raise TypeError(
+            f"h3_ref2va request must be an object, got {type(payload).__name__}"
+        )
+    for required in (
+        "facts", "duration_seconds", "shot_count", "references",
+        "subject_definitions", "summary", "retention_analysis",
+        "detailed_description",
+    ):
+        if required not in payload:
+            raise ValueError(f"h3_ref2va request requires: {required}")
+    for field in ("subject_definitions", "summary", "retention_analysis", "detailed_description"):
+        if not isinstance(payload[field], (list, tuple)):
+            raise TypeError(
+                f"{field} must be a list of segment objects"
+            )
+    facts = _coerce_facts(payload["facts"])
+    fact_ids = tuple(fact.fact_id for fact in facts)
+    return _pf_contracts.H3Ref2VAAuthoringRequest(
+        facts=facts,
+        duration_seconds=float(payload["duration_seconds"]),
+        shot_count=int(payload["shot_count"]),
+        references=_coerce_references(payload["references"]),
+        subject_definitions=_coerce_segments(
+            payload["subject_definitions"], "subject_definitions", default_fact_ids=fact_ids
+        ),
+        summary=_coerce_segments(payload["summary"], "summary", default_fact_ids=fact_ids),
+        retention_analysis=_coerce_segments(
+            payload["retention_analysis"], "retention_analysis", default_fact_ids=fact_ids
+        ),
+        detailed_description=_coerce_segments(
+            payload["detailed_description"], "detailed_description", default_fact_ids=fact_ids
+        ),
+        overall_soundscape=_coerce_segments(
+            payload.get("overall_soundscape", []), "overall_soundscape", default_fact_ids=fact_ids
+        ),
+        non_diegetic_music=_coerce_segments(
+            payload.get("non_diegetic_music", []), "non_diegetic_music", default_fact_ids=fact_ids
+        ),
+    )
+
+
 def main() -> None:
     server = Server(name="comfyui-chenxin-mcp", version="0.2.0")
     skills = discover_skills()
@@ -54,6 +294,123 @@ def main() -> None:
         description="List installed camera skills and their stages.",
         input_schema={"type": "object", "additionalProperties": False},
     )
+    async def list_tools() -> dict:
+        return {
+            "skills": [
+                {"name": sd.name, "stages": list(sd.stages), "output_type": sd.output_type}
+                for sd in skills
+            ]
+        }
+
+    # ----- Authoring tools: build a verified PromptArtifact -----
+    # These close the gap surfaced in session 5ba39012: callers had no
+    # way to produce the artifact camera-* consumes without writing a
+    # Python build script. Each tool coerces a plain JSON request into
+    # the matching typed dataclass, runs author_*_prompt(), then re-validates
+    # via validate_prompt_artifact so the returned dict is guaranteed
+    # production_ready with a content hash. The caller passes the result
+    # back via envelope={"prompt_artifact": <dict>} to run_skill.
+
+    @server.tool(
+        name="compile_anima_artifact",
+        description=(
+            "Build a verified Anima PromptArtifact from a JSON request.\n"
+            "Use when the goal is an Anima still image and the caller can "
+            "express it as a list of locked facts + positive/negative "
+            "AuthoredSegments + Complexity (subjects / explicit_relations / "
+            "complex_actions / environment_clusters / natural_language_bridges).\n"
+            "Returns the exact artifact dict that camera-image / t2i-camera "
+            "consumes via envelope={\"prompt_artifact\": <result>}. "
+            "Same shape as validate_prompt_artifact's output."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "request": {
+                    "type": "object",
+                    "description": (
+                        "AnimaAuthoringRequest fields: facts (list[Fact]), "
+                        "positive_segments (list[AuthoredSegment]), complexity "
+                        "(Complexity), negative_segments (list[AuthoredSegment], "
+                        "optional), exclusion_groups (int, optional, default 0)."
+                    ),
+                },
+            },
+            "required": ["request"],
+            "additionalProperties": False,
+        },
+    )
+    async def compile_anima(request: dict) -> dict:
+        req = _coerce_anima_request(request)
+        # The bridge function returns a dict (artifact.to_dict() already
+        # applied); validate_prompt_artifact takes the dict and re-verifies.
+        artifact_dict = author_anima(req)
+        return validate_prompt_artifact(artifact_dict, expected_task="anima")
+
+    @server.tool(
+        name="compile_h3_t2va_artifact",
+        description=(
+            "Build a verified MiniMax-H3 text-to-video-with-audio PromptArtifact.\n"
+            "Use for camera-video t2v-video stages (no reference images). "
+            "Caller supplies facts + duration_seconds + shot_count + a single "
+            "integrated_multimodal_description (with [Shot 1]...[Shot N] "
+            "markers and At MM:SS.mmm cut timestamps) + optional "
+            "overall_soundscape + non_diegetic_music."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "request": {
+                    "type": "object",
+                    "description": (
+                        "H3T2VAAuthoringRequest fields: facts, duration_seconds, "
+                        "shot_count, integrated_multimodal_description, "
+                        "overall_soundscape (optional), non_diegetic_music (optional)."
+                    ),
+                },
+            },
+            "required": ["request"],
+            "additionalProperties": False,
+        },
+    )
+    async def compile_h3_t2va(request: dict) -> dict:
+        req = _coerce_h3_t2va_request(request)
+        artifact_dict = author_h3_t2va(req)
+        return validate_prompt_artifact(artifact_dict, expected_task="h3_t2va")
+
+    @server.tool(
+        name="compile_h3_ref2va_artifact",
+        description=(
+            "Build a verified MiniMax-H3 reference-to-video-with-audio "
+            "PromptArtifact.\n"
+            "Use for camera-video i2v-video / multi-i2v-video stages (one or "
+            "three reference images). Caller supplies facts + duration_seconds + "
+            "shot_count + references (list of {reference_id: 'Picture N', owner, "
+            "resized_width, resized_height}) + subject_definitions + summary + "
+            "retention_analysis + detailed_description + optional soundscape/music. "
+            "All 'Picture N' labels in the text must resolve to ordered references."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "request": {
+                    "type": "object",
+                    "description": (
+                        "H3Ref2VAAuthoringRequest fields: facts, duration_seconds, "
+                        "shot_count, references, subject_definitions, summary, "
+                        "retention_analysis, detailed_description, "
+                        "overall_soundscape (optional), non_diegetic_music (optional)."
+                    ),
+                },
+            },
+            "required": ["request"],
+            "additionalProperties": False,
+        },
+    )
+    async def compile_h3_ref2va(request: dict) -> dict:
+        req = _coerce_h3_ref2va_request(request)
+        artifact_dict = author_h3_ref2va(req)
+        return validate_prompt_artifact(artifact_dict, expected_task="h3_ref2va")
     async def list_tools() -> dict:
         return {
             "skills": [
