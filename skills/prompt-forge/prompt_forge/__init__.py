@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import NoReturn
 
 from . import contracts as _contracts
+from .artifacts import PromptArtifact
 
 __all__ = [
     "author_anima_prompt",
@@ -13,9 +14,10 @@ __all__ = [
 ]
 
 
-def author_anima_prompt(request: _contracts.AnimaAuthoringRequest) -> NoReturn:
-    del request
-    raise NotImplementedError("Anima authoring is implemented in Task 8")
+def author_anima_prompt(request: _contracts.AnimaAuthoringRequest) -> PromptArtifact:
+    from .anima.author import author_anima_prompt as _author
+
+    return _author(request)
 
 
 def author_h3_t2va_prompt(request: _contracts.H3T2VAAuthoringRequest) -> NoReturn:
