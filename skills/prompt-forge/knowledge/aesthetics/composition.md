@@ -1,62 +1,44 @@
-# Composition — Anima tag vocabulary
+# Composition
 
-> Use these tags to direct the eye. Composition is the layer that decides **where**
-> the subject sits, **how close** the camera is, and **what holds the frame together**.
-> Choose one term from each cluster; do not stack inside a cluster (e.g. `low angle`
-> + `high angle` is a contradiction).
+> 决定"主体落在哪里、镜头多近、画面如何呼吸"。构图层先于色调与光影——它框住观众的视线，再让其他层注入质感。
 
-## Framing (camera distance)
+## 核心公式
+> 用距离（Framing）× 角度（Angle）× 布局（Layout）三轴锁定一个明确的视觉骨架，再按需要挂上多主体（Multi-figure）修饰。
 
-| term | visual effect | use when | avoid when |
-|---|---|---|---|
-| `extreme close-up` | fills the frame with a single feature (eyes, hands, mouth) | emotional beat, detail, abstraction | you need environmental context |
-| `close-up` | head and shoulders, intimate | portrait, character focus | group scene, action beat |
-| `medium shot` | waist-up, balanced | conversation, neutral storytelling | epic landscape, detail |
-| `long shot` | full body visible with surroundings | establishing character in place | portrait |
-| `wide shot` / `panoramic` | environment dominates, subject is small | landscape, scene setting | face must read |
-| `full body` | every limb visible | pose-driven, fashion, reference | conversation, drama |
+## 变体维度表
 
-## Angle (camera position)
+| 维度 | 可选标签 |
+|---|---|
+| Framing（距离） | `extreme close-up` / `close-up` / `medium shot` / `long shot` / `wide shot` / `full body` |
+| Angle（角度） | `low angle` / `high angle` / `bird's eye view` / `dutch angle` / `from side` / `from behind` / `from below` |
+| Layout（布局） | `centered` / `symmetrical` / `rule of thirds` / `leading lines` / `foreground framing` / `negative space` / `depth of field` |
+| Multi-figure（多主体） | `solo` / `couple` / `group` / `crowd` |
 
-| term | visual effect | use when | avoid when |
-|---|---|---|---|
-| `low angle` | subject looks powerful, looming | heroic, threatening, monumental | you need the subject to feel vulnerable |
-| `high angle` | subject looks small or observed | vulnerability, overview, god's-eye narrative | heroic moments |
-| `bird's eye view` / `from above` | top-down, graphic, map-like | layout, symmetry, design-y moments | naturalistic portrait |
-| `dutch angle` | tilted horizon, unease | tension, instability, dream | calm, formal, official |
-| `from side` / `profile` | classic side view, silhouettes | motion, side-by-side, narrative pacing | frontal portrait unless intentional |
-| `from behind` | mystery, anticipation | reveal, follow shot, voyeur | facial expression is the point |
-| `from below` | dramatic, oversized | architecture, looming threat | small subjects, intimacy |
+## 氛围链
+`extreme close-up` → `close-up` → `medium shot` → `long shot` → `wide shot`
 
-## Layout (where the eye lands)
+(从亲密细节到环境主导，距离递增时画面叙事由"角色状态"让位于"世界尺度"。)
 
-| term | visual effect | use when | avoid when |
-|---|---|---|---|
-| `centered` | subject on the axis, formal | portrait, logo-like, Wes Anderson, formal | naturalistic, action |
-| `symmetrical` | mirror balance, deliberate | graphic composition, design, posters | candid realism |
-| `rule of thirds` | subject off-axis, classic editorial | journalism, fine-art photography | centered intentional compositions |
-| `leading lines` | geometry directs to subject | architecture, roads, fences | organic environments without edges |
-| `foreground framing` | object in front frames the subject | voyeur, depth cue, intimacy | clean minimalism |
-| `negative space` | large empty area for breathing | minimalism, mood, posters | cluttered scenes |
-| `depth of field` | layered foreground/mid/background | cinematic, environmental storytelling | flat illustrations |
+## 使用提示
+- 每个维度只选一个；同维度内并置会让模型随机选择或产生逻辑矛盾（如同时 `low angle` + `high angle`）。
+- `symmetrical` + `dutch angle` 互斥：前者要求垂直水平，后者要求倾斜。
+- `centered` 与 `rule of thirds` 互斥：居中构图主动放弃三分法偏移。
+- 距离与角度独立：可以同时 `close-up` + `from below`，不构成矛盾。
+- 多主体只是数量声明（`couple` / `group` / `crowd`），具体人物身份由 count/identity 层负责。
 
-## Multi-figure composition
+## 法典验证场景
+### 场景 A — 英雄特写
+tags: `extreme close-up`, `low angle`, `centered`
+备注: 强调主体威压感与面部细节，常用于反派登场、英雄登顶。
 
-| term | visual effect | use when | avoid when |
-|---|---|---|---|
-| `couple` | two-figure intimacy | romance, partnership | single subject, group |
-| `group` | multiple subjects clustered | social scene, ensemble | two-subject intimacy |
-| `crowd` | many anonymous figures | city, festival, scale | you need each figure readable |
+### 场景 B — 角色对话中景
+tags: `medium shot`, `from side`, `rule of thirds`
+备注: 中景便于展开对话，侧拍 + 三分法给出最自然的电影感构图。
 
-## Anti-cluster: do not co-use
+### 场景 C — 渺小的环境人
+tags: `long shot`, `high angle`, `negative space`
+备注: 强调角色在世界中孤独或渺小感，常用于史诗叙事开篇。
 
-- `centered` + `rule of thirds` (mutually exclusive)
-- `low angle` + `high angle` (mutually exclusive)
-- `from above` + `from below` (mutually exclusive)
-- `symmetrical` + `dutch angle` (mutually exclusive)
-
-## Citation format
-
-When linking a composition fact, write `source_ref` as
-`knowledge/aesthetics/composition.md#<cluster>:<term>`, e.g.
-`composition.md#framing:close-up`.
+### 场景 D — 派对群像
+tags: `medium shot`, `from front`, `group`
+备注: 正面中景容纳多个互动主体，适合节庆、舞会、群体仪式。
