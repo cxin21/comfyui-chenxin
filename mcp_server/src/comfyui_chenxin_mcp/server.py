@@ -88,8 +88,9 @@ def main() -> None:
             "Dry-run validation: same envelope + config shape as run_skill, returns "
             "{ok, errors}. Use this BEFORE run_skill to surface field errors without "
             "spending GPU time.\n"
-            "The envelope contains exactly one complete Prompt Forge artifact:\n"
+            "For camera-image/video, the envelope contains exactly one complete Prompt Forge artifact:\n"
             "  envelope = {\"prompt_artifact\": <production_ready artifact>}\n"
+            "For camera-multiview, envelope = {}.\n"
             "  config = {\"image_size\": {\"width\": 1200, \"height\": 800}}"
         ),
         input_schema={
@@ -119,7 +120,8 @@ def main() -> None:
             "  engine_build         — server-side bug, file an issue\n"
             "  comfyui_runtime      — ComfyUI rejected the workflow, check model/queue/connection\n"
             "  unknown              — unclassified; treat as engine_build\n"
-            "For every camera skill, envelope = {\"prompt_artifact\": <production_ready artifact>}.\n"
+            "For camera-image/video, envelope = {\"prompt_artifact\": <production_ready artifact>}.\n"
+            "For camera-multiview, envelope = {} because its fixed graph has no prompt input.\n"
             "For camera-image, config may contain image_size and runtime tunables.\n"
             "For full schema call describe_config(skill=\"camera-image\", stage=\"t2i-camera\").\n"
             "For camera-video (t2v / i2v / multi-i2v) stages:\n"

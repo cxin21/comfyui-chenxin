@@ -53,7 +53,7 @@ For video, use [`camera-video-flow.md`](camera-video-flow.md).
 2. Call `describe_config`; it must expose only `full_body_image` and
    `face_image`.
 3. Supply both local image paths in `config`.
-4. Call `validate_config` with the same envelope and config used for execution.
+4. Call `validate_config` with the same empty envelope and config used for execution.
 5. Stop on validation or fixed-asset errors.
 6. Call `run_skill` and accept the result only when history succeeds, all saved
    PNG artifacts are present, and the submitted graph is recorded.
@@ -64,22 +64,7 @@ For video, use [`camera-video-flow.md`](camera-video-flow.md).
 {
   "skill": "camera-multiview",
   "stage": "multiview",
-  "envelope": {
-    "evidence": {"locked_facts": []},
-    "draft": {
-      "positive": "fixed multiview workflow, cinematic lighting, anime style",
-      "negative": "none",
-      "tags": ["solo"],
-      "structure": [
-        {"name": "subject", "text": "fixed multiview workflow"},
-        {"name": "action_or_pose", "text": "multiview"},
-        {"name": "scene", "text": "cinematic"},
-        {"name": "lighting", "text": "cinematic lighting"},
-        {"name": "style", "text": "anime style"}
-      ]
-    },
-    "dialect_id": "anima"
-  },
+  "envelope": {},
   "config": {
     "full_body_image": "E:/images/person-full-body.png",
     "face_image": "E:/images/person-face.png"
@@ -109,12 +94,8 @@ workflow JSON to this request. Those values are fixed by the bundled API asset.
 {
   "skill": "camera-video",
   "stage": "t2v-video",
-  "envelope": {
-    "evidence": {"locked_facts": []},
-    "draft": {},
-    "dialect_id": "minimax_h3"
-  },
-  "config": {"prompt": "a person walking in afternoon light", "duration": 4},
+  "envelope": {"prompt_artifact": {"...": "production_ready H3 artifact"}},
+  "config": {"duration": 4},
   "output_dir": "outputs/camera-video"
 }
 ```
@@ -134,22 +115,7 @@ transformation is writing the declared fields and uploaded filenames.
 {
   "skill": "camera-image",
   "stage": "t2i-camera",
-  "envelope": {
-    "evidence": {"locked_facts": []},
-    "draft": {
-      "positive": "1girl, masterpiece, anime portrait, cinematic lighting, anime style",
-      "negative": "lowres, bad anatomy",
-      "tags": ["1girl", "solo"],
-      "structure": [
-        {"name": "subject", "text": "1girl"},
-        {"name": "action_or_pose", "text": "portrait"},
-        {"name": "scene", "text": "cinematic"},
-        {"name": "lighting", "text": "cinematic lighting"},
-        {"name": "style", "text": "anime style"}
-      ]
-    },
-    "dialect_id": "anima"
-  },
+  "envelope": {"prompt_artifact": {"...": "production_ready Anima artifact"}},
   "config": {
     "seed": 42,
     "sampling": {"steps_first": 30, "cfg": 4.5},

@@ -1,6 +1,7 @@
 # Architecture
 
-The project has one authoring boundary and three fixed workflow consumers.
+The project has one authoring boundary, two prompt-consuming camera skills,
+and one prompt-free fixed multiview consumer.
 
 ```mermaid
 flowchart LR
@@ -14,6 +15,7 @@ flowchart LR
   P --> G["Strict MCP artifact gate"]
   G --> I["camera-image fixed workflow"]
   G --> V["camera-video fixed workflows"]
+  U --> M["camera-multiview image-only workflow"]
 ```
 
 ## Prompt Forge
@@ -31,5 +33,8 @@ The complete `prompt_artifact` is the only prompt input to camera skills. The MC
 ## Camera execution
 
 `camera-image` owns the fixed Anima UI graph, group selection, camera controls, ControlNet, camera runtime LoRA selection, strip-to-API step, and still outputs. `camera-video` owns three hash-locked MiniMax-H3 API graphs, duration, ordered image uploads, and MP4 outputs. These runtime choices do not flow back into Prompt Forge.
+
+`camera-multiview` accepts an empty envelope plus two image paths. Its fixed
+Flux2-Klein graph has no prompt patch and therefore no PromptArtifact gate.
 
 The shared MCP engine validates local execution, enqueues the exact graph, waits for terminal history, downloads real outputs, and stores graph/run records with hashes. Validation-only or enqueue-only results are not success.

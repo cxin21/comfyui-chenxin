@@ -49,20 +49,23 @@ def validate_config(
     errors: list[str] = []
 
     if skill_data.envelope_validate_fn is not None:
-        errors.extend(skill_data.envelope_validate_fn(envelope))
+        envelope_errors = skill_data.envelope_validate_fn(envelope)
+        errors.extend(envelope_errors)
     else:
+        envelope_errors = []
         if set(envelope) != {"prompt_artifact"}:
             errors.append("envelope must contain exactly prompt_artifact")
         elif not isinstance(envelope["prompt_artifact"], dict):
             errors.append("envelope.prompt_artifact must be an object")
 
-    try:
-        built = skill_data.build_config_fn(envelope, **config)
-        validate_stage = getattr(built, "validate_stage", None)
-        if callable(validate_stage):
-            validate_stage(stage)
-    except (TypeError, ValueError) as exc:
-        errors.append(str(exc))
+    if not envelope_errors:
+        try:
+            built = skill_data.build_config_fn(envelope, **config)
+            validate_stage = getattr(built, "validate_stage", None)
+            if callable(validate_stage):
+                validate_stage(stage)
+        except (TypeError, ValueError) as exc:
+            errors.append(str(exc))
 
     # Declarative dependency rules (config-only — envelope fields never trigger rules).
     groups = config.get("groups") or {}

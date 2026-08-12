@@ -10,8 +10,10 @@ DOCUMENTS = (
     ROOT / "skills" / "prompt-forge" / "references" / "minimax-h3.md",
     ROOT / "skills" / "prompt-forge" / "references" / "artifact-and-budgets.md",
     ROOT / "skills" / "camera-image" / "SKILL.md",
+    ROOT / "skills" / "camera-multiview" / "SKILL.md",
     ROOT / "skills" / "camera-video" / "SKILL.md",
     ROOT / "docs" / "camera-image-flow.md",
+    ROOT / "docs" / "camera-multiview-flow.md",
     ROOT / "docs" / "camera-video-flow.md",
     ROOT / "docs" / "MCP_BRIDGE.md",
     ROOT / "docs" / "architecture.md",
@@ -26,6 +28,8 @@ def test_documentation_has_one_greenfield_prompt_contract() -> None:
             "anima.md",
             "minimax-h3.md",
             "artifact-and-budgets.md",
+            "camera-multiview-flow.md",
+            "SKILL.md",
         }
         for forbidden in (
             "ForgeRequest",

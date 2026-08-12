@@ -7,7 +7,7 @@ Layered contract:
                                 Direct callers (e.g. unit tests) MUST construct
                                 a RunConfig themselves.
 
-Flow: prompt-forge gate -> upload images -> health -> prepare (UI: config + modes + strip) -> validate -> enqueue -> wait -> download.
+Flow: optional PromptArtifact gate -> upload images -> health -> prepare -> validate -> enqueue -> wait -> download.
 """
 from __future__ import annotations
 
@@ -69,10 +69,10 @@ def run_skill(
     run_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        # Step 1: prompt-forge gate.
-        if skill_data.prompt_gate_fn is None:
-            raise RuntimeError(f"skill {skill_data.name} has no exact prompt profile gate")
-        package = skill_data.prompt_gate_fn(config)
+        # Step 1: validate PromptArtifact for prompt-consuming skills.
+        prompt_artifact = None
+        if skill_data.prompt_gate_fn is not None:
+            prompt_artifact = skill_data.prompt_gate_fn(config)
 
         # Step 2: upload stage_images.
         patch_config = config
@@ -169,8 +169,12 @@ def run_skill(
         "artifact": artifact,
         "duration_ms": duration_ms,
         "config": asdict(config),
-        "prompt_artifact_sha256": package["artifact_sha256"],
-        "prompt_artifact_audit": package["audit"],
+        "prompt_artifact_sha256": (
+            prompt_artifact["artifact_sha256"] if prompt_artifact is not None else None
+        ),
+        "prompt_artifact_audit": (
+            prompt_artifact["audit"] if prompt_artifact is not None else None
+        ),
     }
     (run_dir / "submitted-graph.json").write_text(
         json.dumps(graph, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -190,7 +194,9 @@ def run_skill(
         "artifact": artifact,
         "duration_ms": duration_ms,
         "run_record_path": str(run_dir / "run-record.json"),
-        "prompt_artifact_sha256": package["artifact_sha256"],
+        "prompt_artifact_sha256": (
+            prompt_artifact["artifact_sha256"] if prompt_artifact is not None else None
+        ),
     }
     return payload, 0
 

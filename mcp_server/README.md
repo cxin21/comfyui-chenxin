@@ -127,11 +127,7 @@ Input:
 {
   "skill": "camera-image",
   "stage": "t2i-camera",
-  "envelope": {
-    "evidence": {"locked_facts": []},
-    "draft": {"positive": "...", "negative": "..."},
-    "dialect_id": "anima"
-  },
+  "envelope": {"prompt_artifact": {"...": "complete production artifact"}},
   "config": {"groups": {"g1": [], "g2": []}}
 }
 ```
@@ -154,11 +150,7 @@ The input is the same envelope/config pair plus `output_dir`:
 {
   "skill": "camera-image",
   "stage": "t2i-camera",
-  "envelope": {
-    "evidence": {"locked_facts": []},
-    "draft": {"positive": "1girl, masterpiece", "negative": "lowres"},
-    "dialect_id": "anima"
-  },
+  "envelope": {"prompt_artifact": {"...": "complete production artifact"}},
   "config": {
     "sampling": {"steps_first": 30, "cfg": 4.5},
     "seed": 42,

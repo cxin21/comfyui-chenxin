@@ -1,6 +1,6 @@
 {
   "name": "comfyui-chenxin",
-  "version": "0.1.0+codex.20260810120000",
+  "version": "0.2.0+codex.20260812111500",
   "description": "Local-first ComfyUI plugin: prompt-forge prompt authoring plus three fixed-workflow camera skills (image, multiview, video) consumed through a unified local MCP server.",
   "author": {
     "name": "cxin21",
@@ -31,7 +31,7 @@
   "interface": {
     "displayName": "ComfyUI Chenxin",
     "shortDescription": "Prompt authoring plus three fixed-workflow camera skills for local ComfyUI.",
-    "longDescription": "Four bounded skills: prompt-forge authors and quality-reviews image/video prompts offline; camera-image, camera-multiview, and camera-video consume approved PromptPackages through a unified local ComfyUI/MCP four-stage production flow against fixed release assets.",
+    "longDescription": "Four bounded skills: prompt-forge authors and audits Anima/MiniMax-H3 prompts offline; camera-image and camera-video consume verified prompt_artifacts, while camera-multiview consumes two images through a prompt-free fixed workflow.",
     "developerName": "cxin21",
     "category": "Creative",
     "capabilities": [
@@ -42,7 +42,7 @@
     "defaultPrompt": [
       "Use prompt-forge to author a prompt.",
       "Use camera-image, camera-multiview, or camera-video to produce.",
-      "Review the PromptPackage before production."
+      "Review the prompt_artifact before production."
     ]
   }
 }
