@@ -13,8 +13,8 @@
     "redistribution_allowed": true
   },
   "files": {
-    "LICENSE": "832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e",
+    "LICENSE": "b907c8234b565e5ecefff8232dbb6f1d603fbf9a47a3176db734dcae27175d08",
     "tokenizer.json": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
-    "tokenizer_config.json": "d5d09f07b48c3086c508b30d1c9114bd1189145b74e982a265350c923acd8101"
+    "tokenizer_config.json": "c27ef18dae7dccaee951f6066f71a1b35ca9ec4ff3168b097dbda7905a036324"
   }
 }
