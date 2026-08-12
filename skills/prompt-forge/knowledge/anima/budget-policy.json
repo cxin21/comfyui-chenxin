@@ -1,0 +1,57 @@
+{
+  "formula": {
+    "positive_base": 128,
+    "per_additional_subject": 48,
+    "per_explicit_relation": 24,
+    "per_complex_action": 32,
+    "per_environment_cluster": 24,
+    "per_natural_language_bridge": 64,
+    "positive_min": 128,
+    "positive_max": 512,
+    "negative_base": 32,
+    "per_exclusion_group": 8,
+    "negative_min": 32,
+    "negative_max": 96
+  },
+  "limits": {
+    "soft_multiplier": 1.25,
+    "quality_multiplier": 1.60,
+    "positive_quality_cap": 768,
+    "negative_quality_cap": 128,
+    "hard_limit": 32768
+  },
+  "positive_fields": [
+    {"name": "protocol_prefix", "recommended_min_share": 0.06, "recommended_max_share": 0.10, "hard_max_share": 0.12},
+    {"name": "subject_anchor", "recommended_min_share": 0.15, "recommended_max_share": 0.22, "hard_max_share": 0.28},
+    {"name": "attribute_binding", "recommended_min_share": 0.18, "recommended_max_share": 0.24, "hard_max_share": 0.30},
+    {"name": "action_and_relation", "recommended_min_share": 0.18, "recommended_max_share": 0.25, "hard_max_share": 0.32},
+    {"name": "composition_and_camera", "recommended_min_share": 0.08, "recommended_max_share": 0.14, "hard_max_share": 0.18},
+    {"name": "environment_and_props", "recommended_min_share": 0.10, "recommended_max_share": 0.16, "hard_max_share": 0.22},
+    {"name": "lighting_and_visual_style", "recommended_min_share": 0.08, "recommended_max_share": 0.14, "hard_max_share": 0.18},
+    {"name": "natural_language_bridge", "recommended_min_share": 0.00, "recommended_max_share": 0.18, "hard_max_share": 0.25}
+  ],
+  "negative_fields": [
+    {"name": "official_quality_baseline", "recommended_min_share": 0.35, "recommended_max_share": 0.45, "hard_max_share": 0.45},
+    {"name": "anatomy_count_structure_errors", "recommended_min_share": 0.20, "recommended_max_share": 0.30, "hard_max_share": 0.30},
+    {"name": "image_technical_defects", "recommended_min_share": 0.15, "recommended_max_share": 0.25, "hard_max_share": 0.25},
+    {"name": "user_exclusions", "recommended_min_share": 0.10, "recommended_max_share": 0.20, "hard_max_share": 0.20}
+  ],
+  "positive_borrowing_order": [
+    "lighting_and_visual_style",
+    "environment_and_props",
+    "composition_and_camera",
+    "action_and_relation",
+    "attribute_binding"
+  ],
+  "positive_non_lendable_buckets": [
+    "subject_identity",
+    "subject_count",
+    "user_locked_facts"
+  ],
+  "negative_borrowing_order": [
+    "image_technical_defects",
+    "anatomy_count_structure_errors",
+    "official_quality_baseline"
+  ],
+  "negative_non_lendable_buckets": ["user_exclusions", "user_locked_facts"]
+}
