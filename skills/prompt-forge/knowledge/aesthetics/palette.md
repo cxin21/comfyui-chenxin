@@ -1,57 +1,43 @@
-# Palette — Anima tag vocabulary
+# Palette
 
-> Palette means **one coherent color decision**, not scattered color words.
-> Pick **one named palette or one named grade**, then optionally a modifier.
-> Mixing two named palettes (e.g. `Wes Anderson` + `cyberpunk`) is a contradiction
-> the model will resolve arbitrarily — don't.
+> 调色层只做"一个明确的色彩决定"——选择一个命名级色或一个文化调色板，最多再叠加一个温度修饰。混搭两个命名调色板（如 `Wes Anderson` + `cyberpunk`）是矛盾，模型将随机二选一。
 
-## Named grades (single decisive tag)
+## 核心公式
+> Grade（明度级色）× Temperature（温度）× Cultural（文化调色板）三轴选一为主，其余为辅，确保画面只有一个清晰色彩身份。
 
-| term | what it produces | use when | avoid when |
-|---|---|---|---|
-| `monochrome` | one color value, tonal | portrait, graphic, noir | colorful narrative |
-| `black and white` | greyscale, photography | documentary, classic, dramatic | modern color scenes |
-| `sepia` | warm brown tones, antique | vintage, memory, old photo | modern scenes |
-| `grayscale` | pure neutral grey | illustration, line-art emphasis | color photography |
-| `high contrast` | pushed blacks and whites, graphic | fashion, poster, comic | soft realism |
-| `low contrast` | muted range, soft | slice-of-life, pastel, fog | dramatic scene |
+## 变体维度表
 
-## Named palettes (named after a cultural/textual source)
+| 维度 | 可选标签 |
+|---|---|
+| Grade（明度级色） | `monochrome` / `black and white` / `sepia` / `grayscale` / `high contrast` / `low contrast` |
+| Temperature（温度） | `warm color` / `cool color` |
+| Cultural（文化） | `teal and orange color grade` / `pastel color` / `vivid color` / `muted color` / `dark` / `noir` / `cyberpunk` / `vintage` / `retro` / `washed colors` |
 
-| term | what it produces | use when | avoid when |
-|---|---|---|---|
-| `teal and orange color grade` | complementary split, blockbuster cinema | Hollywood, blockbuster, action | historical, pastoral |
-| `pastel color` | soft desaturated tones | Wes Anderson, Ghibli, kawaii | gritty realism |
-| `vivid color` / `vibrant` | saturated, energetic | pop art, festival, energetic | noir, vintage |
-| `muted color` | desaturated but not monochrome | contemporary realism, indie film | high-saturation posters |
-| `dark` | heavy shadows, low-key | horror, noir, threat | bright scenes |
-| `noir` | black/white + high contrast + shadows | crime, thriller, period | cheerful scenes |
+## 氛围链
+`pastel color` → `muted color` → `vivid color` → `high contrast` → `noir`
 
-## Color temperature (modifiers)
+(从低饱和柔和到高饱和极致黑白，对比度与戏剧性沿链递增。)
 
-| term | what it produces | use when | avoid when |
-|---|---|---|---|
-| `warm color` | red/orange/yellow dominance | sunset, intimacy, fire | ice, night |
-| `cool color` | blue/green/cyan dominance | night, melancholy, sci-fi | firelight, romance |
+## 使用提示
+- `monochrome` 排斥所有 Cultural 标签——它本身就定义了"只用一种色调"。
+- `high contrast` + `low contrast` 互斥：对比度只能选一极。
+- `warm color` + `cool color` 互斥：温度二选一；如要冷暖对比，靠光源对比（如 `golden hour` 暖光 + 阴影冷蓝）。
+- `dark` 与 `low contrast` 不等价：前者压暗整体亮度，后者压缩明度区间。
+- `noir` 是 `black and white` + `high contrast` + 阴影密度的合成短语，等价于黑白犯罪片美学的整体指派。
 
-## Cultural / genre palettes
+## 法典验证场景
+### 场景 A — 黑帮电影定场
+tags: `noir`, `high contrast`
+备注: 黑白高对比，强烈阴影，犯罪片默认调色。
 
-| term | what it produces | use when | avoid when |
-|---|---|---|---|
-| `cyberpunk` | magenta/teal neon on black | sci-fi, urban night, hacker | pastoral, daytime |
-| `vintage` | faded, slightly desaturated, warm | 70s/80s memory, retro | modern, futuristic |
-| `retro` | older artstyle or color treatment | period nostalgia | cutting-edge contemporary |
-| `washed colors` | pulled toward grey, film-bleach | indie film, 90s music video | saturated pop |
+### 场景 B — 暖夕户外
+tags: `warm color`, `golden hour`, `pastel color`
+备注: 暖色 + 低饱和 + 黄金时刻光线，浪漫复古。
 
-## Co-use rules
+### 场景 C — 赛博城市夜景
+tags: `cyberpunk`, `cool color`, `high contrast`
+备注: 冷色霓虹主导，黑底高对比，未来都市。
 
-- **One named palette + at most one temperature modifier**. Don't stack `warm color` + `cool color` + `noir` + `pastel`.
-- `monochrome` is exclusive of all named palettes.
-- Palette is independent of lighting. A scene with `cinematic lighting` and
-  `monochrome` is valid and intentional.
-
-## Citation format
-
-`knowledge/aesthetics/palette.md#<cluster>:<term>`,
-e.g. `palette.md#named_grades:monochrome` or
-`palette.md#cultural:cyberpunk`.
+### 场景 D — 复古明信片
+tags: `vintage`, `sepia`, `muted color`
+备注: 褐色调 + 整体褪色，怀旧摄影效果。
