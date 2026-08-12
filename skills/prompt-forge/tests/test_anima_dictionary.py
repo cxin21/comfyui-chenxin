@@ -10,6 +10,11 @@ from types import ModuleType
 
 import pytest
 
+from prompt_forge.anima.audit import audit_anima_prompt
+from prompt_forge.anima.dictionary import AnimaTagDictionary, DictionaryQueryError
+from prompt_forge.contracts import Fact
+from prompt_forge.facts import FactLedger
+
 
 SCRIPT = Path(__file__).parents[1] / "scripts" / "build_anima_dictionary.py"
 BUNDLED_ROOT = Path(__file__).parents[1] / "knowledge" / "anima"
@@ -275,3 +280,91 @@ def test_anima_knowledge_has_no_translation_checkpoint_or_lora_overlay() -> None
     names = {path.name.lower() for path in BUNDLED_ROOT.iterdir()}
     forbidden_fragments = ("translation", "checkpoint", "lora", "profile", "registry")
     assert not any(fragment in name for name in names for fragment in forbidden_fragments)
+
+
+def test_dictionary_lookup_distinguishes_canonical_alias_and_concept_matches() -> None:
+    dictionary = AnimaTagDictionary(BUNDLED_ROOT / "tags.sqlite")
+    canonical = dictionary.lookup("blue_hair", limit=3)
+    assert canonical[0].canonical == "blue_hair"
+    assert canonical[0].match_kind == "canonical"
+    assert canonical[0].source
+    assert canonical[0].verification_status
+
+    alias = dictionary.lookup("1girls", limit=3)
+    assert alias[0].canonical == "1girl"
+    assert alias[0].match_kind == "alias"
+    assert alias[0].confidence == 0.85
+
+    concept = dictionary.lookup("blue hair", category="general", limit=5)
+    assert concept[0].canonical == "blue_hair"
+    assert all(item.category == "general" for item in concept)
+    assert [item.usage_count for item in concept] == sorted(
+        (item.usage_count for item in concept),
+        reverse=True,
+    )
+
+
+def test_dictionary_lookup_has_a_strict_limit_and_read_only_connection() -> None:
+    dictionary = AnimaTagDictionary(BUNDLED_ROOT / "tags.sqlite")
+    assert len(dictionary.lookup("hair", limit=2)) == 2
+    with pytest.raises(DictionaryQueryError, match="limit"):
+        dictionary.lookup("hair", limit=0)
+    with pytest.raises(DictionaryQueryError, match="limit"):
+        dictionary.lookup("hair", limit=101)
+    with pytest.raises(sqlite3.OperationalError):
+        with dictionary.connect() as connection:
+            connection.execute("DELETE FROM tags")
+
+
+def audit_ledger() -> FactLedger:
+    return FactLedger(
+        (
+            Fact("s1.hair", "blue hair", "user_explicit", False, "subject_1", "hair"),
+            Fact("s2.hair", "blue hair", "user_explicit", False, "subject_2", "hair"),
+            Fact("style", "masterpiece", "agent_embellishment", False, "scene", "quality"),
+        )
+    )
+
+
+def test_protocol_audit_classifies_without_rewriting() -> None:
+    tags = ("masterpiece", "blue hair", "1girls", "invented visual idea")
+    natural_language = "Subject 1 has blue hair."
+    report = audit_anima_prompt(tags, natural_language, audit_ledger())
+    assert report.tags == tags
+    assert report.natural_language == natural_language
+    assert [entry.status for entry in report.entries] == [
+        "canonical",
+        "canonical",
+        "known_alias",
+        "unverified",
+    ]
+    assert report.entries[1].fact_ids == ("s1.hair", "s2.hair")
+    assert any(finding.code == "duplicate_semantics" for finding in report.findings)
+    assert any(finding.code == "possible_binding_conflict" for finding in report.findings)
+
+
+@pytest.mark.parametrize(
+    ("tag", "code"),
+    [
+        ("blue_hair", "wrong_underscore_form"),
+        ("score 7", "wrong_underscore_form"),
+        ("score_10", "invalid_protocol_tag"),
+        ("kantoku", "artist_prefix_missing"),
+        ("@definitely unknown artist namespace", "invalid_protocol_tag"),
+        ("year twenty twenty", "invalid_protocol_tag"),
+    ],
+)
+def test_malformed_or_reserved_protocol_syntax_is_release_blocking(
+    tag: str,
+    code: str,
+) -> None:
+    report = audit_anima_prompt((tag,), "", FactLedger(()))
+    assert report.release_blocking
+    assert any(finding.code == code and finding.severity == "error" for finding in report.findings)
+
+
+def test_unknown_ordinary_semantics_are_advisory_only() -> None:
+    report = audit_anima_prompt(("an entirely new visible concept",), "", FactLedger(()))
+    assert report.entries[0].status == "unverified"
+    assert not report.release_blocking
+    assert report.findings[0].severity == "warning"
