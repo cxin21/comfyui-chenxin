@@ -5,7 +5,7 @@ description: Author and audit high-quality model-native prompts for Anima still 
 
 # Prompt Forge
 
-Author creative content with the LLM. Deterministic code only counts tokens, looks up the bundled dictionary, compresses with trace preservation, audits objectively, hashes artifacts, reports benchmarks, and verifies releases. It never chooses aesthetics, story beats, or shots for you.
+Author creative content with the LLM. Deterministic code only counts tokens, looks up the bundled dictionary, compresses with trace preservation, audits objectively, hashes artifacts, reports benchmarks, and verifies releases; scripts do not choose aesthetics, story beats, or shots for you.
 
 ## Scenarios
 
@@ -20,6 +20,9 @@ Author creative content with the LLM. Deterministic code only counts tokens, loo
 5-step authoring process: [shared/method.md](references/shared/method.md).
 Aesthetic coverage (mandatory retrieval): [shared/aesthetic-coverage.md](references/shared/aesthetic-coverage.md).
 Pre-compile gate: [shared/self-check.md](references/shared/self-check.md).
+
+Every gate preserves protected facts — compression and deduplication never
+sacrifice a user-locked fact, and token counts come from an exact offline tokenizer pinned by repository revision.
 
 ## References index
 

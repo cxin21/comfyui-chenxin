@@ -6,13 +6,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 DOCUMENTS = (
     ROOT / "skills" / "prompt-forge" / "SKILL.md",
-    ROOT / "skills" / "prompt-forge" / "references" / "anima.md",
-    ROOT / "skills" / "prompt-forge" / "references" / "minimax-h3.md",
-    ROOT / "skills" / "prompt-forge" / "references" / "artifact-and-budgets.md",
-    ROOT / "skills" / "prompt-forge" / "references" / "authoring-contract.md",
-    ROOT / "skills" / "prompt-forge" / "references" / "budget-ruler.md",
-    ROOT / "skills" / "prompt-forge" / "references" / "dictionary-preflight.md",
-    ROOT / "skills" / "prompt-forge" / "references" / "audit-and-recovery.md",
+    ROOT / "skills" / "prompt-forge" / "references" / "dialects" / "anima" / "dialect.md",
+    ROOT / "skills" / "prompt-forge" / "references" / "dialects" / "minimax-h3" / "dialect.md",
+    ROOT / "skills" / "prompt-forge" / "references" / "quality" / "budget-ruler.md",
+    ROOT / "skills" / "prompt-forge" / "references" / "shared" / "authoring-contract.md",
+    ROOT / "skills" / "prompt-forge" / "references" / "quality" / "dictionary-preflight.md",
+    ROOT / "skills" / "prompt-forge" / "references" / "quality" / "audit-and-recovery.md",
     ROOT / "skills" / "camera-image" / "SKILL.md",
     ROOT / "skills" / "camera-multiview" / "SKILL.md",
     ROOT / "skills" / "camera-video" / "SKILL.md",
@@ -29,9 +28,9 @@ def test_documentation_has_one_greenfield_prompt_contract() -> None:
         assert path.is_file(), path
         text = path.read_text(encoding="utf-8")
         assert "prompt_artifact" in text or path.name in {
-            "anima.md",
-            "minimax-h3.md",
-            "artifact-and-budgets.md",
+            "dialect.md",
+            "budget-ruler.md",
+            "authoring-contract.md",
             "camera-multiview-flow.md",
             "SKILL.md",
         }
