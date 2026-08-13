@@ -4,6 +4,53 @@ All notable changes to comfyui-chenxin are documented here. Format follows [Keep
 
 ## [Unreleased] — current state on disk
 
+### prompt-forge v2.0: clean refactor, full vocabulary, multi-model ready (2026-08-13) — v0.2.0
+
+**Structural rewrite.** No backward compat. References, knowledge, and scripts reorganized under the `prompt-forge` skill.
+
+### Changed
+- `references/` reorganized into `shared/`, `quality/`, `dialects/<model>/` subdirectories
+- `references/anima.md`, `references/minimax-h3.md` deleted; content migrated to `references/dialects/<model>/dialect.md`
+- `references/authoring-contract.md` → `references/shared/authoring-contract.md` (added 前重后轻 slot weight table)
+- `references/budget-ruler.md` → `references/quality/budget-ruler.md` (token + tag-count linked)
+- `references/audit-and-recovery.md` → `references/quality/audit-and-recovery.md` (with preflight header note)
+- `references/dictionary-preflight.md` → `references/quality/dictionary-preflight.md` (with tag-validate header note)
+- `references/artifact-and-budgets.md` deleted (content subsumed)
+- `SKILL.md` rewritten as a ≤60-line index (3 scenarios + refs + tool + scripts)
+- `knowledge/aesthetics/recipes/` → `references/dialects/anima/recipes/` (6 files in 5-segment + 五层组合 format)
+- `knowledge/aesthetics/{composition,lighting,palette,camera,mood-texture,anti-patterns,style-signatures}.md` all rewritten in 5-segment format
+- `knowledge/aesthetics/manifest.json` updated to match new structure (precedence, row_counts, applies_to)
+
+### Added
+- `references/shared/{method,aesthetic-coverage,decision-tree,self-check,output-protocol,natural-language}.md` (6 new — cross-model concepts)
+- `references/quality/{conflict-table,tag-count-ruler,style-consistency}.md` (3 new — quality gates)
+- `references/dialects/anima/vocabulary/{README,count-identity,appearance,clothing,pose-action,expression,camera-shot,scene-environment,detail-mood,special-themes}.md` (10 new — full Anima tag vocabulary, 5-segment)
+- `references/dialects/minimax-h3/{dialect.md,budget-policy.json}` (2 new — H3 dialect + merged budget policy)
+- `scripts/preflight.py` + `scripts/tag_validate.py` (2 new — pre-compile quality gate + dictionary lookup; tests cover 5+3 cases)
+- `tests/test_preflight.py` + `tests/test_tag_validate.py` (2 new — 8/8 tests pass)
+
+### Removed
+- `references/{anima,minimax-h3,authoring-contract,budget-ruler,audit-and-recovery,dictionary-preflight,artifact-and-budgets}.md`
+- `knowledge/aesthetics/recipes/`
+- `knowledge/h3-t2va-budget-policy.json`, `knowledge/h3-ref2va-budget-policy.json`
+
+### Knowledge / quality
+- `anti-patterns.md` now contains concrete tag blacklist (replaces abstract A-G categories); 59 table rows including NSFW template §13.6 forbidden list
+- `style-signatures.md` (formerly orphan) rewritten in 5-segment format, manifest count corrected to 20
+- Preflight script: catches `pov` + `full body` conflict, `hanfu` + `cyberpunk city` style mismatch, tag-count over hard cap
+
+### Methodology
+- Absorbed NSFW template (`D:\Projects\提示词模版.txt`) methodology: §2 OUTPUT PROTOCOL, §3 SELF-CHECK, §3.1 CONFLICT TABLE, §4.1 STYLE CONSISTENCY, §4.2 TAG COUNT, §4.4 NATURAL LANGUAGE, §5 DECISION TREE, §9 5-SEGMENT STRUCTURE, §13.6 FORBIDDEN LIST, §14 SPECIAL THEMES
+- 5-segment canonical template applied uniformly: 核心公式 / 变体维度表 / 氛围链 / 使用提示 / 法典验证场景
+- Recipes add 五层组合 section (5-layer composition)
+
+### Validation
+- All 8 pytest tests pass
+- Wasteland battle prompt (37 tags) passes preflight
+- Known conflicts caught: pov+full_body, hanfu+cyberpunk_city
+- Zero compat strings in any new content
+- Zero old paths recreated (Phase 1-4 hard deletes)
+
 ### prompt-forge rewrite: methodology-first + one-pass audit (2026-08-13) — v0.1.19
 
 - **SKILL.md rewritten as a methodology spine and split** into four focused references:

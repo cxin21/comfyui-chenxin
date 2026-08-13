@@ -37,7 +37,7 @@ Each vocabulary file maps to authoring-contract fields:
 
 ## Usage constraints
 
-1. Every tag must pass [shared/self-check.md](../../shared/self-check.md) + [quality/style-consistency.md](../../quality/style-consistency.md) + [quality/tag-count-ruler.md](../../quality/tag-count-ruler.md).
+1. Every tag must pass [shared/self-check.md](../../../shared/self-check.md) + [quality/style-consistency.md](../../../quality/style-consistency.md) + [quality/tag-count-ruler.md](../../../quality/tag-count-ruler.md).
 2. Tag frequency warnings come from `scripts/tag-validate.py`.
 3. No compatibility shim with the old NSFW template — content migrated, paths rewritten.
 

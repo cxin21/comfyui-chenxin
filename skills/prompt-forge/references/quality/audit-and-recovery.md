@@ -28,7 +28,7 @@ exact-token verification is invalid.
 |---|---|---|
 | `invalid_protocol_tag` | a reserved namespace is malformed, or a segment holds a comma list | one tag per segment; `score_N` exact `score_1..9`; `year` four digits; `@` artist resolves |
 | `wrong_underscore_form` | an ordinary tag uses an underscore | use spaces (`blue hair`, not `blue_hair`) |
-| `unsupported_positive_field` / `unsupported_negative_field` | unknown field name | use the enumerated fields in [authoring-contract.md](authoring-contract.md) |
+| `unsupported_positive_field` / `unsupported_negative_field` | unknown field name | use the enumerated fields in [authoring-contract.md](../shared/authoring-contract.md) |
 | `natural_language_bridge_count` | bridge count mismatches `complexity` or exceeds 1 | set `complexity.natural_language_bridges` to the actual bridge count |
 | `tag_bridge_fact_overlap` | the bridge and a tag render the same fact | bind each fact once — tags or bridge, not both |
 | `unsupported_bridge_semantic` | bridge fact dimension outside the allowed set | a bridge only binds ownership/spatial/causal/result/relation |
