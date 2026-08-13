@@ -262,3 +262,14 @@ def test_anima_request_variant_defaults_base():
         facts=(), positive_segments=(), complexity=Complexity(1, 0, 0, 0, 0),
     )
     assert req.variant == "base"
+
+
+def test_unresolvable_at_prefix_is_warning_not_error():
+    from prompt_forge.anima.audit import audit_anima_prompt
+    from prompt_forge.facts import FactLedger
+    from prompt_forge.contracts import Fact
+    ledger = FactLedger((
+        Fact("f1", "@my style", "agent_embellishment", False, "s", "style"),
+    ))
+    report = audit_anima_prompt(("@my style",), "", ledger)
+    assert all(f.severity != "error" for f in report.findings)

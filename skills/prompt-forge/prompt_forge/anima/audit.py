@@ -8,7 +8,7 @@ from typing import Literal
 
 from ..facts import FactLedger
 from .dictionary import AnimaTagDictionary
-from .protocol import semantic_form
+from .protocol import deweight, semantic_form
 
 
 TagStatus = Literal[
@@ -82,7 +82,7 @@ def audit_anima_prompt(
         for fact in ledger.facts
     }
 
-    resolved_tags = dictionary.resolve_many(tuple(raw_tag.strip() for raw_tag in tags))
+    resolved_tags = dictionary.resolve_many(tuple(deweight(raw_tag.strip()) for raw_tag in tags))
 
     for index, (raw_tag, exact) in enumerate(zip(tags, resolved_tags)):
         tag = raw_tag.strip()
@@ -100,12 +100,12 @@ def audit_anima_prompt(
                 AnimaAuditFinding(code, "error", message, index, raw_tag, fact_ids)
             )
         elif exact is None and tag.startswith("@"):
-            status = "invalid_protocol_tag"
+            status = "unverified"
             findings.append(
                 AnimaAuditFinding(
-                    "invalid_protocol_tag",
-                    "error",
-                    "reserved artist namespace must resolve to a known artist tag",
+                    "unverified",
+                    "warning",
+                    "reserved @ prefix does not resolve; treat as a style descriptor",
                     index,
                     raw_tag,
                     fact_ids,

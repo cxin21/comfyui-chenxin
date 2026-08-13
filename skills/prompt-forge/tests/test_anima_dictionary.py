@@ -370,7 +370,6 @@ def test_protocol_audit_classifies_without_rewriting() -> None:
         ("score 7", "wrong_underscore_form"),
         ("score_10", "invalid_protocol_tag"),
         ("kantoku", "artist_prefix_missing"),
-        ("@definitely unknown artist namespace", "invalid_protocol_tag"),
         ("year twenty twenty", "invalid_protocol_tag"),
     ],
 )
@@ -381,6 +380,16 @@ def test_malformed_or_reserved_protocol_syntax_is_release_blocking(
     report = audit_anima_prompt((tag,), "", FactLedger(()))
     assert report.release_blocking
     assert any(finding.code == code and finding.severity == "error" for finding in report.findings)
+
+
+def test_unresolvable_at_prefix_is_advisory_not_release_blocking() -> None:
+    report = audit_anima_prompt(
+        ("@definitely unknown artist namespace",), "", FactLedger(())
+    )
+    assert report.entries[0].status == "unverified"
+    assert not report.release_blocking
+    assert report.findings[0].code == "unverified"
+    assert report.findings[0].severity == "warning"
 
 
 def test_unknown_ordinary_semantics_are_advisory_only() -> None:
