@@ -89,12 +89,15 @@ def write_fixture(root: Path) -> tuple[Path, Path]:
                 "score_tag_form": "retain_underscore",
                 "artist_prefix": "@",
                 "tag_order": [
-                    "quality_meta_year_safety",
+                    "protocol_prefix",
                     "count",
                     "character",
-                    "copyright",
+                    "series",
                     "artist",
+                    "appearance",
                     "general",
+                    "environment",
+                    "scene_description",
                 ],
                 "official_tags": [
                     {"canonical": "blue_hair", "category": "general"},

@@ -1,5 +1,5 @@
 {
-  "builder_sha256": "e010a792878667e1987f6e61320d1ce335f22f09a1b2bfae1d5f0c220adaf122",
+  "builder_sha256": "52204ad207f302de6f2b0c0077c2a82644066de0c6e41c5fddc07acb0e2929b3",
   "dictionary_version": "anima-tags-2026-08-12",
   "precedence": [
     "official_anima_rule",

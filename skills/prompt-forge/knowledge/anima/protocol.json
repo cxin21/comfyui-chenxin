@@ -3,12 +3,15 @@
   "score_tag_form": "retain_underscore",
   "artist_prefix": "@",
   "tag_order": [
-    "quality_meta_year_safety",
+    "protocol_prefix",
     "count",
     "character",
-    "copyright",
+    "series",
     "artist",
-    "general"
+    "appearance",
+    "general",
+    "environment",
+    "scene_description"
   ],
   "year_tag_pattern": "year [0-9]{4}",
   "count_tag_pattern": "[1-9][0-9]*(girl|boy|other)s?",

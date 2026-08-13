@@ -394,12 +394,15 @@ def _validate_protocol(protocol: Mapping[str, Any]) -> None:
         "score_tag_form": "retain_underscore",
         "artist_prefix": "@",
         "tag_order": [
-            "quality_meta_year_safety",
+            "protocol_prefix",
             "count",
             "character",
-            "copyright",
+            "series",
             "artist",
+            "appearance",
             "general",
+            "environment",
+            "scene_description",
         ],
     }
     for key, expected in exact.items():
