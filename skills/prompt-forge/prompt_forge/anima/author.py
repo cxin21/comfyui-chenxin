@@ -21,32 +21,21 @@ _SKILL_ROOT = Path(__file__).resolve().parents[2]
 _TOKENIZER = _SKILL_ROOT / "knowledge" / "tokenizers" / "anima-qwen3-0.6b"
 _MANIFEST = _SKILL_ROOT / "knowledge" / "anima" / "manifest.json"
 _FIELD_RANK = {
-    "quality_meta_year_safety": 0,
-    "quality": 0,
-    "meta": 0,
-    "year": 0,
-    "safety": 0,
     "protocol_prefix": 0,
     "count": 1,
-    "subject_anchor": 1,
     "character": 2,
-    "copyright": 3,
+    "series": 3,
     "artist": 4,
-    "general": 5,
-    "tag": 5,
-    "attribute_binding": 5,
-    "action_and_relation": 5,
-    "composition_and_camera": 5,
-    "environment_and_props": 5,
-    "lighting_and_visual_style": 5,
-    "natural_language_bridge": 6,
+    "appearance": 5,
+    "general": 6,
+    "environment": 7,
+    "scene_description": 8,
 }
 _NEGATIVE_FIELDS = {
-    "official_quality_baseline",
-    "anatomy_count_structure_errors",
-    "image_technical_defects",
+    "quality_baseline",
+    "anatomy_and_structure",
+    "technical_defects",
     "user_exclusions",
-    "general",
 }
 _BRIDGE_DIMENSIONS = frozenset(
     {"ownership", "spatial_relation", "causal_action", "action_result", "relation"}
@@ -81,11 +70,13 @@ def author_anima_prompt(request: AnimaAuthoringRequest) -> PromptArtifact:
             key=lambda item: (_FIELD_RANK.get(item[1].field, 99), item[0]),
         )
     )
+    if not any(segment.field == "protocol_prefix" for segment in ordered_positive):
+        hard_codes.append("missing_protocol_prefix")
     bridges = tuple(
-        segment for segment in ordered_positive if segment.field == "natural_language_bridge"
+        segment for segment in ordered_positive if segment.field == "scene_description"
     )
     tag_segments = tuple(
-        segment for segment in ordered_positive if segment.field != "natural_language_bridge"
+        segment for segment in ordered_positive if segment.field != "scene_description"
     )
     if len(bridges) != request.complexity.natural_language_bridges or len(bridges) > 1:
         hard_codes.append("natural_language_bridge_count")
@@ -113,13 +104,13 @@ def author_anima_prompt(request: AnimaAuthoringRequest) -> PromptArtifact:
     )
     compressed_positive = positive_result.segments
     compressed_tags = tuple(
-        segment for segment in compressed_positive if segment.field != "natural_language_bridge"
+        segment for segment in compressed_positive if segment.field != "scene_description"
     )
     compressed_bridges = tuple(
-        segment for segment in compressed_positive if segment.field == "natural_language_bridge"
+        segment for segment in compressed_positive if segment.field == "scene_description"
     )
     positive_text = _render_positive(compressed_tags, compressed_bridges)
-    negative_text = ", ".join(segment.text for segment in negative_result.segments)
+    negative_text = ", ".join(_render_segment(segment) for segment in negative_result.segments)
     positive_tokens = counter.count(positive_text)
     negative_tokens = counter.count(negative_text)
     trace = ledger.trace_rendering(
@@ -240,12 +231,18 @@ def _compress_stream(
     )
 
 
+def _render_segment(segment: AuthoredSegment) -> str:
+    if segment.render_weight is None:
+        return segment.text
+    return f"({segment.text}:{segment.render_weight:g})"
+
+
 def _render_positive(
     tags: tuple[AuthoredSegment, ...],
     bridges: tuple[AuthoredSegment, ...],
 ) -> str:
-    tag_text = ", ".join(segment.text for segment in tags)
-    bridge_text = " ".join(segment.text for segment in bridges)
+    tag_text = ", ".join(_render_segment(segment) for segment in tags)
+    bridge_text = " ".join(_render_segment(segment) for segment in bridges)
     if not bridge_text:
         return tag_text
     if not tag_text:

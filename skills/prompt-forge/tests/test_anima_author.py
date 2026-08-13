@@ -55,20 +55,20 @@ def request(
 
 def test_tag_only_output_uses_official_field_order() -> None:
     facts = (
-        fact("quality", "masterpiece", dimension="quality"),
+        fact("protocol", "masterpiece", dimension="quality"),
         fact("count", "1girl", dimension="count"),
         fact("character", "hatsune miku", dimension="identity"),
-        fact("copyright", "vocaloid", dimension="copyright"),
+        fact("series", "vocaloid", dimension="series"),
         fact("artist", "@kantoku", dimension="artist"),
         fact("appearance", "blue hair"),
     )
     positive = (
-        segment("appearance", "general", "blue hair", "appearance"),
+        segment("appearance", "appearance", "blue hair", "appearance"),
         segment("artist", "artist", "@kantoku", "artist"),
-        segment("copyright", "copyright", "vocaloid", "copyright"),
+        segment("series", "series", "vocaloid", "series"),
         segment("character", "character", "hatsune miku", "character"),
         segment("count", "count", "1girl", "count"),
-        segment("quality", "quality", "masterpiece", "quality"),
+        segment("protocol", "protocol_prefix", "masterpiece", "protocol"),
     )
     artifact = author_anima_prompt(request(facts, positive))
     assert artifact.status == "production_ready"
@@ -82,6 +82,7 @@ def test_tag_only_output_uses_official_field_order() -> None:
 
 def test_hybrid_output_allows_exactly_one_necessary_binding_bridge() -> None:
     facts = (
+        fact("protocol", "masterpiece", dimension="quality"),
         fact("count", "2girls", dimension="count"),
         fact("relation", "subject 1 holds subject 2's umbrella", dimension="ownership"),
     )
@@ -89,10 +90,11 @@ def test_hybrid_output_allows_exactly_one_necessary_binding_bridge() -> None:
         request(
             facts,
             (
+                segment("protocol", "protocol_prefix", "masterpiece", "protocol"),
                 segment("count", "count", "2girls", "count"),
                 segment(
                     "bridge",
-                    "natural_language_bridge",
+                    "scene_description",
                     "Subject 1 holds Subject 2's umbrella.",
                     "relation",
                 ),
@@ -103,7 +105,7 @@ def test_hybrid_output_allows_exactly_one_necessary_binding_bridge() -> None:
     assert artifact.status == "production_ready"
     assert artifact.prompt is not None
     assert artifact.prompt["positive"] == (
-        "2girls. Subject 1 holds Subject 2's umbrella."
+        "masterpiece, 2girls. Subject 1 holds Subject 2's umbrella."
     )
 
 
@@ -116,7 +118,7 @@ def test_tag_and_bridge_cannot_render_the_same_fact() -> None:
                 segment("tag", "general", "holding umbrella", "relation"),
                 segment(
                     "bridge",
-                    "natural_language_bridge",
+                    "scene_description",
                     "The subject is holding an umbrella.",
                     "relation",
                 ),
@@ -187,7 +189,7 @@ def test_budget_conflict_surfaces_protocol_errors_in_one_pass() -> None:
             complexity=Complexity(20, 20, 20, 20, 0),
             negative=(
                 AuthoredSegment(
-                    "neg_bad", "official_quality_baseline",
+                    "neg_bad", "quality_baseline",
                     "score_4, score_5", ("style",), 5, 2, 1,
                 ),
             ),
@@ -228,21 +230,25 @@ def test_budget_conflict_reports_preflight_field_errors() -> None:
 
 def test_negative_prompt_uses_its_own_budget_and_token_report() -> None:
     facts = (
+        fact("protocol", "masterpiece", dimension="quality"),
         fact("positive", "1girl", dimension="count"),
         fact("negative", "blurry", dimension="technical_defect"),
     )
     artifact = author_anima_prompt(
         request(
             facts,
-            (segment("positive", "count", "1girl", "positive"),),
+            (
+                segment("protocol", "protocol_prefix", "masterpiece", "protocol"),
+                segment("positive", "count", "1girl", "positive"),
+            ),
             negative=(
-                segment("negative", "image_technical_defects", "blurry", "negative"),
+                segment("negative", "technical_defects", "blurry", "negative"),
             ),
             exclusions=1,
         )
     )
     assert artifact.status == "production_ready"
-    assert artifact.prompt == {"positive": "1girl", "negative": "blurry"}
+    assert artifact.prompt == {"positive": "masterpiece, 1girl", "negative": "blurry"}
     assert artifact.token_report["negative"]["target"] == 40
     assert artifact.token_report["negative"]["actual"] > 0
 
@@ -273,3 +279,54 @@ def test_unresolvable_at_prefix_is_warning_not_error():
     ))
     report = audit_anima_prompt(("@my style",), "", ledger)
     assert all(f.severity != "error" for f in report.findings)
+
+
+def test_author_renders_weighted_segment():
+    from prompt_forge.anima.author import author_anima_prompt
+    from prompt_forge.contracts import (
+        AnimaAuthoringRequest, AuthoredSegment, Complexity, Fact,
+    )
+    facts = (
+        Fact("f0", "masterpiece", "user_locked", True, "s", "quality"),
+        Fact("f1", "smile", "agent_embellishment", False, "s", "expression"),
+    )
+    prefix = AuthoredSegment(
+        "s0", "protocol_prefix", "masterpiece", ("f0",), 1.0, 1.0, 1.0,
+    )
+    seg = AuthoredSegment(
+        "s1", "general", "smile", ("f1",), 1.0, 1.0, 1.0, render_weight=1.3,
+    )
+    req = AnimaAuthoringRequest(
+        facts=facts, positive_segments=(prefix, seg),
+        complexity=Complexity(1, 0, 0, 0, 0),
+    )
+    art = author_anima_prompt(req)
+    assert art.status == "production_ready"
+    assert "(smile:1.3)" in art.prompt["positive"]
+
+
+def test_author_rejects_old_field_names():
+    from prompt_forge.anima.author import author_anima_prompt
+    from prompt_forge.contracts import (
+        AnimaAuthoringRequest, AuthoredSegment, Complexity, Fact,
+    )
+    facts = (Fact("f1", "smile", "agent_embellishment", False, "s", "expression"),)
+    seg = AuthoredSegment("s1", "composition_and_camera", "smile", ("f1",), 1.0, 1.0, 1.0)
+    req = AnimaAuthoringRequest(
+        facts=facts, positive_segments=(seg,),
+        complexity=Complexity(1, 0, 0, 0, 0),
+    )
+    art = author_anima_prompt(req)
+    assert art.status == "quality_rejected"
+    assert "unsupported_positive_field" in art.audit["hard_gate_codes"]
+
+
+def test_weighted_artist_tag_is_not_artist_prefix_missing():
+    from prompt_forge.anima.audit import audit_anima_prompt
+    from prompt_forge.facts import FactLedger
+    from prompt_forge.contracts import Fact
+    ledger = FactLedger((
+        Fact("f1", "@kantoku", "user_explicit", False, "s", "artist"),
+    ))
+    report = audit_anima_prompt(("(@kantoku:2.0)",), "", ledger)
+    assert all(f.code != "artist_prefix_missing" for f in report.findings)

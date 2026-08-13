@@ -86,6 +86,7 @@ def audit_anima_prompt(
 
     for index, (raw_tag, exact) in enumerate(zip(tags, resolved_tags)):
         tag = raw_tag.strip()
+        deweighted = deweight(raw_tag)
         semantic = semantic_form(tag)
         fact_ids = tuple(
             fact_id
@@ -99,7 +100,7 @@ def audit_anima_prompt(
             findings.append(
                 AnimaAuditFinding(code, "error", message, index, raw_tag, fact_ids)
             )
-        elif exact is None and tag.startswith("@"):
+        elif exact is None and deweighted.startswith("@"):
             status = "unverified"
             findings.append(
                 AnimaAuditFinding(
@@ -123,7 +124,7 @@ def audit_anima_prompt(
                     fact_ids,
                 )
             )
-        elif exact.category == "artist" and not tag.startswith("@"):
+        elif exact.category == "artist" and not deweighted.startswith("@"):
             status = "artist_prefix_missing"
             findings.append(
                 AnimaAuditFinding(
