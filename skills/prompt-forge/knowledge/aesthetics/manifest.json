@@ -5,8 +5,7 @@
   "precedence": [
     "anti_patterns_override",
     "core_vocabulary",
-    "style_signatures",
-    "recipes"
+    "style_signatures"
   ],
   "structure": {
     "core_layers": [
@@ -17,8 +16,7 @@
       "mood-texture.md"
     ],
     "style_signatures_file": "style-signatures.md",
-    "anti_patterns_file": "anti-patterns.md",
-    "recipes_directory": "recipes/"
+    "anti_patterns_file": "anti-patterns.md"
   },
   "row_counts": {
     "composition_terms": 27,
@@ -26,9 +24,8 @@
     "palette_terms": 22,
     "camera_terms": 20,
     "mood_texture_terms": 38,
-    "style_signatures": 14,
-    "anti_patterns": 18,
-    "recipes": 6
+    "style_signatures": 20,
+    "anti_patterns": 18
   },
   "source_ids": [
     "anima-tag-vocabulary-2026-08-12",
@@ -62,7 +59,7 @@
   ],
   "manifest_sha256": "TBD_BY_BUILDER",
   "applies_to": {
-    "anima": "fully supported; the five core layers plus style-signatures and recipes",
+    "anima": "fully supported; the five core layers plus style-signatures and anti-patterns (recipes live under references/dialects/anima/recipes/)",
     "h3_t2va": "out of scope for this revision",
     "h3_ref2va": "out of scope for this revision"
   }
