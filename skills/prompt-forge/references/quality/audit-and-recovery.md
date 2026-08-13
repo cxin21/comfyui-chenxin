@@ -39,6 +39,11 @@ exact-token verification is invalid.
 | `token_quality_limit` | a stream exceeded its quality limit | see `conflict`; drop/unlink agent segments first |
 | `token_quality_limit` + others on a `budget_conflict` | over budget **and** protocol errors | fix all codes in one pass — budget and protocol are independent |
 
+> **Severity nuance:** `possible_binding_conflict` is emitted with `severity == "warning"` in
+> the findings, but it **is release-blocking** — the audit includes it in `hard_gate_codes`
+> and a build reporting it will not reach `production_ready`. Fix it (bind the tag to one fact
+> or split it) before shipping.
+
 `unverified` findings are **warnings, not errors** — advisory only. Treat them per
 [dictionary-preflight.md](dictionary-preflight.md), not as gates.
 

@@ -1,7 +1,7 @@
 # Detail & Mood
 
 ## 核心公式
-> 画面质感与情绪基调——让画面「看起来像什么」和「给人什么感觉」。灯光/光影/色调标签禁止输出（lora 已内置），仅允许非光影的氛围与特效标签。
+> 画面质感与情绪基调——让画面「看起来像什么」和「给人什么感觉」。灯光/光影/色调标签是合法词典标签（见 aesthetics/lighting.md 与 palette.md），本文件专注非光影的质感/氛围/特效标签。
 
 ## 变体维度表
 
@@ -33,7 +33,7 @@
 | 电影感 | `cinematic, cinematic composition, cinematic angle` |
 | 戏剧张力 | `dramatic tension, dramatic shadows` |
 | 空灵 | `ethereal, dreamcore, dreamlike` |
-| 暗黑 | `dark atmosphere, suspenseful, ominous` |
+| 暗黑 | `dark atmosphere, suspenseful, tense` |
 | 明暗对照 | `chiaroscuro` |
 | 诗意 | `poetic atmosphere` |
 | 混乱 | `chaos, explosive composition` |
@@ -49,13 +49,8 @@
 - `motion lines` 偏漫画风格，`motion blur` 偏摄影风格——二选一即可；`speed lines` + `motion blur` 可叠加但不要叠 3 个以上运动标签。
 - 运动标签适合高强度动作（后入、骑乘、种付、传教士冲刺）。
 - 数字效果（glitch / VHS / 数据流）是强风格标签，选 1 个即可；适合赛博/催眠/偷拍场景。
-- 禁止输出光线/光影/色调标签（lora 已内置）：
-  - 光线：`sunlight, moonlight, dim light, candlelight, neon light, neon lights, streetlights`
-  - 光影：`backlighting, rim light, warm lighting, cool lighting, golden hour glow, soft lighting`
-  - 色调：`warm tone, cool tone, sepia, blue tone, amber tone`
-  - 光学：`god rays, light rays, light particles, volumetric light beams, tyndall effect`
-  - 发光：`glowing, illuminated, lit, backlit, spotlight, flash`
-- 允许环境天气描写（`rain, snow, fog, steam, stormy, dust particles, underwater`）和时辰/大气标签。
+- 光线/光影/色调标签是合法词典标签（`neon lights`、`rim light`、`warm color`、`cool color`、`light particles` 等均可直接使用；标准命名与反模式见 aesthetics/lighting.md、palette.md、anti-patterns.md）。
+- 环境天气描写（`rain, snow, fog, steam, stormy, dust particles, underwater`）和时辰/大气标签可直接使用。
 
 ## 法典验证场景
 

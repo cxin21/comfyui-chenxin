@@ -9,13 +9,13 @@
 
 | 维度 | 可选标签 |
 |---|---|
-| Mood（情绪） | `melancholic` / `dramatic` / `epic` / `serene` / `lonely` / `romantic` / `mysterious` / `cheerful` / `nostalgic` / `ethereal` / `ominous` |
+| Mood（情绪） | `melancholic` / `dramatic` / `epic` / `serene` / `lonely` / `romantic` / `mysterious` / `cheerful` / `nostalgic` / `ethereal` / `tense` |
 | Atmosphere（空气） | `fog` / `smoke` / `rain` / `snow` / `wind` / `dust` / `embers` |
 | Surface（表面） | `wet` / `frost` / `cracks` / `worn` / `polished` / `matte` / `lace` / `silk` / `velvet` / `leather` |
-| Particle（粒子） | `sakura petals` / `petals` / `leaves` / `ash` / `bubbles` / `light particles` |
+| Particle（粒子） | `sakura petals` / `petals` / `leaves` / `debris` / `bubbles` / `light particles` |
 
 ## 氛围链
-`cheerful` → `romantic` → `nostalgic` → `melancholic` → `ominous`
+`cheerful` → `romantic` → `nostalgic` → `melancholic` → `tense`
 
 (从明亮欢快到阴沉威胁，情绪强度沿链递增。)
 
@@ -28,15 +28,15 @@
 
 ## 法典验证场景
 ### 场景 A — 雨夜独行
-tags: `melancholic`, `rain`, `wet`, `ash`
-备注: 雨中湿地面 + 飘灰，孤独忧郁氛围。
+tags: `melancholic`, `rain`, `wet`, `dust`
+备注: 雨中湿地面 + 飘尘，孤独忧郁氛围。
 
 ### 场景 B — 春日告白
 tags: `romantic`, `wind`, `sakura petals`, `silk`
 备注: 微风飘樱 + 丝绸衣物，柔和浪漫。
 
 ### 场景 C — 战后废墟
-tags: `ominous`, `dust`, `cracks`, `embers`
+tags: `tense`, `dust`, `cracks`, `embers`
 备注: 扬尘 + 龟裂地表 + 余烬，末日战后氛围。
 
 ### 场景 D — 雪夜温泉

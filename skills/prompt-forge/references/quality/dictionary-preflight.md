@@ -29,8 +29,10 @@ for t in ['score_9', 'male', 'holding katana', 'melee combat']:
 ## Reading the verdicts
 
 - **canonical** — the tag the model's vocabulary actually uses. Prefer these.
-- **known_alias** — the dictionary maps your tag to a canonical form. The returned prompt uses
-  the **canonical** form, not your spelling.
+- **known_alias** — the dictionary maps your tag to a canonical form. The audit/verification
+  resolves against that canonical, but the compiler renders your authored spelling **verbatim**
+  — it does not rewrite `male` to `male_focus` or `low angle` to `from_below`. Prefer the
+  canonical spelling yourself when authoring so the model sees the form its vocabulary knows.
 - **unverified** — not in the dictionary. Advisory: the gate does not block it, but it is an
   honest signal that the model may not have learned that exact semantic.
 
@@ -57,7 +59,10 @@ Common canonicalizations you will hit:
 
 ## After compiling: verify the returned string
 
-The `prompt` that `compile_prompt_artifact` returns is **exactly what the model sees** —
-aliases already resolved, tags in native order. Diff it against your segments before running
-`camera-image`: if the model-native form surprises you (a canonicalized alias, a reordered
-count), fix your segments and recompile rather than shipping a prompt you have not read.
+The `prompt` that `compile_prompt_artifact` returns is **exactly what the model sees** — your
+authored spelling verbatim, in native field order, with any `render_weight` applied as
+`(text:weight)`. It is **not** canonicalized: `low angle` stays `low angle` (dictionary
+canonical `from_below`), `photo (medium)` stays as authored. The dictionary resolves only for
+audit/verification. Diff the returned string against your segments before running
+`camera-image`; if the native form surprises you (an unverified tag, a reordered segment), fix
+your segments and recompile rather than shipping a prompt you have not read.

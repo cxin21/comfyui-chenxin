@@ -14,7 +14,7 @@ Cross-slot worldview check. Clothing, scene, detail/mood must share one worldvie
 |---|---|---|---|
 | 古风 | `hanfu`, `kimono`, `traditional clothing` | `ancient shrine`, `tatami`, `shouji` | `ink splash`, `poetic atmosphere`, muted |
 | 赛博 | `latex`, `metallic`, `cybernetic suit` | `cyberpunk city`, `neon city` | `neon lights`, `glitch`, vibrant |
-| 末世 | `leather armor`, `gas mask`, `tattered clothing` | `ruined city`, `desert`, `rubble` | `dust`, `ash`, `epic`, warm + high contrast |
+| 末世 | `leather armor`, `gas mask`, `tattered clothing` | `ruined city`, `desert`, `rubble` | `dust`, `debris`, `epic`, warm + high contrast |
 | 日常 | `casual clothes`, `school uniform` | `school`, `bedroom`, `street` | `natural light`, `cheerful`, soft |
 | 中世纪 | `plate armor`, `chainmail`, `tabard` | `medieval castle`, `candlelight room` | `candlelight`, `dramatic`, low key |
 | 当代奇幻 | `cloak`, `magical robes`, `runic accessories` | `enchanted forest`, `crystal cave` | `glow`, `ethereal`, mystical |
