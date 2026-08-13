@@ -4,6 +4,23 @@ All notable changes to comfyui-chenxin are documented here. Format follows [Keep
 
 ## [Unreleased] — current state on disk
 
+### prompt-forge anima prompt-methodology rewrite: virgin rewrite from model facts (2026-08-13) — v0.3.0
+
+**Methodology rewrite, no backward compat.** The Anima still-image authoring method is re-derived from the model's own documented behavior (LLM text encoder, official tag dialect, weighting, dropout, variants), replacing inherited Pony/NovelAI/SDXL habit.
+
+### Changed
+- 14-field positive enum → **9 slots** (`protocol_prefix, count, character, series, artist, appearance, general, environment, scene_description`); 5-field negative enum → **4 slots** (`quality_baseline, anatomy_and_structure, technical_defects, user_exclusions`)
+- Prompt weighting is now **first-class**: `AuthoredSegment.render_weight` renders `(text:weight)`; calibration ordinary 1.0–2.0 / artist 2.0–4.0; dictionary/audit/compression are weight-aware
+- **Enforced quality-prefix baseline**: a `protocol_prefix` segment is mandatory (hard gate `missing_protocol_prefix`); three tiers (Standard `masterpiece, best quality, score_7, safe` / Artist-led `best quality, safe` / Aesthetic `best quality, safe`)
+- Negative baseline corrected `score_4..6` → `score_1, score_2, score_3` (Anima official card)
+- `@` on a non-resolving tag downgraded from hard error to warning (permits `@style` descriptors)
+- Sparse-input completion methodology: five coherence layers, all `agent_embellishment`, never touching protected facts
+- Variant awareness (`base`/`aesthetic`/`turbo`) as an authoring input knob
+- Dialect, authoring-contract, natural-language, aesthetic-coverage, budget-ruler, tag-count-ruler, vocabulary map, and 6 recipes rewritten to the 9-slot model
+- H3 budget policies load from `references/dialects/minimax-h3/budget-policy.json` (v2.0 leftover fix); `Complexity.natural_language_bridges` renamed `scene_descriptions`
+- Anima benchmark corpus rebuilt to the 9-slot format
+- Full test suite green: **202 passed, 0 failed, 0 errors** (was 35 failed / 2 errors pre-cleanup)
+
 ### prompt-forge v2.0: clean refactor, full vocabulary, multi-model ready (2026-08-13) — v0.2.0
 
 **Structural rewrite.** No backward compat. References, knowledge, and scripts reorganized under the `prompt-forge` skill.
