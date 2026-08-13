@@ -315,7 +315,7 @@ def _delete_agent_embellishment(
         facts = tuple(ledger.get(fact_id) for fact_id in segment.fact_ids)
         if not all(fact.origin == "agent_embellishment" for fact in facts):
             continue
-        token_cost = counter.count(segment.text)
+        token_cost = counter.count(_render_segment_text(segment, structure))
         candidates.append(
             (
                 utility_density(
@@ -429,13 +429,21 @@ def _build_conflict(
     )
 
 
+def _render_segment_text(segment: AuthoredSegment, structure: Structure) -> str:
+    if structure == "anima" and segment.render_weight is not None:
+        return f"({segment.text}:{segment.render_weight:g})"
+    return segment.text
+
+
 def _count_segments(
     counter: TokenCounter,
     segments: list[AuthoredSegment] | tuple[AuthoredSegment, ...],
     structure: Structure,
 ) -> int:
     separator = ", " if structure == "anima" else "\n"
-    return counter.count(separator.join(segment.text for segment in segments))
+    return counter.count(
+        separator.join(_render_segment_text(segment, structure) for segment in segments)
+    )
 
 
 def _unique_segments(segments: list[AuthoredSegment]) -> list[AuthoredSegment]:

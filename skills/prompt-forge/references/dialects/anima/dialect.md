@@ -69,7 +69,7 @@ When the user gives little detail, complete it by coherent inference (see `../..
 
 For complete tag selection, consult the [vocabulary](vocabulary/) cluster:
 
-- [vocabulary/README.md](vocabulary/README.md) — positioning, field mapping, 5-segment structure
+- [vocabulary/README.md](vocabulary/README.md) — positioning, field mapping, 9-slot structure
 - [vocabulary/count-identity.md](vocabulary/count-identity.md) — count, IP, body type, age difference
 - [vocabulary/appearance.md](vocabulary/appearance.md) — hair, eyes, body, non-human, marks
 - [vocabulary/clothing.md](vocabulary/clothing.md) — garments + 7-dim modifications + contrast

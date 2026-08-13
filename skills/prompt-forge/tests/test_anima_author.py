@@ -332,6 +332,16 @@ def test_weighted_artist_tag_is_not_artist_prefix_missing():
     assert all(f.code != "artist_prefix_missing" for f in report.findings)
 
 
+def test_inline_weighted_reserved_tag_is_hard_error() -> None:
+    from prompt_forge.anima.audit import audit_anima_prompt
+    from prompt_forge.facts import FactLedger
+    ledger = FactLedger(())
+    report = audit_anima_prompt(("(year 202:2)", "(score 7:2)"), "", ledger)
+    codes = {finding.code for finding in report.findings if finding.severity == "error"}
+    assert "invalid_protocol_tag" in codes
+    assert "wrong_underscore_form" in codes
+
+
 def test_missing_protocol_prefix_is_quality_rejected() -> None:
     # The ONLY defect is the missing protocol_prefix segment: the request is
     # otherwise valid (a resolvable general tag on an agent fact).

@@ -93,7 +93,7 @@ def audit_anima_prompt(
             for fact_id, value in fact_semantics.items()
             if value == semantic
         )
-        syntax = _syntax_error(tag)
+        syntax = _syntax_error(deweighted)
         status: TagStatus
         if syntax is not None:
             status, code, message = syntax

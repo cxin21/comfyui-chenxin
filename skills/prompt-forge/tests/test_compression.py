@@ -12,6 +12,15 @@ class WordCounter:
         return len(text.replace(",", " ").split())
 
 
+class RecordingCounter:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def count(self, text: str) -> int:
+        self.calls.append(text)
+        return len(text.replace(",", " ").split())
+
+
 def fact(
     fact_id: str,
     *,
@@ -330,3 +339,50 @@ def test_anima_dedupes_weighted_and_bare_twin():
         soft_limit=1, quality_limit=2, structure="anima",
     )
     assert len(result.segments) == 1
+
+
+def test_anima_count_uses_rendered_weighted_form() -> None:
+    from prompt_forge.compression import compress_to_budget
+    from prompt_forge.contracts import AuthoredSegment, Fact
+    from prompt_forge.facts import FactLedger
+    ledger = FactLedger(
+        (Fact("f1", "smile", "user_explicit", False, "s", "expression"),)
+    )
+    seg = AuthoredSegment(
+        "s1", "general", "smile", ("f1",), 1.0, 1.0, 1.0, render_weight=1.3
+    )
+    counter = RecordingCounter()
+    result = compress_to_budget(
+        segments=(seg,),
+        ledger=ledger,
+        counter=counter,  # type: ignore[arg-type]
+        soft_limit=100,
+        quality_limit=200,
+        structure="anima",
+    )
+    assert result.status == "within_budget"
+    assert "(smile:1.3)" in counter.calls
+
+
+def test_h3_count_ignores_render_weight() -> None:
+    from prompt_forge.compression import compress_to_budget
+    from prompt_forge.contracts import AuthoredSegment, Fact
+    from prompt_forge.facts import FactLedger
+    ledger = FactLedger(
+        (Fact("f1", "smile", "user_explicit", False, "s", "expression"),)
+    )
+    seg = AuthoredSegment(
+        "s1", "general", "smile", ("f1",), 1.0, 1.0, 1.0, render_weight=1.3
+    )
+    counter = RecordingCounter()
+    result = compress_to_budget(
+        segments=(seg,),
+        ledger=ledger,
+        counter=counter,  # type: ignore[arg-type]
+        soft_limit=100,
+        quality_limit=200,
+        structure="h3_t2va",
+    )
+    assert result.status == "within_budget"
+    assert "smile" in counter.calls
+    assert not any("(smile:1.3)" in call for call in counter.calls)

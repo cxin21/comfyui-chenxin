@@ -12,7 +12,7 @@ A bridge is a concise natural-language phrase appended after all tags. Use when 
 ## Rules
 
 - **Count ≤ 1** — one bridge per prompt.
-- **Position = end of positive stream** — after all tags, separated by `, `.
+- **Position = end of positive stream** — after all tags, separated by `. `.
 - **Fact dimensions allowed**: `ownership`, `spatial_relation`, `causal_action`, `action_result`, `relation`.
 - **No overlap with tag segments** — bind each fact once (tag or bridge, never both).
 

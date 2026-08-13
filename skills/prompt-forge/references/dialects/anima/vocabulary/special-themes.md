@@ -1,7 +1,7 @@
 # Special Themes
 
 ## 核心公式
-> 跨槽位场景配方——协调 count/gender → clothing → pose/action → expression → scene 多个槽位，而非单槽位可选。
+> 跨槽位场景配方——协调 count / character / appearance / general / environment 等多个槽位（9 槽位结构，见 dialect.md），而非单槽位可选。
 
 ## 变体维度表
 
@@ -65,7 +65,7 @@
 
 ## 使用提示
 
-- 跨槽位场景必须先匹配主题配方，再按 §5 决策树对应基础类型填充各槽位。
+- 跨槽位场景必须先匹配主题配方，再按 vocabulary/README.md 的 field mapping 对应基础类型填充各槽位。
 - NTR 核心在「谁在看/谁知道」——分屏（split screen）+ 电话（talking on phone / smartphone visible）是最强镜头工具。
 - 绑标签要写清楚束缚了什么部位（arms/legs/torso/wrists/ankles）；绳痕（`rope marks` + `skindentation`）是真实感关键。
 - 物化强调非人化（`objectification` / `degradation` / `used goods`）+ 过量体液（`excessive cum` / `cum bath`）；与普通群交的区别在「被用完后丢弃」的残骸感。
