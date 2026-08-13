@@ -39,6 +39,7 @@ class AuthoredSegment:
     priority: float
     adherence_risk: float
     source_confidence: float
+    render_weight: float | None = None
 
 
 @dataclass(frozen=True)
@@ -65,6 +66,7 @@ class AnimaAuthoringRequest:
     complexity: Complexity
     negative_segments: tuple[AuthoredSegment, ...] = ()
     exclusion_groups: int = 0
+    variant: Literal["base", "aesthetic", "turbo"] = "base"
 
 
 @dataclass(frozen=True)

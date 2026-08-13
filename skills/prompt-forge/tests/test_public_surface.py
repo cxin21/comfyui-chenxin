@@ -31,6 +31,7 @@ def test_contracts_are_explicit_and_non_interchangeable() -> None:
         "complexity",
         "negative_segments",
         "exclusion_groups",
+        "variant",
     ]
     assert [field.name for field in fields(H3T2VAAuthoringRequest)] == [
         "facts",

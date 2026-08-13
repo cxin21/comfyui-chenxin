@@ -245,3 +245,20 @@ def test_negative_prompt_uses_its_own_budget_and_token_report() -> None:
     assert artifact.prompt == {"positive": "1girl", "negative": "blurry"}
     assert artifact.token_report["negative"]["target"] == 40
     assert artifact.token_report["negative"]["actual"] > 0
+
+
+def test_segment_render_weight_defaults_none():
+    from prompt_forge.contracts import AuthoredSegment
+    seg = AuthoredSegment(
+        segment_id="s1", field="general", text="smile",
+        fact_ids=("f1",), priority=1.0, adherence_risk=1.0, source_confidence=1.0,
+    )
+    assert seg.render_weight is None
+
+
+def test_anima_request_variant_defaults_base():
+    from prompt_forge.contracts import AnimaAuthoringRequest, Complexity
+    req = AnimaAuthoringRequest(
+        facts=(), positive_segments=(), complexity=Complexity(1, 0, 0, 0, 0),
+    )
+    assert req.variant == "base"
