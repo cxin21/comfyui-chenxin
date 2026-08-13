@@ -403,3 +403,12 @@ def test_deweight_strips_artist_weight():
 def test_deweight_leaves_bare_tag_unchanged():
     from prompt_forge.anima.protocol import deweight
     assert deweight("smile") == "smile"
+
+
+def test_resolve_weighted_tag_matches_bare_tag():
+    from prompt_forge.anima.dictionary import AnimaTagDictionary
+    d = AnimaTagDictionary()
+    bare = d.resolve("score_9")
+    weighted = d.resolve("(score_9:2)")
+    assert bare is not None
+    assert weighted is not None and weighted.canonical == bare.canonical

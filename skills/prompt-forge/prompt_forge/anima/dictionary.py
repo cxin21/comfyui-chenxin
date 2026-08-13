@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from .protocol import deweight
+
 
 _DEFAULT_DATABASE = (
     Path(__file__).resolve().parents[2] / "knowledge" / "anima" / "tags.sqlite"
@@ -136,7 +138,7 @@ class AnimaTagDictionary:
             return None
         if connection is None:
             return self.resolve_many((tag,))[0]
-        display = " ".join(tag.strip().lower().lstrip("@").split())
+        display = " ".join(deweight(tag).lower().lstrip("@").split())
         canonical = display.replace(" ", "_")
         row = connection.execute(
                 """
