@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Mapping
@@ -20,9 +21,17 @@ def load_protocol() -> Mapping[str, Any]:
 
 
 def canonical_form(tag: str) -> str:
-    value = " ".join(tag.strip().lower().lstrip("@").split())
+    value = " ".join(deweight(tag).lower().lstrip("@").split())
     return value if value.startswith("score_") else value.replace(" ", "_")
 
 
 def semantic_form(value: str) -> str:
-    return " ".join(value.strip().lower().lstrip("@").replace("_", " ").split())
+    return " ".join(deweight(value).lower().lstrip("@").replace("_", " ").split())
+
+
+_WEIGHTED = re.compile(r"\(\s*([^:()]+?)\s*:\s*\d+(?:\.\d+)?\s*\)")
+
+
+def deweight(text: str) -> str:
+    """Strip a (tag:weight) wrapper down to the bare tag."""
+    return _WEIGHTED.sub(r"\1", text).strip()

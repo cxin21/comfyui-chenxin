@@ -388,3 +388,18 @@ def test_unknown_ordinary_semantics_are_advisory_only() -> None:
     assert report.entries[0].status == "unverified"
     assert not report.release_blocking
     assert report.findings[0].severity == "warning"
+
+
+def test_deweight_strips_plain_weight():
+    from prompt_forge.anima.protocol import deweight
+    assert deweight("(chibi:2)") == "chibi"
+
+
+def test_deweight_strips_artist_weight():
+    from prompt_forge.anima.protocol import deweight
+    assert deweight("(@wlop:1.2)") == "@wlop"
+
+
+def test_deweight_leaves_bare_tag_unchanged():
+    from prompt_forge.anima.protocol import deweight
+    assert deweight("smile") == "smile"
