@@ -42,24 +42,26 @@ def validate_tag(tag: str) -> dict:
 
     # Exact match first
     row = conn.execute(
-        "SELECT canonical, frequency FROM tags WHERE canonical = ?", (tag,)
+        "SELECT canonical, usage_count FROM tags WHERE canonical = ?", (tag,)
     ).fetchone()
     if row:
         return {
             "canonical": row["canonical"],
-            "frequency": row["frequency"],
+            "frequency": row["usage_count"],
             "verified": True,
             "alias": False,
         }
 
-    # Alias match
+    # Alias match (aliases table stores alias -> tag_id, JOIN to get canonical)
     row = conn.execute(
-        "SELECT canonical, frequency FROM aliases WHERE alias = ?", (tag,)
+        "SELECT t.canonical, t.usage_count FROM aliases a "
+        "JOIN tags t ON a.tag_id = t.tag_id WHERE a.alias = ?",
+        (tag,),
     ).fetchone()
     if row:
         return {
             "canonical": row["canonical"],
-            "frequency": row["frequency"],
+            "frequency": row["usage_count"],
             "verified": True,
             "alias": True,
         }

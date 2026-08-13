@@ -44,11 +44,12 @@ def _tag_set(segments: list[dict]) -> set[str]:
 def _check_conflicts(tags: set[str]) -> list[str]:
     errors = []
     for pair_set in VIEW_CONFLICTS + IDENTITY_CONFLICTS:
-        for group_a, group_b in [(list(s)[0], list(s)[1]) for s in pair_set]:
-            a_hit = group_a in tags
-            b_hit = any(t in tags for t in group_b)
-            if a_hit and b_hit:
-                errors.append(f"conflict: {group_a} + {group_b}")
+        groups = list(pair_set)
+        group_a, group_b = groups[0], groups[1]
+        a_hit = any(t in tags for t in group_a)
+        b_hit = any(t in tags for t in group_b)
+        if a_hit and b_hit:
+            errors.append(f"conflict: {group_a[0] if len(group_a)==1 else '/'.join(group_a)} + {group_b[0] if len(group_b)==1 else '/'.join(group_b)}")
     return errors
 
 
