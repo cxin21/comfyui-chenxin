@@ -87,7 +87,7 @@ def anima_request(
             "explicit_relations": relations,
             "complex_actions": actions,
             "environment_clusters": environments,
-            "natural_language_bridges": bridges,
+            "scene_descriptions": bridges,
         },
     }
 
@@ -99,10 +99,15 @@ def build_anima() -> list[dict[str, Any]]:
         "white dress", "side view", "soft lighting", "holding book", "city skyline",
     ]
     for index, concept in enumerate(concepts, 1):
-        facts = [fact("count", "1girl", dimension="count"), fact("concept", concept)]
+        facts = [
+            fact("count", "1girl", dimension="count"),
+            fact("concept", concept),
+            fact("quality", "masterpiece", dimension="quality"),
+        ]
         result.append(case(
             f"anima-simple-{index:02d}", "anima", "simple", "production_ready", facts,
             anima_request([
+                segment("quality", "protocol_prefix", "masterpiece", "quality"),
                 segment("count", "count", "1girl", "count"),
                 segment("concept", "general", concept, "concept"),
             ]),
@@ -113,13 +118,15 @@ def build_anima() -> list[dict[str, Any]]:
             fact("count", "2girls", dimension="count"),
             fact("relation", relation, dimension="spatial_relation"),
             fact("exclude", f"unwanted artifact {index}", dimension="exclusion"),
+            fact("quality", "masterpiece", dimension="quality"),
         ]
         result.append(case(
             f"anima-boundary-{index:02d}", "anima", "boundary", "production_ready", facts,
             anima_request(
                 [
+                    segment("quality", "protocol_prefix", "masterpiece", "quality"),
                     segment("count", "count", "2girls", "count"),
-                    segment("bridge", "natural_language_bridge", relation, "relation"),
+                    segment("bridge", "scene_description", relation, "relation"),
                 ],
                 subjects=2,
                 relations=1,
@@ -140,14 +147,14 @@ def build_anima() -> list[dict[str, Any]]:
     adversarial.append(("quality_rejected", [fact("relation", "holding umbrella", dimension="ownership")], anima_request(
         [
             segment("tag", "general", "holding umbrella", "relation"),
-            segment("bridge", "natural_language_bridge", "The subject is holding an umbrella.", "relation"),
+            segment("bridge", "scene_description", "The subject is holding an umbrella.", "relation"),
         ], relations=1, bridges=1,
     )))
     adversarial.append(("quality_rejected", [fact("x", "blue hair")], anima_request([
         segment("x", "future_field", "blue hair", "x")
     ])))
     adversarial.append(("quality_rejected", [fact("r", "Subject 1 follows Subject 2.", dimension="relation")], anima_request([
-        segment("r", "natural_language_bridge", "Subject 1 follows Subject 2.", "r")
+        segment("r", "scene_description", "Subject 1 follows Subject 2.", "r")
     ], subjects=2, relations=1, bridges=0)))
     adversarial.append(("quality_rejected", [fact("artist", "@unknownbenchmarkartist", dimension="artist")], anima_request([
         segment("artist", "artist", "@unknownbenchmarkartist", "artist")
@@ -167,8 +174,8 @@ def build_anima() -> list[dict[str, Any]]:
         fact("r1", "Subject 1 moves left.", dimension="relation"),
         fact("r2", "Subject 2 moves right.", dimension="relation", owner="subject_2"),
     ], anima_request([
-        segment("r1", "natural_language_bridge", "Subject 1 moves left.", "r1"),
-        segment("r2", "natural_language_bridge", "Subject 2 moves right.", "r2"),
+        segment("r1", "scene_description", "Subject 1 moves left.", "r1"),
+        segment("r2", "scene_description", "Subject 2 moves right.", "r2"),
     ], subjects=2, relations=2, bridges=2)))
     for index, (status, facts, request) in enumerate(adversarial, 1):
         result.append(case(f"anima-adversarial-{index:02d}", "anima", "adversarial", status, facts, request))
