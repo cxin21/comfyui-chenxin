@@ -73,13 +73,12 @@ def test_exact_and_semantic_dedupe_preserve_fact_trace() -> None:
 @pytest.mark.parametrize(
     ("structure", "field", "expected"),
     [
-        ("anima", "natural_language_stable_attribute", "tag"),
         ("h3_ref2va", "detailed_stable_appearance", "subject_definitions"),
         ("h3_t2va", "shot_global_soundscape", "overall_soundscape"),
         ("h3_ref2va", "shot_non_diegetic_music", "non_diegetic_music"),
     ],
 )
-def test_structure_extraction_uses_only_three_fixed_dialects(
+def test_h3_structure_extraction_uses_fixed_dialects(
     structure: str,
     field: str,
     expected: str,
@@ -95,6 +94,24 @@ def test_structure_extraction_uses_only_three_fixed_dialects(
     )
     assert result.segments[0].field == expected
     assert result.operations[0].pass_name == "structure_extraction"
+
+
+def test_anima_does_not_extract_structure_fields() -> None:
+    # Ruling 1: the legacy natural_language_stable_attribute -> tag mapping is
+    # gone; the anima dialect has no model-native structure fields to extract.
+    ledger = FactLedger((fact("inferred", origin="necessary_inference"),))
+    result = compress_to_budget(
+        segments=(
+            segment("one", "stable concise fact", "inferred", field="natural_language_stable_attribute"),
+        ),
+        ledger=ledger,
+        counter=WordCounter(),  # type: ignore[arg-type]
+        soft_limit=1,
+        quality_limit=10,
+        structure="anima",
+    )
+    assert result.segments[0].field == "natural_language_stable_attribute"
+    assert not any(op.pass_name == "structure_extraction" for op in result.operations)
 
 
 def test_lexical_compression_then_agent_deletion_are_ordered() -> None:
@@ -293,3 +310,23 @@ def test_invalid_limits_and_structure_are_rejected() -> None:
             quality_limit=2,
             structure="generic",  # type: ignore[arg-type]
         )
+
+
+def test_anima_dedupes_weighted_and_bare_twin():
+    from prompt_forge.compression import compress_to_budget
+    from prompt_forge.facts import FactLedger
+    from prompt_forge.contracts import AuthoredSegment, Fact
+    from prompt_forge.token_counting import TokenCounter
+    from pathlib import Path
+    tokenizer_dir = Path(__file__).resolve().parents[1] / "knowledge" / "tokenizers" / "anima-qwen3-0.6b"
+    ledger = FactLedger((
+        Fact("f1", "smile", "user_explicit", False, "s", "expression"),
+    ))
+    a = AuthoredSegment("a", "general", "smile", ("f1",), 1.0, 1.0, 1.0)
+    b = AuthoredSegment("b", "general", "(smile:1.3)", ("f1",), 1.0, 1.0, 1.0)
+    counter = TokenCounter.load(tokenizer_dir, "anima-qwen3-0.6b")
+    result = compress_to_budget(
+        segments=(a, b), ledger=ledger, counter=counter,
+        soft_limit=1, quality_limit=2, structure="anima",
+    )
+    assert len(result.segments) == 1

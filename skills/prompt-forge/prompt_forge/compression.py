@@ -84,7 +84,7 @@ _PROTECTED_DIMENSIONS = frozenset(
     }
 )
 _STRUCTURE_FIELDS: dict[Structure, dict[str, str]] = {
-    "anima": {"natural_language_stable_attribute": "tag"},
+    "anima": {},
     "h3_t2va": {
         "shot_global_soundscape": "overall_soundscape",
         "shot_non_diegetic_music": "non_diegetic_music",
@@ -131,9 +131,9 @@ def compress_to_budget(
             "within_budget", tuple(current), actual, (), None
         )
 
-    current, new_operations = _exact_dedupe(current, counter)
+    current, new_operations = _exact_dedupe(current, counter, structure)
     operations.extend(new_operations)
-    current, new_operations = _semantic_dedupe(current, counter)
+    current, new_operations = _semantic_dedupe(current, counter, structure)
     operations.extend(new_operations)
     current, new_operations = _extract_structure(current, counter, structure)
     operations.extend(new_operations)
@@ -177,12 +177,13 @@ def compress_to_budget(
 def _exact_dedupe(
     segments: list[AuthoredSegment],
     counter: TokenCounter,
+    structure: Structure,
 ) -> tuple[list[AuthoredSegment], list[CompressionOperation]]:
     kept: list[AuthoredSegment] = []
     indices: dict[tuple[str, str], int] = {}
     operations: list[CompressionOperation] = []
     for segment in segments:
-        key = (segment.field, _exact_text(segment.text))
+        key = (segment.field, _dedupe_text(_exact_text(segment.text), structure))
         previous_index = indices.get(key)
         if previous_index is None:
             indices[key] = len(kept)
@@ -207,10 +208,14 @@ def _exact_dedupe(
 def _semantic_dedupe(
     segments: list[AuthoredSegment],
     counter: TokenCounter,
+    structure: Structure,
 ) -> tuple[list[AuthoredSegment], list[CompressionOperation]]:
     groups: dict[tuple[frozenset[str], str], list[AuthoredSegment]] = {}
     for segment in segments:
-        key = (frozenset(segment.fact_ids), _semantic_text(segment.text))
+        key = (
+            frozenset(segment.fact_ids),
+            _dedupe_text(_semantic_text(segment.text), structure),
+        )
         groups.setdefault(key, []).append(segment)
     removed: set[str] = set()
     operations: list[CompressionOperation] = []
@@ -436,6 +441,13 @@ def _count_segments(
 def _unique_segments(segments: list[AuthoredSegment]) -> list[AuthoredSegment]:
     by_id = {segment.segment_id: segment for segment in segments}
     return [by_id[key] for key in sorted(by_id)]
+
+
+def _dedupe_text(text: str, structure: Structure) -> str:
+    if structure != "anima":
+        return text
+    from .anima.protocol import deweight
+    return deweight(text)
 
 
 def _exact_text(text: str) -> str:
