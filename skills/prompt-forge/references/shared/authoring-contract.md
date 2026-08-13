@@ -5,10 +5,11 @@
 ```json
 {
   "facts": [{"fact_id": "...", "value": "...", "origin": "...", "locked": bool, "owner": "...", "dimension": "..."}],
-  "positive_segments": [{"segment_id": "...", "field": "...", "text": "...", "fact_ids": ["..."]}],
+  "positive_segments": [{"segment_id": "...", "field": "...", "text": "...", "fact_ids": ["..."], "render_weight": float | null}],
   "complexity": {"subjects": int, "explicit_relations": int, "complex_actions": int, "environment_clusters": int, "natural_language_bridges": int},
-  "negative_segments": [{"segment_id": "...", "field": "...", "text": "...", "fact_ids": ["..."]}],
-  "exclusion_groups": int
+  "negative_segments": [{"segment_id": "...", "field": "...", "text": "...", "fact_ids": ["..."], "render_weight": float | null}],
+  "exclusion_groups": int,
+  "variant": "base"
 }
 ```
 
@@ -24,16 +25,17 @@ Positive segments are rendered in this order; **earlier fields carry higher impl
 
 | Position | Field | Weight | Purpose |
 |---|---|---|---|
-| 1 | `quality_meta_year_safety` | highest | quality tags, year, safety |
+| 1 | `protocol_prefix` | highest (enforced baseline) | quality + meta + year + safety tags |
 | 2 | `count` | high | subject count |
-| 3 | `character` | high | subject identity |
-| 4 | `copyright` | high | IP |
-| 5 | `artist` | medium | @artist |
-| 6 | `general` | medium | free visual semantics |
-| 7 | `composition_and_camera` | medium | framing, lens |
-| 8 | `environment_and_props` | medium | scene, props |
-| 9 | `lighting_and_visual_style` | medium | light, color, mood |
-| 10 | `natural_language_bridge` | lowest | bridge at end |
+| 3 | `character` | high | subject identity / IP character |
+| 4 | `series` | high | source work / franchise |
+| 5 | `artist` | medium-high | `@artist`, weighted, mixable |
+| 6 | `appearance` | medium | hair, eyes, body, clothing |
+| 7 | `general` | medium | action/expression + five aesthetic layers, ordered (below) |
+| 8 | `environment` | medium | location, props, weather |
+| 9 | `scene_description` | lowest | ≤1 natural-language bridge, after a period |
+
+`general` internal order: action/expression → composition → lighting → palette → camera → mood.
 
 ## One tag per segment
 
@@ -46,13 +48,19 @@ Every `positive_segments[].text` and every `negative_segments[].text` is **exact
 - `@artist` — `@` prefix, must resolve
 - Ordinary tags — spaces, never underscores
 
-## Positive field enums
+## Positive slots (anima)
 
-`quality_meta_year_safety`, `count`, `subject_anchor`, `character`, `copyright`, `artist`, `general`, `tag`, `attribute_binding`, `action_and_relation`, `composition_and_camera`, `environment_and_props`, `lighting_and_visual_style`, `natural_language_bridge`
+`protocol_prefix`, `count`, `character`, `series`, `artist`, `appearance`, `general`, `environment`, `scene_description`
 
-## Negative field enums
+Ordered front-weighted; `general` internally orders action/expression → composition → lighting → palette → camera → mood.
 
-`official_quality_baseline`, `anatomy_count_structure_errors`, `image_technical_defects`, `user_exclusions`, `general`
+## Negative slots (anima)
+
+`quality_baseline`, `anatomy_and_structure`, `technical_defects`, `user_exclusions`
+
+## Weighted segment
+
+A segment may set `render_weight: float | None`. When set, it renders `(text:weight)`. Dedup/audit/compression operate on the de-weighted text.
 
 ## Compressibility
 

@@ -29,3 +29,10 @@ A bridge is a concise natural-language phrase appended after all tags. Use when 
 - Decoration or "polish" prose → DROP; tags only
 - Long descriptive paragraph → break into tags or split scene
 - Anything that could be a tag → use the tag instead
+
+## Sparse and multi-character guidance
+
+- Multiple characters: name the character first, then describe appearance — listing names alone confuses the model.
+- A pure natural-language author path needs ≥2 sentences; very short NL is unstable.
+- Long NL drifts toward realism/over-detail — keep the bridge short.
+- Cold characters: `She is a character from the game "Azur Lane", and her name is Anchorage`.

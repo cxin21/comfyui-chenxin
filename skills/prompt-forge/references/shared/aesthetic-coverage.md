@@ -33,3 +33,17 @@ Skip aesthetic retrieval when:
 - prompt is text-only (no visual)
 - prompt is a sticker / icon / emoji style
 - prompt is a schematic / diagram / chart
+
+## Sparse-input completion
+
+When the user's request is thin, complete it by coherent inference — never reflect it back empty. All completion is `agent_embellishment` (removable). Five coherence layers, in order:
+
+| Layer | Fill example |
+|---|---|
+| appearance coherence | `brown hair` + `amber eyes` + `leather jacket` |
+| environment coherence | `abandoned city` + `crumbling overpass` + `ashfall` |
+| action↔environment | `running` under `blizzard` ⇒ `struggling through deep snow` |
+| lighting coherence | `golden hour` + `backlighting` + long shadows |
+| mood coherence | wasteland ⇒ `somber`, `desaturated`, `overcast` |
+
+Every filled tag passes aesthetic retrieval + dictionary verification.

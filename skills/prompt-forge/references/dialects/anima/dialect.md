@@ -63,7 +63,7 @@ Warning: anime character names carry style bias — raise artist weight or bind 
 
 ## Sparse input
 
-When the user gives little detail, complete it by coherent inference (see `references/shared/aesthetic-coverage.md`) — five coherence layers, all as removable `agent_embellishment`.
+When the user gives little detail, complete it by coherent inference (see `../../shared/aesthetic-coverage.md`) — five coherence layers, all as removable `agent_embellishment`.
 
 ## Vocabulary
 
