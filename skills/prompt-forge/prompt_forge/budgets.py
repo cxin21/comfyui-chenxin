@@ -14,8 +14,8 @@ from .contracts import Complexity
 
 _KNOWLEDGE_ROOT = Path(__file__).resolve().parent.parent / "knowledge"
 _ANIMA_POLICY = _KNOWLEDGE_ROOT / "anima" / "budget-policy.json"
-_H3_T2VA_POLICY = _KNOWLEDGE_ROOT / "h3-t2va-budget-policy.json"
-_H3_REF2VA_POLICY = _KNOWLEDGE_ROOT / "h3-ref2va-budget-policy.json"
+_REFERENCES_ROOT = Path(__file__).resolve().parent.parent / "references"
+_H3_POLICY = _REFERENCES_ROOT / "dialects" / "minimax-h3" / "budget-policy.json"
 
 
 class BudgetPolicyError(ValueError):
@@ -87,7 +87,7 @@ def plan_anima_budget(
         "explicit_relations": complexity.explicit_relations,
         "complex_actions": complexity.complex_actions,
         "environment_clusters": complexity.environment_clusters,
-        "natural_language_bridges": complexity.natural_language_bridges,
+        "scene_descriptions": complexity.scene_descriptions,
     }
     for name, value in values.items():
         _require_non_negative_integer(name, value)
@@ -104,8 +104,8 @@ def plan_anima_budget(
         + _integer(formula, "per_complex_action") * complexity.complex_actions
         + _integer(formula, "per_environment_cluster")
         * complexity.environment_clusters
-        + _integer(formula, "per_natural_language_bridge")
-        * complexity.natural_language_bridges
+        + _integer(formula, "per_scene_description")
+        * complexity.scene_descriptions
     )
     positive_target = _clamp(
         positive_raw,
@@ -151,7 +151,7 @@ def plan_h3_t2va_budget(
     dialogue_tokens: int,
 ) -> H3BudgetPlan:
     """Plan MiniMax-H3 text-to-video-with-audio text budget."""
-    policy = _load_policy(_H3_T2VA_POLICY)
+    policy = _mapping(_load_policy(_H3_POLICY), "t2va")
     formula = _mapping(policy, "formula")
     max_shots = _validate_h3_inputs(
         duration_seconds,
@@ -196,7 +196,7 @@ def plan_h3_ref2va_budget(
 ) -> H3BudgetPlan:
     """Plan MiniMax-H3 reference-to-video-with-audio text budget."""
     _require_positive_integer("reference_count", reference_count)
-    policy = _load_policy(_H3_REF2VA_POLICY)
+    policy = _mapping(_load_policy(_H3_POLICY), "ref2va")
     formula = _mapping(policy, "formula")
     max_shots = _validate_h3_inputs(
         duration_seconds,

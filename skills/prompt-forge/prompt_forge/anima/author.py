@@ -78,8 +78,8 @@ def author_anima_prompt(request: AnimaAuthoringRequest) -> PromptArtifact:
     tag_segments = tuple(
         segment for segment in ordered_positive if segment.field != "scene_description"
     )
-    if len(bridges) != request.complexity.natural_language_bridges or len(bridges) > 1:
-        hard_codes.append("natural_language_bridge_count")
+    if len(bridges) != request.complexity.scene_descriptions or len(bridges) > 1:
+        hard_codes.append("scene_description_count")
     tag_fact_ids = {fact_id for segment in tag_segments for fact_id in segment.fact_ids}
     bridge_fact_ids = {fact_id for segment in bridges for fact_id in segment.fact_ids}
     if tag_fact_ids.intersection(bridge_fact_ids):

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from dataclasses import asdict, replace
 from math import floor
@@ -28,7 +29,8 @@ from .common import (
 _MODEL = "MiniMaxAI/MiniMax-H3"
 _ROOT = Path(__file__).resolve().parents[2]
 _TOKENIZER = _ROOT / "knowledge" / "tokenizers" / "h3-qwen3-vl"
-_POLICY = _ROOT / "knowledge" / "h3-ref2va-budget-policy.json"
+_POLICY = _ROOT / "references" / "dialects" / "minimax-h3" / "budget-policy.json"
+_POLICY_KEY = "ref2va"
 _FIELD_ORDER = (
     "subject_definitions",
     "summary",
@@ -356,5 +358,8 @@ def _artifact(
 def _knowledge_hash() -> str:
     digest = hashlib.sha256()
     digest.update((_TOKENIZER / "manifest.json").read_bytes())
-    digest.update(_POLICY.read_bytes())
+    policy = json.loads(_POLICY.read_text(encoding="utf-8"))
+    digest.update(
+        json.dumps(policy[_POLICY_KEY], sort_keys=True, separators=(",", ":")).encode()
+    )
     return digest.hexdigest()

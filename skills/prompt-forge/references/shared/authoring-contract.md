@@ -6,7 +6,7 @@
 {
   "facts": [{"fact_id": "...", "value": "...", "origin": "...", "locked": bool, "owner": "...", "dimension": "..."}],
   "positive_segments": [{"segment_id": "...", "field": "...", "text": "...", "fact_ids": ["..."], "render_weight": float | null}],
-  "complexity": {"subjects": int, "explicit_relations": int, "complex_actions": int, "environment_clusters": int, "natural_language_bridges": int},
+  "complexity": {"subjects": int, "explicit_relations": int, "complex_actions": int, "environment_clusters": int, "scene_descriptions": int},
   "negative_segments": [{"segment_id": "...", "field": "...", "text": "...", "fact_ids": ["..."], "render_weight": float | null}],
   "exclusion_groups": int,
   "variant": "base"

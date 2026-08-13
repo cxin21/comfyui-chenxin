@@ -256,8 +256,7 @@ def source_cache_key_files(source_root: Path) -> tuple[Path, ...]:
         Path("skills/prompt-forge/knowledge/anima/sources.lock.json"),
         Path("skills/prompt-forge/knowledge/anima/tags.sqlite"),
         Path("skills/prompt-forge/knowledge/anima/budget-policy.json"),
-        Path("skills/prompt-forge/knowledge/h3-t2va-budget-policy.json"),
-        Path("skills/prompt-forge/knowledge/h3-ref2va-budget-policy.json"),
+        Path("skills/prompt-forge/references/dialects/minimax-h3/budget-policy.json"),
     ]
     for snapshot in ("anima-qwen3-0.6b", "h3-qwen3-vl"):
         root = prompt / "knowledge" / "tokenizers" / snapshot

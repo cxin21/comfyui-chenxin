@@ -5,7 +5,7 @@
     "per_explicit_relation": 24,
     "per_complex_action": 32,
     "per_environment_cluster": 24,
-    "per_natural_language_bridge": 64,
+    "per_scene_description": 64,
     "positive_min": 128,
     "positive_max": 512,
     "negative_base": 32,

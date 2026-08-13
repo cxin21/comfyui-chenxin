@@ -30,7 +30,7 @@ exact-token verification is invalid.
 | `wrong_underscore_form` | an ordinary tag uses an underscore | use spaces (`blue hair`, not `blue_hair`) |
 | `missing_protocol_prefix` | positive stream lacks a `protocol_prefix` segment (enforced quality baseline) | add one `protocol_prefix` segment carrying the baseline tags |
 | `unsupported_positive_field` / `unsupported_negative_field` | unknown field name | use the enumerated fields in [authoring-contract.md](../shared/authoring-contract.md) |
-| `natural_language_bridge_count` | bridge count mismatches `complexity` or exceeds 1 | set `complexity.natural_language_bridges` to the actual bridge count |
+| `scene_description_count` | bridge count mismatches `complexity` or exceeds 1 | set `complexity.scene_descriptions` to the actual bridge count |
 | `tag_bridge_fact_overlap` | the bridge and a tag render the same fact | bind each fact once — tags or bridge, not both |
 | `unsupported_bridge_semantic` | bridge fact dimension outside the allowed set | a bridge only binds ownership/spatial/causal/result/relation |
 | `duplicate_semantics` | same semantic resolved twice, or rendered by tag and bridge | dedupe; keep one rendering per semantic |

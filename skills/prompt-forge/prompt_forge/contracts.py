@@ -48,7 +48,7 @@ class Complexity:
     explicit_relations: int
     complex_actions: int
     environment_clusters: int
-    natural_language_bridges: int
+    scene_descriptions: int
 
 
 @dataclass(frozen=True)
