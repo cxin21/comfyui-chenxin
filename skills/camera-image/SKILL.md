@@ -40,3 +40,26 @@ Use `config.camera`, `camera_extra`, `sampling`, `seed`, `image_size`, `lora`, `
 Regional text-prompt groups are not supported by this prompt contract. Unknown fields, missing dependencies, invalid groups, missing nodes, or failed outputs stop execution. Do not create a bypass or fallback graph.
 
 Read [the camera image flow](../../docs/camera-image-flow.md) for exact sequence and acceptance evidence.
+
+## Prompt input is permissive
+
+The `envelope.prompt` field is **not bound to any specific prompt-authoring
+skill**. The camera-image skill accepts any prompt dict that the Anima model
+can render — typically `{"positive": "...", "negative": "..."}` strings.
+How that dict was authored is irrelevant to this skill.
+
+- **No checksum lock.** The camera skill does not verify a content hash
+  against any external source. It does not know or care whether the
+  prompt was produced by Prompt Forge, by another skill, by a hand-edit,
+  or by copy-paste from a tutorial.
+- **`prompt_ref` is optional.** It only resolves a BuildLog ref server-side
+  when one is explicitly provided in `envelope.prompt_ref`. Without it,
+  the skill uses `envelope.prompt` directly, untouched.
+- **No "must-call-first" check.** You may invoke camera-image without
+  ever calling `compile_prompt_artifact`. Prompt Forge is **recommended**
+  for quality (ledger discipline, anti-pattern scrubbing, dictionary
+  preflight, aesthetic coverage), but it is **not required** by this skill.
+- **No production_ready gate at this layer.** If `envelope.prompt_ref`
+  is set, the server resolves it and may refuse a stale ref — that is
+  a ref-liveness check, not a prompt-content seal. The camera skill
+  itself never refuses a prompt based on its origin.

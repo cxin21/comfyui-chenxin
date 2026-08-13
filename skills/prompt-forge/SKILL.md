@@ -42,3 +42,23 @@ Audit via `get_build_audit(ref_id)` if status is `quality_rejected` or `budget_c
 
 - [preflight.py](scripts/preflight.py) — pre-compile quality gates
 - [tag-validate.py](scripts/tag-validate.py) — tag dictionary lookup
+
+## Out-of-scope: no binding to camera skills
+
+Prompt Forge is a **standalone prompt-authoring skill**. It has **no runtime
+binding** to `camera-image`, `camera-video`, or `camera-multiview`:
+
+- The three camera skills **recommend** Prompt Forge for prompt generation,
+  but **do not require it**. They accept any `prompt` dict that contains
+  model-native `positive` and `negative` strings.
+- Prompt Forge does **not** verify, sign, hash, or seal its outputs in any
+  way that the camera skills would refuse to bypass. There is no
+  `checksum_lock`, no `production_ready` gate at the camera side, no
+  "you must call compile_prompt_artifact first" check.
+- If you call `compile_prompt_artifact`, you may then pass the resulting
+  `prompt` dict into a camera skill — or modify it first, or skip
+  Prompt Forge entirely and write the `prompt` dict yourself. The camera
+  skills accept all three paths identically.
+- If you only have a `prompt_ref` and want the camera skill to fetch it
+  server-side, that is also optional; the camera skill only resolves a
+  ref when one is explicitly provided in `envelope.prompt_ref`.
