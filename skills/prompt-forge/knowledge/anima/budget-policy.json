@@ -22,26 +22,27 @@
   },
   "positive_fields": [
     {"name": "protocol_prefix", "recommended_min_share": 0.06, "recommended_max_share": 0.10, "hard_max_share": 0.12},
-    {"name": "subject_anchor", "recommended_min_share": 0.15, "recommended_max_share": 0.22, "hard_max_share": 0.28},
-    {"name": "attribute_binding", "recommended_min_share": 0.18, "recommended_max_share": 0.24, "hard_max_share": 0.30},
-    {"name": "action_and_relation", "recommended_min_share": 0.18, "recommended_max_share": 0.25, "hard_max_share": 0.32},
-    {"name": "composition_and_camera", "recommended_min_share": 0.08, "recommended_max_share": 0.14, "hard_max_share": 0.18},
-    {"name": "environment_and_props", "recommended_min_share": 0.10, "recommended_max_share": 0.16, "hard_max_share": 0.22},
-    {"name": "lighting_and_visual_style", "recommended_min_share": 0.08, "recommended_max_share": 0.14, "hard_max_share": 0.18},
-    {"name": "natural_language_bridge", "recommended_min_share": 0.00, "recommended_max_share": 0.18, "hard_max_share": 0.25}
+    {"name": "count", "recommended_min_share": 0.04, "recommended_max_share": 0.08, "hard_max_share": 0.10},
+    {"name": "character", "recommended_min_share": 0.15, "recommended_max_share": 0.22, "hard_max_share": 0.28},
+    {"name": "series", "recommended_min_share": 0.03, "recommended_max_share": 0.06, "hard_max_share": 0.08},
+    {"name": "artist", "recommended_min_share": 0.08, "recommended_max_share": 0.14, "hard_max_share": 0.18},
+    {"name": "appearance", "recommended_min_share": 0.18, "recommended_max_share": 0.24, "hard_max_share": 0.30},
+    {"name": "general", "recommended_min_share": 0.25, "recommended_max_share": 0.35, "hard_max_share": 0.45},
+    {"name": "environment", "recommended_min_share": 0.10, "recommended_max_share": 0.16, "hard_max_share": 0.22},
+    {"name": "scene_description", "recommended_min_share": 0.00, "recommended_max_share": 0.18, "hard_max_share": 0.25}
   ],
   "negative_fields": [
-    {"name": "official_quality_baseline", "recommended_min_share": 0.35, "recommended_max_share": 0.45, "hard_max_share": 0.45},
-    {"name": "anatomy_count_structure_errors", "recommended_min_share": 0.20, "recommended_max_share": 0.30, "hard_max_share": 0.30},
-    {"name": "image_technical_defects", "recommended_min_share": 0.15, "recommended_max_share": 0.25, "hard_max_share": 0.25},
+    {"name": "quality_baseline", "recommended_min_share": 0.35, "recommended_max_share": 0.45, "hard_max_share": 0.45},
+    {"name": "anatomy_and_structure", "recommended_min_share": 0.20, "recommended_max_share": 0.30, "hard_max_share": 0.30},
+    {"name": "technical_defects", "recommended_min_share": 0.15, "recommended_max_share": 0.25, "hard_max_share": 0.25},
     {"name": "user_exclusions", "recommended_min_share": 0.10, "recommended_max_share": 0.20, "hard_max_share": 0.20}
   ],
   "positive_borrowing_order": [
-    "lighting_and_visual_style",
-    "environment_and_props",
-    "composition_and_camera",
-    "action_and_relation",
-    "attribute_binding"
+    "series",
+    "artist",
+    "general",
+    "environment",
+    "appearance"
   ],
   "positive_non_lendable_buckets": [
     "subject_identity",
@@ -49,9 +50,9 @@
     "user_locked_facts"
   ],
   "negative_borrowing_order": [
-    "image_technical_defects",
-    "anatomy_count_structure_errors",
-    "official_quality_baseline"
+    "technical_defects",
+    "anatomy_and_structure",
+    "quality_baseline"
   ],
   "negative_non_lendable_buckets": ["user_exclusions", "user_locked_facts"]
 }

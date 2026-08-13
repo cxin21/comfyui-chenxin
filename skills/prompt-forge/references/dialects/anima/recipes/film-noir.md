@@ -8,13 +8,15 @@
 
 > 都市暗巷里的硬光阴阳脸——侧光雕刻、烟雨反光、黑白高反差、单色胶片颗粒。
 
-## 五层组合
+## 五层组合 — `general` 槽内
 
-- composition: `medium shot` *or* `long shot`; `from side` *or* `low angle`; `leading lines`
-- lighting: `dramatic lighting`; `side lighting` *or* `partially shadowed`; `neon lights` (urban) *or* `moonlight` (open); `chiaroscuro` for portraits
-- palette: `monochrome` (default) *or* `noir`; never stack with `pastel color` / `vivid color`
-- camera: `photo (medium)`; `depth of field`, `bokeh`; `film grain` *or* `35mm`
-- mood-texture: `mysterious` *or* `dramatic`; `rain` + `reflections` (urban) *or* `fog` (alley); `smoke` (cigarette, vent)
+> 以下五层 = `general` 槽位的内部五层（按 general 内部顺序：action/expression → composition → lighting → palette → camera → mood）。action/expression 由场景另行编撰，此处只给后五层的 `general` 标签。
+
+- general·composition: `medium shot` *or* `long shot`; `from side` *or* `low angle`; `leading lines`
+- general·lighting: `dramatic lighting`; `side lighting` *or* `partially shadowed`; `neon lights` (urban) *or* `moonlight` (open); `chiaroscuro` for portraits
+- general·palette: `monochrome` (default) *or* `noir`; never stack with `pastel color` / `vivid color`
+- general·camera: `photo (medium)`; `depth of field`, `bokeh`; `film grain` *or* `35mm`
+- general·mood-texture: `mysterious` *or* `dramatic`; `rain` + `reflections` (urban) *or* `fog` (alley); `smoke` (cigarette, vent)
 
 ## 变体维度表
 

@@ -26,7 +26,7 @@ quality = min(128, ceil(target * 1.60))
 ```
 
 Spend in this order:
-1. **Three standard baselines** (mandatory floor): `score_4..6`, `lowres`, `worst quality`, `low quality`, anatomy/structure errors, technical defects.
+1. **Standard baselines** (mandatory floor): `score_1, score_2, score_3`, `worst quality`, `low quality`, `blurry`, `jpeg artifacts`, `chromatic aberration`, anatomy/structure defects.
 2. **User exclusions** — only if user explicitly gave them; each `exclusion_groups` increment raises target by 8.
 3. **Agent-added mood/style exclusions** — from compressible pool only; first to drop under pressure.
 

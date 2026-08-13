@@ -8,13 +8,17 @@
 
 > 高端时尚摄影棚里的硬光雕塑——黑白高反差、侧光刻出身体轮廓、长礼服礼服与肌肤光泽。
 
-## 五层组合
+> Prefix tier: **Artist-led** — `best quality, safe`（Helmut Newton 风格主导，去掉 `masterpiece` / `score_*` 以保留摄影师风格）。
 
-- composition: `full body` *or* `medium shot`; `low angle` (empowering subject) *or* `from side` (architectural); `rule of thirds` *or* `negative space`
-- lighting: `hard lighting` (Newton's signature) *or* `dramatic lighting`; `side lighting` *or* `rim light`; `studio lighting`; `chiaroscuro`, `partially shadowed`
-- palette: `monochrome` (mandatory) *or* `black and white`; `high contrast` (Newton uses pushed blacks); never stack `pastel color` / `vivid color` / `sepia`
-- camera: `photo (medium)` (mandatory); `shallow depth of field`, `bokeh`; `35mm` (Newton's signature film look)
-- mood-texture: `dramatic` (fashion intensity); clean studio, no weather; `polished` (skin, fabric)
+## 五层组合 — `general` 槽内
+
+> 以下五层 = `general` 槽位的内部五层（按 general 内部顺序：action/expression → composition → lighting → palette → camera → mood）。action/expression 由场景另行编撰，此处只给后五层的 `general` 标签。
+
+- general·composition: `full body` *or* `medium shot`; `low angle` (empowering subject) *or* `from side` (architectural); `rule of thirds` *or* `negative space`
+- general·lighting: `hard lighting` (Newton's signature) *or* `dramatic lighting`; `side lighting` *or* `rim light`; `studio lighting`; `chiaroscuro`, `partially shadowed`
+- general·palette: `monochrome` (mandatory) *or* `black and white`; `high contrast` (Newton uses pushed blacks); never stack `pastel color` / `vivid color` / `sepia`
+- general·camera: `photo (medium)` (mandatory); `shallow depth of field`, `bokeh`; `35mm` (Newton's signature film look)
+- general·mood-texture: `dramatic` (fashion intensity); clean studio, no weather; `polished` (skin, fabric)
 
 ## 变体维度表
 

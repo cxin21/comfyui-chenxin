@@ -8,13 +8,17 @@
 
 > 粉彩对称构图里的死板俏皮——居中正面、平光无阴影、低对比度、童趣绘本风。
 
-## 五层组合
+> Prefix tier: **Artist-led** — `best quality, safe`（Wes Anderson 风格主导，去掉 `masterpiece` / `score_*` 以保留导演风格）。
 
-- composition: `medium shot` *or* `wide shot` (group scale); `centered` (frontal deadpan) — **not** `low angle` / `high angle`; `symmetrical` (mandatory) *or* `centered` + `rule of thirds`
-- lighting: `soft lighting` (mandatory) *or* `ambient light`; `front lighting` (flat, even, no drama); `studio lighting` (controlled); never `dramatic lighting` / `chiaroscuro` / `rim light`
-- palette: `pastel color` (mandatory); `low contrast` *or* `muted color`; never stack `vivid color` / `high contrast` / `cyberpunk` / `monochrome`
-- camera: `illustration` (mandatory — Anderson is illustrated, not photographic); `depth of field` *or* plain (no bokeh); no film signature — clean digital
-- mood-texture: `serene` *or* `cheerful` (deadpan humor); clean (no fog, smoke, rain); `matte` (not glossy / not wet)
+## 五层组合 — `general` 槽内
+
+> 以下五层 = `general` 槽位的内部五层（按 general 内部顺序：action/expression → composition → lighting → palette → camera → mood）。action/expression 由场景另行编撰，此处只给后五层的 `general` 标签。
+
+- general·composition: `medium shot` *or* `wide shot` (group scale); `centered` (frontal deadpan) — **not** `low angle` / `high angle`; `symmetrical` (mandatory) *or* `centered` + `rule of thirds`
+- general·lighting: `soft lighting` (mandatory) *or* `ambient light`; `front lighting` (flat, even, no drama); `studio lighting` (controlled); never `dramatic lighting` / `chiaroscuro` / `rim light`
+- general·palette: `pastel color` (mandatory); `low contrast` *or* `muted color`; never stack `vivid color` / `high contrast` / `cyberpunk` / `monochrome`
+- general·camera: `illustration` (mandatory — Anderson is illustrated, not photographic); `depth of field` *or* plain (no bokeh); no film signature — clean digital
+- general·mood-texture: `serene` *or* `cheerful` (deadpan humor); clean (no fog, smoke, rain); `matte` (not glossy / not wet)
 
 ## 变体维度表
 

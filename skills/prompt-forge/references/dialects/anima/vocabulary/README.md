@@ -20,20 +20,18 @@ Anima's complete tag vocabulary knowledge — every tag the model has learned to
 
 ## Field mapping
 
-Each vocabulary file maps to authoring-contract fields:
+Each vocabulary file maps to authoring-contract fields (the 9-slot structure — see `dialect.md`):
 
 | Field | Vocabulary file(s) |
 |---|---|
 | `count` | count-identity.md |
 | `character` | count-identity.md (IP) |
-| `general` (appearance) | appearance.md |
-| `general` (clothing) | clothing.md |
-| `action_and_relation` | pose-action.md |
-| `general` (expression) | expression.md |
-| `composition_and_camera` | camera-shot.md |
-| `environment_and_props` | scene-environment.md |
-| `lighting_and_visual_style` | detail-mood.md |
-| `natural_language_bridge` | special-themes.md |
+| `appearance` | appearance.md + clothing.md |
+| `general` | expression.md + pose-action.md + camera-shot.md + detail-mood.md |
+| `environment` | scene-environment.md |
+| `scene_description` | special-themes.md |
+
+`protocol_prefix`, `series`, and `artist` have no dedicated vocabulary file — `protocol_prefix` is the enforced quality baseline (see `dialect.md`), `series`/`artist` are authored from the request/facts.
 
 ## Usage constraints
 
@@ -41,9 +39,9 @@ Each vocabulary file maps to authoring-contract fields:
 2. Tag frequency warnings come from `scripts/tag-validate.py`.
 3. No compatibility shim with the old NSFW template — content migrated, paths rewritten.
 
-## 5-segment structure
+## Vocabulary file template (5-段式, 非 prompt 结构)
 
-Every vocabulary file uses the canonical template:
+This is the **document** template each vocabulary file follows — distinct from the prompt's 9-slot structure (see `dialect.md`). The 5 segments organize the dictionary entry, not the generated prompt:
 
 1. **核心公式** — one-sentence punch line
 2. **变体维度表** — dimensions × tags

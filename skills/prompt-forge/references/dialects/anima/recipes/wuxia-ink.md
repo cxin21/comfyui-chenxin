@@ -8,13 +8,15 @@
 
 > 山巅云雾间的孤剑客——水墨笔触、远景大留白、月光透云、墨色浅淡晕染。
 
-## 五层组合
+## 五层组合 — `general` 槽内
 
-- composition: `long shot` *or* `wide shot` (mountain scale); `from below` (looking up at hero on cliff) *or* `low angle`; `negative space` (mountains, mist) *or* `leading lines` (river)
-- lighting: `cinematic lighting` *or* `volumetric lighting` (mist backlit); `backlighting` (mountain silhouette) *or* `side lighting`; `moonlight` (night swordplay) *or* `dappled sunlight` (forest); `partially shadowed` (hero half-lit), `chiaroscuro`
-- palette: `muted color` (ink-wash default); `low contrast` (soft ink); cool-leaning (ink is grey-blue by default); never stack `vivid color` / `cyberpunk` / `pastel color`
-- camera: `traditional media` (mandatory — ink wash look); plain (no depth-of-field tricks — flat illustration); no film signature
-- mood-texture: `epic` *or* `melancholic` *or* `mysterious`; `fog` / `misty` (mandatory — wuxia reads as misty mountain); `sakura petals` (when cherry season) *or* `leaves` (autumn); `matte` (no glossy, no wet)
+> 以下五层 = `general` 槽位的内部五层（按 general 内部顺序：action/expression → composition → lighting → palette → camera → mood）。action/expression 由场景另行编撰，此处只给后五层的 `general` 标签。
+
+- general·composition: `long shot` *or* `wide shot` (mountain scale); `from below` (looking up at hero on cliff) *or* `low angle`; `negative space` (mountains, mist) *or* `leading lines` (river)
+- general·lighting: `cinematic lighting` *or* `volumetric lighting` (mist backlit); `backlighting` (mountain silhouette) *or* `side lighting`; `moonlight` (night swordplay) *or* `dappled sunlight` (forest); `partially shadowed` (hero half-lit), `chiaroscuro`
+- general·palette: `muted color` (ink-wash default); `low contrast` (soft ink); cool-leaning (ink is grey-blue by default); never stack `vivid color` / `cyberpunk` / `pastel color`
+- general·camera: `traditional media` (mandatory — ink wash look); plain (no depth-of-field tricks — flat illustration); no film signature
+- general·mood-texture: `epic` *or* `melancholic` *or* `mysterious`; `fog` / `misty` (mandatory — wuxia reads as misty mountain); `sakura petals` (when cherry season) *or* `leaves` (autumn); `matte` (no glossy, no wet)
 
 ## 变体维度表
 

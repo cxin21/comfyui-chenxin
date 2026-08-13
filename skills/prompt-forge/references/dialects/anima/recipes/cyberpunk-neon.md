@@ -8,13 +8,15 @@
 
 > 摩天楼俯视的霓虹雨夜——冷色品红/青光对撞、暗调高反差、湿润反射、全息光晕。
 
-## 五层组合
+## 五层组合 — `general` 槽内
 
-- composition: `long shot` *or* `wide shot` (city scale); `low angle` (skyscrapers looming) *or* `from below`; `leading lines` (street perspective)
-- lighting: `cinematic lighting` *or* `dramatic lighting`; `rim light` *or* `backlighting`; `neon lights` (mandatory); `lens flare`, `bloom`, `reflections`
-- palette: `cyberpunk` (mandatory anchor); `dark` *or* `vibrant`; `cool color` dominant; never stack `pastel color` / `sepia`
-- camera: `photo (medium)` *or* `digital media`; `depth of field`, `bokeh`; `film grain` (slight)
-- mood-texture: `dramatic` *or* `mysterious`; `rain` (mandatory noir feel), `reflections`; `embers` *or* `light particles` (holograms, sparks)
+> 以下五层 = `general` 槽位的内部五层（按 general 内部顺序：action/expression → composition → lighting → palette → camera → mood）。action/expression 由场景另行编撰，此处只给后五层的 `general` 标签。
+
+- general·composition: `long shot` *or* `wide shot` (city scale); `low angle` (skyscrapers looming) *or* `from below`; `leading lines` (street perspective)
+- general·lighting: `cinematic lighting` *or* `dramatic lighting`; `rim light` *or* `backlighting`; `neon lights` (mandatory); `lens flare`, `bloom`, `reflections`
+- general·palette: `cyberpunk` (mandatory anchor); `dark` *or* `vibrant`; `cool color` dominant; never stack `pastel color` / `sepia`
+- general·camera: `photo (medium)` *or* `digital media`; `depth of field`, `bokeh`; `film grain` (slight)
+- general·mood-texture: `dramatic` *or* `mysterious`; `rain` (mandatory noir feel), `reflections`; `embers` *or* `light particles` (holograms, sparks)
 
 ## 变体维度表
 

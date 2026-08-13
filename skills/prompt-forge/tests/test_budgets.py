@@ -161,20 +161,21 @@ def test_anima_field_ranges_and_borrowing_policy_are_exact() -> None:
     plan = plan_anima_budget(complexity(), 0).positive
     assert ranges(plan) == {
         "protocol_prefix": (0.06, 0.10, 0.12),
-        "subject_anchor": (0.15, 0.22, 0.28),
-        "attribute_binding": (0.18, 0.24, 0.30),
-        "action_and_relation": (0.18, 0.25, 0.32),
-        "composition_and_camera": (0.08, 0.14, 0.18),
-        "environment_and_props": (0.10, 0.16, 0.22),
-        "lighting_and_visual_style": (0.08, 0.14, 0.18),
-        "natural_language_bridge": (0.00, 0.18, 0.25),
+        "count": (0.04, 0.08, 0.10),
+        "character": (0.15, 0.22, 0.28),
+        "series": (0.03, 0.06, 0.08),
+        "artist": (0.08, 0.14, 0.18),
+        "appearance": (0.18, 0.24, 0.30),
+        "general": (0.25, 0.35, 0.45),
+        "environment": (0.10, 0.16, 0.22),
+        "scene_description": (0.00, 0.18, 0.25),
     }
     assert plan.borrowing_order == (
-        "lighting_and_visual_style",
-        "environment_and_props",
-        "composition_and_camera",
-        "action_and_relation",
-        "attribute_binding",
+        "series",
+        "artist",
+        "general",
+        "environment",
+        "appearance",
     )
     assert plan.non_lendable_buckets == frozenset(
         {"subject_identity", "subject_count", "user_locked_facts"}
@@ -182,9 +183,9 @@ def test_anima_field_ranges_and_borrowing_policy_are_exact() -> None:
 
     negative = plan_anima_budget(complexity(), 0).negative
     assert ranges(negative) == {
-        "official_quality_baseline": (0.35, 0.45, 0.45),
-        "anatomy_count_structure_errors": (0.20, 0.30, 0.30),
-        "image_technical_defects": (0.15, 0.25, 0.25),
+        "quality_baseline": (0.35, 0.45, 0.45),
+        "anatomy_and_structure": (0.20, 0.30, 0.30),
+        "technical_defects": (0.15, 0.25, 0.25),
         "user_exclusions": (0.10, 0.20, 0.20),
     }
 

@@ -16,16 +16,17 @@ A prompt with > hard cap violates attention distribution — split into multiple
 
 | Slot | min | max | note |
 |---|---|---|---|
-| count/gender | 2 | 4 | fixed format |
-| character/series | 0 | 2 | IP only |
-| appearance | 3 | 8 | hair+eye+body+skin |
-| clothing/state | 2 | 10 | largest slot by nature |
-| pose/action | 2 | 8 | |
-| expression | 1 | 4 | |
-| camera/shot | 1 | 5 | |
-| scene/environment | 2 | 6 | |
+| protocol_prefix | 2 | 4 | quality/meta/safety baseline |
+| count | 1 | 2 | subject count |
+| character | 0 | 2 | IP only |
+| series | 0 | 1 | source work / franchise |
+| artist | 0 | 3 | `@artist`, weighted |
+| appearance | 3 | 8 | hair+eye+body+clothing |
+| general | 5 | 12 | action/expression + 5 aesthetic layers |
+| environment | 2 | 6 | location/props/weather |
+| scene_description | 0 | 1 | NL bridge, after a period |
 
-Clothing slot is naturally largest — base garment + material + 1-3 modification dimensions. Other slots stay lean; diversity comes from cross-slot combination, not stacking.
+`general` is naturally the largest slot — action/expression plus the five aesthetic layers (composition → lighting → palette → camera → mood). Other slots stay lean; diversity comes from cross-slot combination, not stacking.
 
 ## Relationship to token budget
 

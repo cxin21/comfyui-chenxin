@@ -9,13 +9,17 @@
 
 > 阳光穿透云层洒在草坡少女身上——粉彩水彩、柔光逆光、漂浮光斑、花瓣与风。
 
-## 五层组合
+> Prefix tier: **Artist-led** — `best quality, safe`（吉卜力 / 宫崎骏风格主导，去掉 `masterpiece` / `score_*` 以保留工作室风格）。
 
-- composition: `long shot` *or* `wide shot` (nature scale); `from side` (profile flight, walking) *or* `low angle` (looking up at sky); `depth of field` *or* `leading lines` (clouds, river)
-- lighting: `soft lighting` *or* `cinematic lighting`; `backlighting` (sun behind character, halo); `dappled sunlight` (forest) *or* `golden hour` (summer evening); `volumetric lighting` (clouds, mist)
-- palette: `pastel color` (mandatory); `vivid color` *or* `muted color`; `warm color` (sunny) *or* mix with `cool color` (sky); never stack `monochrome` / `cyberpunk` / `noir` / `high contrast`
-- camera: `traditional media` *or* `watercolor` (watercolor edges); `depth of field` *or* plain; no film signature — clean illustration look
-- mood-texture: `serene` *or* `nostalgic` *or* `ethereal`; `light particles` (mandatory — magic dust, fireflies, spirit); `sakura petals` (spring) *or* `leaves` (autumn)
+## 五层组合 — `general` 槽内
+
+> 以下五层 = `general` 槽位的内部五层（按 general 内部顺序：action/expression → composition → lighting → palette → camera → mood）。action/expression 由场景另行编撰，此处只给后五层的 `general` 标签。
+
+- general·composition: `long shot` *or* `wide shot` (nature scale); `from side` (profile flight, walking) *or* `low angle` (looking up at sky); `depth of field` *or* `leading lines` (clouds, river)
+- general·lighting: `soft lighting` *or* `cinematic lighting`; `backlighting` (sun behind character, halo); `dappled sunlight` (forest) *or* `golden hour` (summer evening); `volumetric lighting` (clouds, mist)
+- general·palette: `pastel color` (mandatory); `vivid color` *or* `muted color`; `warm color` (sunny) *or* mix with `cool color` (sky); never stack `monochrome` / `cyberpunk` / `noir` / `high contrast`
+- general·camera: `traditional media` *or* `watercolor` (watercolor edges); `depth of field` *or* plain; no film signature — clean illustration look
+- general·mood-texture: `serene` *or* `nostalgic` *or* `ethereal`; `light particles` (mandatory — magic dust, fireflies, spirit); `sakura petals` (spring) *or* `leaves` (autumn)
 
 ## 变体维度表
 
