@@ -48,12 +48,15 @@ class SamplingConfig:
 
     Two physical KSamplers in workflow.json; we keep their fields distinct
     so callers can tune first-pass and refine independently. None fields
-    fall through to static values (40 / 4 / dpmpp_2m / karras / 1.0 / 25 / 0.2).
+    fall through to static values in workflow.json (steps / cfg / denoise
+    defaults live there).
+
+    sampler and scheduler are NOT exposed here — they are pinned to the
+    static values baked into workflow.json (forbidden_inputs in the
+    manifest). Callers cannot override them.
     """
     steps_first: int | None = None
     cfg: float | None = None
-    sampler: str | None = None
-    scheduler: str | None = None
     denoise_first: float | None = None
     steps_refine: int | None = None
     denoise_refine: float | None = None

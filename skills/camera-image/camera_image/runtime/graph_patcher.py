@@ -57,11 +57,12 @@ from .source_workflow import (
 
 
 # Single source of truth — patcher and describe_config both read this.
+# NOTE: sampler / scheduler are intentionally absent; they are pinned to
+# the static values baked into workflow.json (forbidden_inputs in the
+# manifest). Patcher does not write them and describe_config does not surface them.
 NODE_FIELD_MAP: dict[str, tuple[str, str]] = {
     "sampling.steps_first":    ("50", "steps"),
     "sampling.cfg":            ("50", "cfg"),
-    "sampling.sampler":        ("50", "sampler"),
-    "sampling.scheduler":      ("50", "scheduler"),
     "sampling.denoise_first":  ("50", "denoise"),
     "sampling.steps_refine":   ("51", "steps"),
     "sampling.denoise_refine": ("51", "denoise"),
@@ -99,18 +100,17 @@ _UI_WIDGET_INDEX: dict[tuple[str, str], int] = {
     # widgets_values layout: [seed, control_after_generate, steps,
     # cfg, sampler, scheduler, denoise]; widget input positions skip
     # the hidden control_after_generate.
+    # NOTE: sampler / scheduler widgets are intentionally NOT registered
+    # here — they are pinned to the static values baked into workflow.json
+    # and the patcher must not write them.
     ("50", "seed"): 0,
     ("50", "steps"): 2,
     ("50", "cfg"): 3,
-    ("50", "sampler"): 4,
-    ("50", "scheduler"): 5,
     ("50", "denoise"): 6,
     # KSampler (51) — refine pass; same widget layout as node 50.
     ("51", "seed"): 0,
     ("51", "steps"): 2,
     ("51", "cfg"): 3,
-    ("51", "sampler_name"): 4,
-    ("51", "scheduler"): 5,
     ("51", "denoise"): 6,
     # Seed (rgthree) (65) — all implicit widgets.
     ("65", "seed"): 0,
@@ -276,10 +276,10 @@ def _set_lora(graph: dict, lora_patch: dict) -> None:
 
 
 def _apply_sampling(graph: dict, s: SamplingConfig) -> None:
+    # NOTE: sampler / scheduler are intentionally not written — they are
+    # pinned to workflow.json static values.
     if s.steps_first is not None:    _set_value(graph, "50", "steps",    s.steps_first)
     if s.cfg is not None:            _set_value(graph, "50", "cfg",      s.cfg)
-    if s.sampler is not None:        _set_value(graph, "50", "sampler",  s.sampler)
-    if s.scheduler is not None:      _set_value(graph, "50", "scheduler", s.scheduler)
     if s.denoise_first is not None:  _set_value(graph, "50", "denoise",  s.denoise_first)
     if s.steps_refine is not None:   _set_value(graph, "51", "steps",    s.steps_refine)
     if s.denoise_refine is not None: _set_value(graph, "51", "denoise",  s.denoise_refine)
