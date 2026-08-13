@@ -330,3 +330,17 @@ def test_weighted_artist_tag_is_not_artist_prefix_missing():
     ))
     report = audit_anima_prompt(("(@kantoku:2.0)",), "", ledger)
     assert all(f.code != "artist_prefix_missing" for f in report.findings)
+
+
+def test_missing_protocol_prefix_is_quality_rejected() -> None:
+    # The ONLY defect is the missing protocol_prefix segment: the request is
+    # otherwise valid (a resolvable general tag on an agent fact).
+    artifact = author_anima_prompt(
+        request(
+            (fact("smile", "smile", origin="agent_embellishment"),),
+            (segment("smile", "general", "smile", "smile"),),
+        )
+    )
+    assert artifact.status == "quality_rejected"
+    assert artifact.prompt is None
+    assert "missing_protocol_prefix" in artifact.audit["hard_gate_codes"]
