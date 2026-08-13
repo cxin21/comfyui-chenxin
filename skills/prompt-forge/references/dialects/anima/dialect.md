@@ -8,35 +8,62 @@
 
 ## Native form
 
-Build the positive prompt in this order:
+Positive prompt, in this exact order (front-weighted):
 
-1. quality, meta, year, and safety;
-2. subject count;
-3. character;
-4. copyright;
-5. artist;
-6. general visual semantics;
-7. at most one necessary natural-language bridge.
+1. `protocol_prefix` — quality/meta/year/safety baseline
+2. `count` — subject count
+3. `character` — subject identity
+4. `series` — source work
+5. `artist` — `@artist`, weighted, mixable
+6. `appearance` — hair/eyes/body/clothing
+7. `general` — action/expression, then composition → lighting → palette → camera → mood/texture
+8. `environment` — location/props/weather
+9. `scene_description` — ≤1 natural-language bridge, after a period
 
-Separate tags with comma-space. Use lowercase spaces for ordinary tags, retain underscores only in reserved score tags such as `score_9`, and prefix artist tags with `@`. Treat malformed reserved syntax as blocking. Treat an unknown ordinary semantic as advisory when it is well formed and linked to a fact.
+Separate tags with `, ` (comma-space). Lowercase + spaces for ordinary tags; underscores only in `score_N`. Artist tags require `@`. A weighted tag renders `(text:weight)`.
 
-Use tags when they express the semantic unambiguously. Add one concise natural-language bridge only for ownership, spatial relations, causal action, action result, or another relation that independent tags cannot bind. Do not render the same fact as both a tag and prose.
+## Quality prefix (enforced baseline)
 
-Example fact ledger:
+| Tier | Trigger | Prefix |
+|---|---|---|
+| Standard | default (Base / Turbo) | `masterpiece, best quality, score_7, safe` |
+| Artist-led | `@artist` present, style should dominate | `best quality, safe` |
+| Aesthetic | variant = Aesthetic | `best quality, safe` |
 
-```text
-f_count | subject_group | count | 2girls
-f_relation | subject_1 -> subject_2 | ownership | Subject 1 holds Subject 2's umbrella.
-```
+Use `score_7`, not `score_8/9` (they stiffen composition). The two quality systems (human + score) may be used alone, together, or neither.
 
-Example authored fields:
+The official 4-tag prefix is authored as **four separate `protocol_prefix` segments** — one tag per segment is the contract. Never write the prefix as a single comma-list segment: `masterpiece, best quality, score_7, safe` in one segment trips the underscore-form check (the string contains the underscore in `score_7` but does not itself start with `score_`, so the audit rejects it as `wrong_underscore_form`).
 
-```text
-count [f_count]: 2girls
-natural_language_bridge [f_relation]: Subject 1 holds Subject 2's umbrella.
-```
+## Negative baseline
 
-The negative prompt has its own facts and budget. Use explicit exclusions; reject a semantic present in both positive and negative streams.
+`worst quality, low quality, score_1, score_2, score_3` + `blurry, jpeg artifacts, chromatic aberration` + anatomy/count defects as needed + user exclusions. Keep it lean — Anima's negative is temperamental.
+
+## Weight calibration
+
+| Target | Range |
+|---|---|
+| ordinary tag | 1.0 – 2.0 |
+| artist tag | 2.0 – 4.0 (whole block `(:2.0)` allowed) |
+| window | 0.0 – 4.0 |
+
+## Artist mixing
+
+1. comma list: `@a, @b`
+2. natural language: `using artist @A and @B to draw a picture`
+3. weighted block: `Mixed style of following artists: (@artist1, @artist2:2.0)`
+4. inline weights: `(@a:2.0), (@b:0.8)`
+
+Warning: anime character names carry style bias — raise artist weight or bind to distinguishing features.
+
+## Variants
+
+- `base` (default, what camera-image pins): full quality stack.
+- `aesthetic`: drop `score_*`; keep `best quality, safe`.
+- `turbo`: full quality stack; CFG 1, 8–12 steps.
+
+## Sparse input
+
+When the user gives little detail, complete it by coherent inference (see `references/shared/aesthetic-coverage.md`) — five coherence layers, all as removable `agent_embellishment`.
 
 ## Vocabulary
 
