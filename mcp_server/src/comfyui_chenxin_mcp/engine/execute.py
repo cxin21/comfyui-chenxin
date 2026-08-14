@@ -1,13 +1,13 @@
-"""Shared execution engine - one run_skill for all skills.
+﻿"""Shared execution engine - one run_skill for all skills.
 
 Layered contract:
-  - MCP tool layer (server.py:run) — public; accepts envelope + config dicts.
-  - engine.execute.run_skill     — INTERNAL; takes a RunConfig dataclass.
+  - MCP tool layer (server.py:run) 鈥?public; accepts envelope + config dicts.
+  - engine.execute.run_skill     鈥?INTERNAL; takes a RunConfig dataclass.
                                 The MCP server builds it via SkillData.build_config_fn.
                                 Direct callers (e.g. unit tests) MUST construct
                                 a RunConfig themselves.
 
-Flow: prompt-forge gate -> upload images -> health -> prepare (UI: config + modes + strip) -> validate -> enqueue -> wait -> download.
+Flow: upload images -> health -> prepare -> validate -> enqueue -> wait -> download.
 """
 from __future__ import annotations
 
@@ -35,9 +35,8 @@ def run_skill(
     """Execute a skill stage. Returns (payload, exit_code).
 
     Generic flow:
-    1. prompt-forge gate (compile_envelope)
-    2. upload stage_images (reference, controlnet)
-    3. health check (ComfyUI queue idle)
+    1. upload stage_images (reference, controlnet)
+    2. health check (ComfyUI queue idle)
     4. prepare temp workflow (apply config + G1/G2 modes to UI, upload,
        return stripped API graph with config baked in)
     5. validate + check runtime
@@ -69,14 +68,6 @@ def run_skill(
     run_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        # Step 1: prompt-forge gate.
-        from .prompt_forge import compile_envelope
-        package = (
-            skill_data.prompt_gate_fn(config)
-            if skill_data.prompt_gate_fn is not None
-            else compile_envelope(config.evidence, config.draft, skill_data.dialect_id)
-        )
-
         # Step 2: upload stage_images.
         patch_config = config
         for spec in skill_data.stage_images.get(stage, ()):
@@ -165,6 +156,7 @@ def run_skill(
         }, 1
 
     duration_ms = int((time.monotonic() - started) * 1000)
+    # Record the direct model-native prompt carried by the camera config.
     run_record = {
         "schema_version": "2.0",
         "stage": stage,
@@ -172,7 +164,7 @@ def run_skill(
         "artifact": artifact,
         "duration_ms": duration_ms,
         "config": asdict(config),
-        "prompt_package_quality": package.get("quality", {}),
+        "prompt": getattr(config, "prompt", None),
     }
     (run_dir / "submitted-graph.json").write_text(
         json.dumps(graph, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -192,7 +184,7 @@ def run_skill(
         "artifact": artifact,
         "duration_ms": duration_ms,
         "run_record_path": str(run_dir / "run-record.json"),
-        "prompt_forge_warnings": package.get("warnings", []),
+        "prompt": getattr(config, "prompt", None),
     }
     return payload, 0
 
@@ -226,7 +218,7 @@ def _wait_for_completion(mcp, prompt_id: str, timeout: float, poll: float) -> di
 def _parse_history(history, prompt_id: str) -> tuple[dict | None, str | None, str]:
     """Parse the raw ``GET /history/<id>`` response from ComfyUI.
 
-    The wire format is ``{<prompt_id>: {status, outputs, ...}}`` — empty
+    The wire format is ``{<prompt_id>: {status, outputs, ...}}`` 鈥?empty
     dict means the prompt is not yet committed, so we treat that as
     "still running" by returning ``(None, None, "")``.
     """
@@ -322,3 +314,6 @@ def _download_one_artifact(mcp, artifact_info: dict, output_dir: Path) -> dict:
         "bytes": len(data),
         "sha256": hashlib.sha256(data).hexdigest(),
     }
+
+
+

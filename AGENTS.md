@@ -2,7 +2,7 @@
 
 ## 技能调用铁律
 
-1. **职责内验证**：Prompt Forge 的提示词编写与质量审计没有强制前置脚本。生产执行仅在进入对应技能的本地运行边界时，按该技能契约验证所需服务与依赖。
+1. **职责内验证**：提示词技能独立完成作者侧审计；生产执行仅在进入对应技能的本地运行边界时，按该技能契约验证所需服务与依赖。
 2. **不绕过**：硬性依赖缺失时立即停止并告知用户。禁止用其他语言重写运行时工具、禁止手工模拟、禁止 partial 执行。
 3. **缓存即运行时**：Agent 从插件缓存读取技能内容。缓存与项目源不同步（关键文件缺失）时，运行 `scripts/install.ps1` 重新同步，不直接操作缓存目录。
 4. **固定工作流**：所有 camera 技能的工作流都是固定 release asset（`runtime/workflow_assets/` 下的 JSON），不是运行时发现结果。不从 ComfyUI 本地库或磁盘搜索工作流文件。
@@ -25,7 +25,7 @@
 
 ## 目录结构
 
-- `skills/prompt-forge/` — LLM-first 提示词编写与质量审计（无副作用）
+- `skills/anima-prompt-v1/`、`skills/minimax-h3-prompt/` — 独立提示词编写与质量审计（无副作用）
 - `skills/camera-image/` — Anima T2I/I2I 固定工作流消费者
 - `skills/camera-multiview/` — Flux2-Klein 固定多视图工作流消费者
 - `skills/camera-video/` — MiniMax H3 固定文生视频/参考图生视频工作流消费者

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Anima Prompt v1"
+  short_description: "Anima prompts with required quality terms and provenance."
+  default_prompt: "Use $anima-prompt-v1 to create an Anima prompt with required quality terms and Catalog provenance."

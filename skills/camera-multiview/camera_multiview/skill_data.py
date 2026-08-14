@@ -9,6 +9,12 @@ from .runtime.graph_patcher import describe_config
 from .runtime.source_workflow import prepare_workflow
 
 
+def validate_envelope(envelope: dict) -> list[str]:
+    if envelope:
+        return ["camera-multiview envelope must be empty"]
+    return []
+
+
 def get_skill_data() -> SkillData:
     return SkillData(
         name="camera-multiview",
@@ -34,5 +40,5 @@ def get_skill_data() -> SkillData:
         describe_fn=describe_config,
         prepare_fn=prepare_workflow,
         build_config_fn=RunConfig.from_envelope,
-        dialect_id="anima",
+        envelope_validate_fn=validate_envelope,
     )

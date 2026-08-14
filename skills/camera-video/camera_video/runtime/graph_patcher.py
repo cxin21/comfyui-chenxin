@@ -1,4 +1,4 @@
-"""Patch only the declared prompt, duration, and reference-image inputs."""
+﻿"""Patch only the declared prompt, duration, and reference-image inputs."""
 
 from __future__ import annotations
 
@@ -6,15 +6,16 @@ from copy import deepcopy
 from typing import Any
 
 from .assets import scene_spec
-from .config_schema import RunConfig
+from .config_schema import IMAGE_FIELDS, RunConfig
 
 
 def apply_run_config(graph: dict[str, Any], stage: str, config: RunConfig) -> dict[str, Any]:
     """Return a graph with only the stage's declared inputs changed."""
     config.validate_stage(stage)
+    prompt = dict(config.prompt)
     spec = scene_spec(stage)
     result = deepcopy(graph)
-    result[str(spec["prompt_node"])]["inputs"]["value"] = config.prompt
+    result[str(spec["prompt_node"])]["inputs"]["value"] = prompt["text"]
     result[str(spec["duration_node"])]["inputs"]["value"] = config.duration
     for index, node_id in enumerate(spec.get("image_nodes", []), start=1):
         result[str(node_id)]["inputs"]["image"] = getattr(config, f"reference_image_{index}")
@@ -26,7 +27,7 @@ def describe_config(stage: str) -> dict[str, Any]:
     spec = scene_spec(stage)
     fields: dict[str, dict[str, Any]] = {
         "prompt": {
-            "type": "string",
+            "type": "object",
             "required": True,
             "node_id": str(spec["prompt_node"]),
             "node_title": "Input Text (Prompt)",
@@ -45,7 +46,7 @@ def describe_config(stage: str) -> dict[str, Any]:
             "type": "local_image_path",
             "required": True,
             "node_id": str(node_id),
-            "node_title": "加载图像",
+            "node_title": "鍔犺浇鍥惧儚",
         }
     return {
         "stage": stage,
@@ -58,3 +59,4 @@ def describe_config(stage: str) -> dict[str, Any]:
         },
         "groups": None,
     }
+

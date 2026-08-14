@@ -4,6 +4,109 @@ All notable changes to comfyui-chenxin are documented here. Format follows [Keep
 
 ## [Unreleased] — current state on disk
 
+### Drop `prompt-core` orphan package
+
+The leftover `skills/prompt-core/` package was unused — neither `anima-prompt-v1` nor `minimax-h3-prompt` imported it, and the README's claim that it "shares immutable fact records across authoring skills" no longer reflected reality. Removed the directory; updated `README.md`, `README.en.md`, `docs/architecture.md`, `scripts/install.sh`, and `skills/minimax-h3-prompt/pyproject.toml` (`pythonpath` no longer references it).
+
+### prompt-forge anima prompt-methodology rewrite: virgin rewrite from model facts (2026-08-13) — v0.3.0
+
+**Methodology rewrite, no backward compat.** The Anima still-image authoring method is re-derived from the model's own documented behavior (LLM text encoder, official tag dialect, weighting, dropout, variants), replacing inherited Pony/NovelAI/SDXL habit.
+
+### Changed
+- 14-field positive enum → **9 slots** (`protocol_prefix, count, character, series, artist, appearance, general, environment, scene_description`); 5-field negative enum → **4 slots** (`quality_baseline, anatomy_and_structure, technical_defects, user_exclusions`)
+- Prompt weighting is now **first-class**: `AuthoredSegment.render_weight` renders `(text:weight)`; calibration ordinary 1.0–2.0 / artist 2.0–4.0; dictionary/audit/compression are weight-aware
+- **Enforced quality-prefix baseline**: a `protocol_prefix` segment is mandatory (hard gate `missing_protocol_prefix`); three tiers (Standard `masterpiece, best quality, score_7, safe` / Artist-led `best quality, safe` / Aesthetic `best quality, safe`)
+- Negative baseline corrected `score_4..6` → `score_1, score_2, score_3` (Anima official card)
+- `@` on a non-resolving tag downgraded from hard error to warning (permits `@style` descriptors)
+- Sparse-input completion methodology: five coherence layers, all `agent_embellishment`, never touching protected facts
+- Variant awareness (`base`/`aesthetic`/`turbo`) as an authoring input knob
+- Dialect, authoring-contract, natural-language, aesthetic-coverage, budget-ruler, tag-count-ruler, vocabulary map, and 6 recipes rewritten to the 9-slot model
+- H3 budget policies load from `references/dialects/minimax-h3/budget-policy.json` (v2.0 leftover fix); `Complexity.natural_language_bridges` renamed `scene_descriptions`
+- Anima benchmark corpus rebuilt to the 9-slot format
+- Full test suite green: **202 passed, 0 failed, 0 errors** (was 35 failed / 2 errors pre-cleanup)
+
+### prompt-forge v2.0: clean refactor, full vocabulary, multi-model ready (2026-08-13) — v0.2.0
+
+**Structural rewrite.** No backward compat. References, knowledge, and scripts reorganized under the `prompt-forge` skill.
+
+### Changed
+- `references/` reorganized into `shared/`, `quality/`, `dialects/<model>/` subdirectories
+- `references/anima.md`, `references/minimax-h3.md` deleted; content migrated to `references/dialects/<model>/dialect.md`
+- `references/authoring-contract.md` → `references/shared/authoring-contract.md` (added 前重后轻 slot weight table)
+- `references/budget-ruler.md` → `references/quality/budget-ruler.md` (token + tag-count linked)
+- `references/audit-and-recovery.md` → `references/quality/audit-and-recovery.md` (with preflight header note)
+- `references/dictionary-preflight.md` → `references/quality/dictionary-preflight.md` (with tag-validate header note)
+- `references/artifact-and-budgets.md` deleted (content subsumed)
+- `SKILL.md` rewritten as a ≤60-line index (3 scenarios + refs + tool + scripts)
+- `knowledge/aesthetics/recipes/` → `references/dialects/anima/recipes/` (6 files in 5-segment + 五层组合 format)
+- `knowledge/aesthetics/{composition,lighting,palette,camera,mood-texture,anti-patterns,style-signatures}.md` all rewritten in 5-segment format
+- `knowledge/aesthetics/manifest.json` updated to match new structure (precedence, row_counts, applies_to)
+
+### Added
+- `references/shared/{method,aesthetic-coverage,decision-tree,self-check,output-protocol,natural-language}.md` (6 new — cross-model concepts)
+- `references/quality/{conflict-table,tag-count-ruler,style-consistency}.md` (3 new — quality gates)
+- `references/dialects/anima/vocabulary/{README,count-identity,appearance,clothing,pose-action,expression,camera-shot,scene-environment,detail-mood,special-themes}.md` (10 new — full Anima tag vocabulary, 5-segment)
+- `references/dialects/minimax-h3/{dialect.md,budget-policy.json}` (2 new — H3 dialect + merged budget policy)
+- `scripts/preflight.py` + `scripts/tag_validate.py` (2 new — pre-compile quality gate + dictionary lookup; tests cover 5+3 cases)
+- `tests/test_preflight.py` + `tests/test_tag_validate.py` (2 new — 8/8 tests pass)
+
+### Removed
+- `references/{anima,minimax-h3,authoring-contract,budget-ruler,audit-and-recovery,dictionary-preflight,artifact-and-budgets}.md`
+- `knowledge/aesthetics/recipes/`
+- `knowledge/h3-t2va-budget-policy.json`, `knowledge/h3-ref2va-budget-policy.json`
+
+### Knowledge / quality
+- `anti-patterns.md` now contains concrete tag blacklist (replaces abstract A-G categories); 59 table rows including NSFW template §13.6 forbidden list
+- `style-signatures.md` (formerly orphan) rewritten in 5-segment format, manifest count corrected to 20
+- Preflight script: catches `pov` + `full body` conflict, `hanfu` + `cyberpunk city` style mismatch, tag-count over hard cap
+
+### Methodology
+- Absorbed NSFW template (`D:\Projects\提示词模版.txt`) methodology: §2 OUTPUT PROTOCOL, §3 SELF-CHECK, §3.1 CONFLICT TABLE, §4.1 STYLE CONSISTENCY, §4.2 TAG COUNT, §4.4 NATURAL LANGUAGE, §5 DECISION TREE, §9 5-SEGMENT STRUCTURE, §13.6 FORBIDDEN LIST, §14 SPECIAL THEMES
+- 5-segment canonical template applied uniformly: 核心公式 / 变体维度表 / 氛围链 / 使用提示 / 法典验证场景
+- Recipes add 五层组合 section (5-layer composition)
+
+### Validation
+- All 8 pytest tests pass
+- Wasteland battle prompt (37 tags) passes preflight
+- Known conflicts caught: pov+full_body, hanfu+cyberpunk_city
+- Zero compat strings in any new content
+- Zero old paths recreated (Phase 1-4 hard deletes)
+
+### prompt-forge rewrite: methodology-first + one-pass audit (2026-08-13) — v0.1.19
+
+- **SKILL.md rewritten as a methodology spine and split** into four focused references:
+  `authoring-contract`, `budget-ruler`, `dictionary-preflight`, `audit-and-recovery`. Docs now
+  teach authoring rules — one tag per segment in **both** streams, reserved namespaces, and
+  attribution — instead of pointing at code behavior. Fixes doc-vs-implementation drift that
+  made comma-separated negative segments look valid and produced `invalid_protocol_tag`.
+- **One-pass audit**: a `budget_conflict` build now runs the tag audit too, so an over-budget
+  build surfaces every hard-gate code (budget + protocol) in a single compile instead of
+  serial rounds of fix-and-recompile.
+- **Conflict escape hatch**: `budget_conflict.user_choices` now names mixed agent/protected
+  segments as `unlink_segment_<id>_from_protected_fact`, so an author can free tokens without
+  weakening protected facts — previously the only offered choice was simplifying protected
+  dimensions.
+- **Benchmark baseline regenerated**: the 90-case baseline recorded pre-LF-normalization
+  artifact hashes; prompts are byte-identical, hashes refreshed after the tokenizer manifest
+  pinning (v0.1.17).
+- Doc-contract test asserts the three `task` values (`anima` / `h3_t2va` / `h3_ref2va`)
+  instead of the legacy `author_*_prompt` function names, and guards the four new references.
+
+### prompt-forge docs sync (2026-08-12) — v0.1.18
+
+- Bump 0.1.17 → 0.1.18 so the MCP tool contract + aesthetic quality gate
+  (commit `98eeae4`, landed after v0.1.17 was installed) actually reach the
+  installed plugin cache.
+- Root cause: docs/content changed after v0.1.17 shipped without a version
+  bump, so `claude plugin update` (version-keyed) saw "already at the latest
+  version (0.1.17)" and the runtime-loaded `SKILL.md` stayed on the
+  library-API era — missing the request schema, the `origin` enum, the
+  one-tag-per-segment rule, and the aesthetic quality gate. Authoring against
+  the stale doc failed with `FactLedgerError` / `invalid_protocol_tag`.
+- Rule going forward: any change to `skills/*/SKILL.md` or the authoring
+  contract must bump the plugin version, or `claude plugin update` cannot
+  deliver it.
+
 ### MCP server registration fix (2026-08-10) — v0.1.6
 
 - **Switch MCP server config from `.claude-plugin/plugin.json` (which the

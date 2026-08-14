@@ -1,0 +1,9 @@
+[project]
+name = "anima-prompt-v1"
+version = "1.0.0"
+description = "Anima prompt skill with a full multi-source tag catalog"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+anima-catalog = "anima_prompt_v1.catalog.cli:main"

@@ -38,30 +38,14 @@ list_skills
   -> run_skill
 ```
 
-The engine envelope retains its required evidence and draft metadata. That
-metadata satisfies the engine gate; it does not become a prompt or workflow
-tuning surface for this skill.
+This workflow has no prompt input. Its envelope is intentionally empty, and
+the only runtime values are the two declared image paths.
 
 ```json
 {
   "skill": "camera-multiview",
   "stage": "multiview",
-  "envelope": {
-    "evidence": {"locked_facts": []},
-    "draft": {
-      "positive": "fixed multiview workflow, cinematic lighting, anime style",
-      "negative": "none",
-      "tags": ["solo"],
-      "structure": [
-        {"name": "subject", "text": "fixed multiview workflow"},
-        {"name": "action_or_pose", "text": "multiview"},
-        {"name": "scene", "text": "cinematic"},
-        {"name": "lighting", "text": "cinematic lighting"},
-        {"name": "style", "text": "anime style"}
-      ]
-    },
-    "dialect_id": "anima"
-  },
+  "envelope": {},
   "config": {
     "full_body_image": "E:/images/person-full-body.png",
     "face_image": "E:/images/person-face.png"

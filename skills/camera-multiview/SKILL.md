@@ -9,9 +9,8 @@ description: |
 Execute the single `multiview` stage with the bundled API workflow and the
 bundled pose assets.
 
-The engine still applies the mandatory Prompt Forge gate. Supply a valid
-Anima draft with `positive`, `negative`, exact `tags`, and ordered `structure`
-fields in the envelope; those fields do not alter the fixed API graph.
+This workflow consumes only the two reference images. It has no prompt input,
+so the MCP envelope must be `{}` and no prompt authoring skill is involved.
 
 ## Contract
 

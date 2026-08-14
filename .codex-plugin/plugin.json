@@ -1,48 +1,5 @@
 {
   "name": "comfyui-chenxin",
-  "version": "0.1.0+codex.20260810120000",
-  "description": "Local-first ComfyUI plugin: prompt-forge prompt authoring plus three fixed-workflow camera skills (image, multiview, video) consumed through a unified local MCP server.",
-  "author": {
-    "name": "cxin21",
-    "url": "https://github.com/cxin21"
-  },
-  "homepage": "https://github.com/cxin21/comfyui-chenxin",
-  "repository": "https://github.com/cxin21/comfyui-chenxin",
-  "license": "MIT",
-  "keywords": [
-    "comfyui",
-    "prompt-engineering",
-    "character-consistency",
-    "flux",
-    "minimax",
-    "anima",
-    "video",
-    "ai-image"
-  ],
-  "skills": "./skills/",
-  "mcpServers": {
-    "comfyui-chenxin-mcp": {
-      "type": "stdio",
-      "command": "comfyui-chenxin-mcp-server",
-      "args": [],
-      "env": {}
-    }
-  },
-  "interface": {
-    "displayName": "ComfyUI Chenxin",
-    "shortDescription": "Prompt authoring plus three fixed-workflow camera skills for local ComfyUI.",
-    "longDescription": "Four bounded skills: prompt-forge authors and quality-reviews image/video prompts offline; camera-image, camera-multiview, and camera-video consume approved PromptPackages through a unified local ComfyUI/MCP four-stage production flow against fixed release assets.",
-    "developerName": "cxin21",
-    "category": "Creative",
-    "capabilities": [
-      "Interactive",
-      "Read",
-      "Write"
-    ],
-    "defaultPrompt": [
-      "Use prompt-forge to author a prompt.",
-      "Use camera-image, camera-multiview, or camera-video to produce.",
-      "Review the PromptPackage before production."
-    ]
-  }
+  "version": "1.0.0",
+  "description": "ComfyUI prompt authoring and fixed workflow execution skills"
 }

@@ -1,17 +1,17 @@
-"""Configuration schema for character-video-pipeline runs.
+﻿"""Configuration schema for character-video-pipeline runs.
 
 Single source of truth for what callers can tune. All fields are optional
 (unless marked required); missing fields fall through to workflow.json
 static values at patch time.
 
 Mandatory inputs are:
-  * RunConfig.draft (must contain keys "positive" and "negative")
+  * RunConfig.prompt (must contain keys "positive" and "negative")
   * RunConfig.evidence (CreativeEvidence ledger)
-Prompt text MUST pass through the prompt-forge gate before reaching here.
+Prompt text is supplied directly as model-native positive and negative strings.
 
 Stage-specific mandatory inputs:
   * RunConfig.reference_image (i2i-camera)
-  * RunConfig.controlnet_image (when "ControlNet LLLite（G1）" group enabled)
+  * RunConfig.controlnet_image (when "ControlNet LLLite锛圙1锛? group enabled)
 
 The schema is node-grouped (sampling spans nodes 50/51, image_size spans
 nodes 68/71) so the CLI helper output and the patcher's NODE_FIELD_MAP
@@ -22,6 +22,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+
+
+_ALLOWED_TUNABLES = frozenset({
+    "camera", "camera_extra", "lora", "groups", "sampling", "seed",
+    "image_size", "reference_image", "controlnet_image",
+})
 
 
 @dataclass(frozen=True)
@@ -42,12 +48,15 @@ class SamplingConfig:
 
     Two physical KSamplers in workflow.json; we keep their fields distinct
     so callers can tune first-pass and refine independently. None fields
-    fall through to static values (40 / 4 / dpmpp_2m / karras / 1.0 / 25 / 0.2).
+    fall through to static values in workflow.json (steps / cfg / denoise
+    defaults live there).
+
+    sampler and scheduler are NOT exposed here 鈥?they are pinned to the
+    static values baked into workflow.json (forbidden_inputs in the
+    manifest). Callers cannot override them.
     """
     steps_first: int | None = None
     cfg: float | None = None
-    sampler: str | None = None
-    scheduler: str | None = None
     denoise_first: float | None = None
     steps_refine: int | None = None
     denoise_refine: float | None = None
@@ -58,7 +67,7 @@ class ImageSizeConfig:
     """Maps to node 68 (easy int) value + node 71 (easy int) value.
 
     Workflow.json feeds these ints into EmptyLatentImage (node 86).
-    Default static values: 1216 × 832.
+    Default static values: 1216 脳 832.
     """
     width: int | None = None
     height: int | None = None
@@ -68,7 +77,7 @@ class ImageSizeConfig:
 class GroupsConfig:
     """G1/G2 group toggles by title.
 
-    i2i-camera stage: "加载图片（G1）" is auto-appended by patch_graph
+    i2i-camera stage: "鍔犺浇鍥剧墖锛圙1锛? is auto-appended by patch_graph
     (caller does not pass it). Default workflow.json values for the
     core render path are kept inside patch_graph (DEFAULT_ENABLED_G1/G2)
     and merged with the user's choices.
@@ -81,13 +90,10 @@ class GroupsConfig:
 class RunConfig:
     """Top-level config for patch_graph + run_t2i / run_i2i.
 
-    Mandatory: evidence (dict) + draft (dict, must contain "positive" and "negative").
-    All other fields are optional — fall through to workflow.json defaults when None.
+    Mandatory: the model-native prompt (positive + negative for Anima).
+    All other fields are optional 鈥?fall through to workflow.json defaults when None.
     """
-    # prompt-forge gate (always required)
-    evidence: dict
-    draft: dict
-    dialect_id: str = "anima"
+    prompt: dict[str, str]
     # existing tunables
     camera: CameraConfig | None = None
     camera_extra: dict | None = None
@@ -103,23 +109,32 @@ class RunConfig:
     # stage-specific
     reference_image: str | None = None   # i2i only: local path (run_i2i uploads via mcp.upload_image)
     controlnet_image: str | None = None # t2i and i2i: local path (run_t2i/run_i2i uploads via mcp.upload_image)
-    # region prompts (区域提示词 G1): per-channel text written to nodes 3/4/5.
-    # Required (validated by Rule) when 区域提示词（G1） group is enabled.
-    red_prompt: str | None = None
-    green_prompt: str | None = None
-    blue_prompt: str | None = None
-
+    # region prompts (鍖哄煙鎻愮ず璇?G1): per-channel text written to nodes 3/4/5.
+    # Required (validated by Rule) when 鍖哄煙鎻愮ず璇嶏紙G1锛?group is enabled.
     @classmethod
     def from_envelope(cls, envelope: dict, **tunables) -> "RunConfig":
         """Build RunConfig from an envelope dict + tunable kwargs.
 
-        envelope must contain: evidence (dict), draft (dict).
-        Optional envelope key: dialect_id (str, default "anima").
+        envelope must contain ``prompt`` with positive and negative strings.
         tunables: camera (dict), camera_extra (dict), lora (dict),
                   groups (dict), sampling (dict), seed (int),
-                  image_size (dict), reference_image (str), controlnet_image (str),
-                  red_prompt (str), green_prompt (str), blue_prompt (str).
+                  image_size (dict), reference_image (str), controlnet_image (str).
         """
+        if not isinstance(envelope, dict):
+            raise TypeError("envelope must be an object")
+        unknown_envelope = sorted(set(envelope) - {"prompt"})
+        if unknown_envelope:
+            raise TypeError(f"unsupported envelope field(s): {unknown_envelope}")
+        prompt = envelope.get("prompt")
+        if not isinstance(prompt, dict):
+            raise TypeError("envelope.prompt must be an object")
+        if set(prompt) != {"positive", "negative"}:
+            raise TypeError("envelope.prompt must contain positive and negative")
+        if any(not isinstance(value, str) for value in prompt.values()):
+            raise TypeError("envelope.prompt fields must be strings")
+        unknown_tunables = sorted(set(tunables) - _ALLOWED_TUNABLES)
+        if unknown_tunables:
+            raise TypeError(f"unsupported camera-image config field(s): {unknown_tunables}")
         camera = tunables.get("camera")
         if isinstance(camera, dict):
             camera = CameraConfig(**camera)
@@ -132,10 +147,10 @@ class RunConfig:
         groups = tunables.get("groups")
         if isinstance(groups, dict):
             groups = GroupsConfig(**groups)
+        if groups is not None and GROUPS.AREA_PROMPT in ((groups.g1 or []) + (groups.g2 or [])):
+            raise ValueError("regional prompt group is outside the prompt contract")
         return cls(
-            evidence=envelope.get("evidence", {}),
-            draft=envelope.get("draft", {}),
-            dialect_id=envelope.get("dialect_id", "anima"),
+            prompt=dict(prompt),
             camera=camera,
             camera_extra=tunables.get("camera_extra"),
             lora=tunables.get("lora"),
@@ -145,9 +160,6 @@ class RunConfig:
             image_size=image_size,
             reference_image=tunables.get("reference_image"),
             controlnet_image=tunables.get("controlnet_image"),
-            red_prompt=tunables.get("red_prompt"),
-            green_prompt=tunables.get("green_prompt"),
-            blue_prompt=tunables.get("blue_prompt"),
         )
 
 
@@ -158,10 +170,10 @@ class STAGES:
 
 @dataclass(frozen=True)
 class GroupTitle:
-    LOAD_IMAGE: str = "加载图片（G1）"
-    CONTROLNET_LLLITE: str = "ControlNet LLLite（G1）"
-    AREA_PROMPT: str = "区域提示词（G1）"
-    ADD_SIGNATURE: str = "添加签名（G1）"
+    LOAD_IMAGE: str = "Load Image (G1)"
+    CONTROLNET_LLLITE: str = "ControlNet LLLite (G1)"
+    AREA_PROMPT: str = "Regional Prompts (G1)"
+    ADD_SIGNATURE: str = "Add Signature (G1)"
 
 
 GROUPS = GroupTitle()
@@ -179,18 +191,18 @@ CONTROLNET_IMAGE_NODE: dict[str, str] = {STAGES.T2I: "129", STAGES.I2I: "129"}
 
 # Core-render-path groups that MUST always be active for any working render.
 # Patcher merges these with the user's RunConfig.groups.g1/g2 (user-provided
-# groups are added on top — they can enable MORE, never disable these).
+# groups are added on top 鈥?they can enable MORE, never disable these).
 DEFAULT_ENABLED_G1: list[str] = [
-    "保存图片（G1）",          # node 35 Image Saver
-    "第二轮采样器（G1）",      # node 51 KSampler (refine)
-    "相机视角生图（G1）",      # nodes 583 CameraAngleNode + 585 CameraExtraConfigNode
+    "Save Image (G1)",
+    "Second KSampler (G1)",
+    "Camera View Generation (G1)",
 ]
 DEFAULT_ENABLED_G2: list[str] = [
-    "图像锐化（G2）",          # node 111 ImageSharpen
-    "对比度（G2）",            # node 96  AdjustContrast
+    "Image Sharpen (G2)",
+    "Contrast (G2)",
 ]
 
-# i2i nodes — single source for the latent-rewire step (was hardcoded in
+# i2i nodes 鈥?single source for the latent-rewire step (was hardcoded in
 # _activate_img2img). Node ids: 21 LoadImage, 57/58/59 VAEEncode chain,
 # 86 EmptyLatentImage (t2i source),
 # 27 KSampler (first-pass; latent_image is rewired between 86 and 59).
@@ -204,3 +216,5 @@ class I2INodes:
 
 
 I2I_NODES = I2INodes()
+
+

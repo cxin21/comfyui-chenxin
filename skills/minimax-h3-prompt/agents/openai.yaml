@@ -1,0 +1,4 @@
+interface:
+  display_name: "MiniMax-H3 Prompt"
+  short_description: "Independent MiniMax-H3 video prompt authoring"
+  default_prompt: "Use $minimax-h3-prompt to write a copyable H3 video prompt and audit its timeline."

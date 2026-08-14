@@ -1,0 +1,11 @@
+{
+  "content_filters": false,
+  "output": {
+    "checksum": "a6d6a7db90ff9e89d67be77709dcd02f949465a565a8fa0834a1b9ab635573f3",
+    "path": "tag-catalog.sqlite"
+  },
+  "source": {
+    "checksum": "4401b7e78340acb4da3cc7b5b082d394c0a42139172b6557d8abe2a77000407d",
+    "path": "tags.sqlite"
+  }
+}

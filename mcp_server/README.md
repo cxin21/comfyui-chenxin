@@ -28,7 +28,6 @@ MCP host
        describe.py
        validate.py
        execute.py
-       prompt_forge.py
        mcp_client.py
   -> skill runtime through SkillData function pointers
   -> comfyui-mcp@0.49.8
@@ -43,7 +42,7 @@ the two layers.
 
 For `camera-image`, `run_skill` performs the following exact sequence:
 
-1. Compile the Prompt Forge envelope.
+1. Accept the direct model-native prompt envelope.
 2. Upload declared stage images and replace local paths with ComfyUI filenames.
 3. Require an idle local ComfyUI queue.
 4. Call the skill's `prepare_fn`.
@@ -127,11 +126,7 @@ Input:
 {
   "skill": "camera-image",
   "stage": "t2i-camera",
-  "envelope": {
-    "evidence": {"locked_facts": []},
-    "draft": {"positive": "...", "negative": "..."},
-    "dialect_id": "anima"
-  },
+  "envelope": {"prompt": {"positive": "...", "negative": "..."}},
   "config": {"groups": {"g1": [], "g2": []}}
 }
 ```
@@ -154,11 +149,7 @@ The input is the same envelope/config pair plus `output_dir`:
 {
   "skill": "camera-image",
   "stage": "t2i-camera",
-  "envelope": {
-    "evidence": {"locked_facts": []},
-    "draft": {"positive": "1girl, masterpiece", "negative": "lowres"},
-    "dialect_id": "anima"
-  },
+  "envelope": {"prompt": {"positive": "...", "negative": "..."}},
   "config": {
     "sampling": {"steps_first": 30, "cfg": 4.5},
     "seed": 42,

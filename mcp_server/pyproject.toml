@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "comfyui-chenxin-mcp"
-version = "0.1.0"
-description = "MCP server exposing comfyui-chenxin plugin skills (camera-image, camera-multiview, camera-video, etc.)"
+version = "1.0.0"
+description = "MCP server exposing direct-prompt ComfyUI execution skills"
 requires-python = ">=3.10"
 dependencies = []
 

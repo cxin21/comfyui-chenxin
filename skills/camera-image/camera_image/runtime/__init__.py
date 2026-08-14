@@ -15,12 +15,11 @@ Public API:
   CAMERA_EXTRA_FIELDS                                         -- camera coords
 
 Single entry-point rule (2026-08-07): all prompt text destined for ComfyUI
-must come through the engine's prompt_forge.compile_envelope. Execution is
+is supplied directly by the caller. Execution is
 handled via the MCP server tools: list_skills, describe_config, validate_config,
 and run_skill. RunConfig is the only config object accepted.
 
-The prompt-forge gate is strict: there is no silent fallback. If prompt-forge
-rejects a draft or marks it not-ready, the run aborts loud.
+Prompt validation is strict. Invalid direct prompt fields abort the run.
 
 Workflow assembly (2026-08-08): the source UI workflow at
 ``camera_image/runtime/workflow_assets/camera-anima.json`` is the single

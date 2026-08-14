@@ -49,25 +49,23 @@ def validate_config(
     errors: list[str] = []
 
     if skill_data.envelope_validate_fn is not None:
-        errors.extend(skill_data.envelope_validate_fn(envelope))
+        envelope_errors = skill_data.envelope_validate_fn(envelope)
+        errors.extend(envelope_errors)
     else:
-        # Image skills use the shared positive/negative envelope contract.
-        draft = envelope.get("draft")
-        if not isinstance(draft, dict):
-            errors.append("envelope.draft must be an object (prompt-forge envelope)")
-        else:
-            for key in ("positive", "negative"):
-                val = draft.get(key)
-                if not isinstance(val, str) or not val.strip():
-                    errors.append(f"envelope.draft.{key} must be a non-empty string")
+        envelope_errors = []
+        if set(envelope) - {"prompt"}:
+            errors.append(f"envelope may contain only prompt, got {sorted(set(envelope))}")
+        elif not isinstance(envelope.get("prompt"), dict):
+            errors.append("envelope.prompt must be an object")
 
-    try:
-        built = skill_data.build_config_fn(envelope, **config)
-        validate_stage = getattr(built, "validate_stage", None)
-        if callable(validate_stage):
-            validate_stage(stage)
-    except (TypeError, ValueError) as exc:
-        errors.append(str(exc))
+    if not envelope_errors:
+        try:
+            built = skill_data.build_config_fn(envelope, **config)
+            validate_stage = getattr(built, "validate_stage", None)
+            if callable(validate_stage):
+                validate_stage(stage)
+        except (TypeError, ValueError) as exc:
+            errors.append(str(exc))
 
     # Declarative dependency rules (config-only — envelope fields never trigger rules).
     groups = config.get("groups") or {}

@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "minimax-h3-prompt"
+version = "1.0.0"
+description = "Independent MiniMax-H3 video prompt authoring"
+requires-python = ">=3.10"
+dependencies = ["tokenizers==0.22.2"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["h3_prompt*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

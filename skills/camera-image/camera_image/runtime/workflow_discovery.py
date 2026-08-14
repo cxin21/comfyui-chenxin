@@ -38,13 +38,13 @@ DEFAULT_WORKFLOW_SPECS = (
         "role": "character-multiview-requested",
         "profile_file": "flux2-klein-multiview.json",
         "production": False,
-        "replacement_workflow_name": "PromptForge-Flux2-Klein-multiview-flat-v2.json",
+        "replacement_workflow_name": "Flux2-Klein-multiview-flat-v2.json",
     },
     {
         "role": "character-multiview",
         "profile_file": "flux2-klein-multiview-flat-v2.json",
         "production": True,
-        "replaces_workflow_name": "Flux2-Klein人物一键多视图工作流.json",
+        "replaces_workflow_name": "Flux2-Klein浜虹墿涓€閿瑙嗗浘宸ヤ綔娴?json",
     },
     {
         "role": "video",
@@ -106,7 +106,7 @@ def _base_candidate(spec: dict, profile: dict, observed_at: str) -> dict:
         "profile_fingerprint": profile.get("workflow_fingerprint"),
         "observed_at": observed_at,
         "status": "unavailable",
-        "production_ready": False,
+        "ready": False,
         "reason_codes": [],
         "reasons": [],
     }
@@ -298,7 +298,7 @@ def discover_workflow_candidates(
                         _mark(candidate, "runtime_not_local", "bundled fixed workflow is not confirmed local/free")
             if not candidate["reason_codes"]:
                 candidate["status"] = "ready"
-                candidate["production_ready"] = candidate["production"] is True
+                candidate["ready"] = candidate["production"] is True
             elif candidate["reason_codes"] == ["fixed_capability_unchecked"]:
                 candidate["status"] = "unavailable"
             else:
@@ -397,7 +397,7 @@ def discover_workflow_candidates(
 
         if not candidate["reason_codes"]:
             candidate["status"] = "ready"
-            candidate["production_ready"] = candidate["production"] is True
+            candidate["ready"] = candidate["production"] is True
         elif "raw_graph_requires_normalization" in candidate["reason_codes"] and len(candidate["reason_codes"]) == 1:
             candidate["status"] = "needs-normalization"
         else:

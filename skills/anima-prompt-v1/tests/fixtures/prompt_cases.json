@@ -1,0 +1,25 @@
+[
+  {
+    "name": "tag-led-single",
+    "subjects": ["woman"],
+    "route": "tag-led",
+    "positive": ["long_hair", "red_dress", "smiling"]
+  },
+  {
+    "name": "two-subject-relations",
+    "subjects": ["girl", "boy"],
+    "route": "hybrid",
+    "relations": ["left", "right", "interacts_with", "performs"]
+  },
+  {
+    "name": "locked-special-syntax",
+    "locked": ["<lora:detail:1>", "{character}"],
+    "weight": "(cinematic:1.2)"
+  },
+  {
+    "name": "nsfw-conflict",
+    "category": "nsfw",
+    "positive": ["nude"],
+    "negative": ["blurry"]
+  }
+]

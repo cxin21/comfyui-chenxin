@@ -43,6 +43,12 @@ if [ -z "$PY" ]; then
   exit 1
 fi
 
+RELEASE_VERIFIER="$REPO_ROOT/scripts/verify_release.py"
+[ -f "$RELEASE_VERIFIER" ] || { echo "[install][error] missing release verifier: $RELEASE_VERIFIER" >&2; exit 1; }
+RELEASE_STAGER="$REPO_ROOT/scripts/stage_release.py"
+[ -f "$RELEASE_STAGER" ] || { echo "[install][error] missing release stager: $RELEASE_STAGER" >&2; exit 1; }
+"$PY" "$RELEASE_VERIFIER" --source-root "$REPO_ROOT" >/dev/null
+
 step() { printf "[install] %s\n" "$*"; }
 warn() { printf "[install][warn] %s\n" "$*" >&2; }
 die()  { printf "[install][error] %s\n" "$*" >&2; exit 1; }
@@ -150,37 +156,56 @@ PYEOF
 
   CACHE_ROOT="$CODEX_HOME/plugins/cache/personal/comfyui-chenxin"
   STAGING="${TMPDIR:-/tmp}/comfyui-chenxin-install-$VERSION"
-  rm -rf "$STAGING"
+  TEMP_ROOT="$($PY -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "${TMPDIR:-/tmp}")"
+  STAGING_REAL="$($PY -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$STAGING")"
+  case "$STAGING_REAL" in
+    "$TEMP_ROOT"/*) ;;
+    *) die "Refusing to remove staging path outside TEMP: $STAGING_REAL" ;;
+  esac
+  if [ -e "$STAGING_REAL" ]; then
+    rm -rf -- "$STAGING_REAL"
+  fi
   mkdir -p "$STAGING"
 
-  for entry in "skills" "mcp_server" ".codex-plugin" ".mcp.json" "LICENSE" "README.md"; do
-    src="$REPO_ROOT/$entry"
-    if [ -e "$src" ]; then
-      cp -R "$src" "$STAGING/$entry"
-    fi
-  done
+  "$PY" "$RELEASE_STAGER" --source-root "$REPO_ROOT" --destination-root "$STAGING" >/dev/null
+  step "staged explicit plugin release file set"
 
   [ -f "$STAGING/.codex-plugin/plugin.json" ] || die "Staged plugin.json missing."
   STAGED_VERSION="$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1],encoding="utf-8"))["version"])' "$STAGING/.codex-plugin/plugin.json")"
   [ "$STAGED_VERSION" = "$VERSION" ] || die "Staged version [$STAGED_VERSION] does not match directory version [$VERSION]."
   [ -d "$STAGING/skills" ] || die "Staged skills/ missing."
+  for asset in \
+    "skills/anima-prompt-v1/SKILL.md" \
+    "skills/minimax-h3-prompt/SKILL.md"
+  do
+    [ -f "$STAGING/$asset" ] || die "Staged skill asset missing: $asset"
+  done
 
   mkdir -p "$CACHE_ROOT"
-  case "$(cd "$(dirname "$CACHE_ROOT")" && pwd)" in
-    "$(cd "$CODEX_HOME" && pwd)") ;;
-    *) die "Refusing to operate on a CACHE_ROOT outside CODEX_HOME: $CACHE_ROOT" ;;
+  CODEX_HOME_REAL="$($PY -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$CODEX_HOME")"
+  CACHE_ROOT_REAL="$($PY -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$CACHE_ROOT")"
+  case "$CACHE_ROOT_REAL" in
+    "$CODEX_HOME_REAL"/*) ;;
+    *) die "Refusing to operate on a CACHE_ROOT outside CODEX_HOME: $CACHE_ROOT_REAL" ;;
   esac
   for dir in "$CACHE_ROOT"/*; do
     [ -d "$dir" ] || continue
-    step "removing previous version directory $dir"
-    rm -rf "$dir"
+    DIR_REAL="$($PY -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$dir")"
+    case "$DIR_REAL" in
+      "$CACHE_ROOT_REAL"/*) ;;
+      *) die "Refusing to remove path outside cache root: $DIR_REAL" ;;
+    esac
+    step "removing previous version directory $DIR_REAL"
+    rm -rf -- "$DIR_REAL"
   done
   TARGET="$CACHE_ROOT/$VERSION"
   mv "$STAGING" "$TARGET"
   step "installed plugin at $TARGET"
+  "$PY" "$RELEASE_VERIFIER" --source-root "$REPO_ROOT" --cache-root "$TARGET" >/dev/null
+  step "Source/cache verification passed"
 
   step "pip-installing mcp_server + skills (so the host finds comfyui-chenxin-mcp-server)"
-  for pkg_src in "$TARGET/mcp_server" "$TARGET/skills/camera-image" "$TARGET/skills/camera-multiview" "$TARGET/skills/camera-video"; do
+  for pkg_src in "$TARGET/mcp_server" "$TARGET/skills/anima-prompt-v1" "$TARGET/skills/minimax-h3-prompt" "$TARGET/skills/camera-image" "$TARGET/skills/camera-multiview" "$TARGET/skills/camera-video"; do
     if [ -f "$pkg_src/pyproject.toml" ]; then
       if ! "$PY" -m pip install -e "$pkg_src" --quiet 2>/dev/null; then
         die "pip install -e $pkg_src failed. Re-run without -e is fine; -e gives live source edits."

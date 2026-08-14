@@ -1,4 +1,4 @@
-"""camera-image skill data for the comfyui-chenxin-mcp engine.
+﻿"""camera-image skill data for the comfyui-chenxin-mcp engine.
 
 Provides SkillData: field map, groups, dependency rules, stage images,
 and function pointers to runtime.source_workflow.
@@ -14,6 +14,21 @@ from comfyui_chenxin_mcp.engine.skill_data import SkillData, Rule, ImageSpec
 from camera_image.runtime.config_schema import GROUPS, STAGES, RunConfig
 from camera_image.runtime.graph_patcher import NODE_FIELD_MAP, describe_config
 from camera_image.runtime.source_workflow import prepare_temporary_workflow
+
+
+def validate_envelope(envelope: dict) -> list[str]:
+    if set(envelope) - {"prompt"}:
+        return [f"envelope may contain only prompt, got {sorted(set(envelope))}"]
+    if "prompt" not in envelope:
+        return ["envelope must contain exactly prompt"]
+    prompt = envelope["prompt"]
+    if not isinstance(prompt, dict):
+        return ["envelope.prompt must be an object"]
+    if set(prompt) != {"positive", "negative"}:
+        return ["envelope.prompt must contain positive and negative"]
+    if any(not isinstance(value, str) for value in prompt.values()):
+        return ["envelope.prompt fields must be strings"]
+    return []
 
 
 def get_skill_data() -> SkillData:
@@ -33,12 +48,12 @@ def get_skill_data() -> SkillData:
                 implies=f"group_auto:{GROUPS.LOAD_IMAGE}",
                 direction="forward",
             ),
-            # 加载图片（G1） <-> reference_image (bidirectional)
+            # 鍔犺浇鍥剧墖锛圙1锛?<-> reference_image (bidirectional)
             Rule(
                 condition=f"group:{GROUPS.LOAD_IMAGE}",
                 implies="config:reference_image",
             ),
-            # 区域提示词（G1） -> 3 images (forward)
+            # 鍖哄煙鎻愮ず璇嶏紙G1锛?-> 3 images (forward)
             Rule(
                 condition=f"group:{GROUPS.AREA_PROMPT}",
                 implies="config:red_image",
@@ -54,23 +69,8 @@ def get_skill_data() -> SkillData:
                 implies="config:blue_image",
                 direction="forward",
             ),
-            # 区域提示词（G1） -> 3 text prompts (forward)
-            Rule(
-                condition=f"group:{GROUPS.AREA_PROMPT}",
-                implies="config:red_prompt",
-                direction="forward",
-            ),
-            Rule(
-                condition=f"group:{GROUPS.AREA_PROMPT}",
-                implies="config:green_prompt",
-                direction="forward",
-            ),
-            Rule(
-                condition=f"group:{GROUPS.AREA_PROMPT}",
-                implies="config:blue_prompt",
-                direction="forward",
-            ),
-            # 添加签名（G1） <-> signature_image (bidirectional)
+            # 鍖哄煙鎻愮ず璇嶏紙G1锛?-> 3 text prompts (forward)
+            # 娣诲姞绛惧悕锛圙1锛?<-> signature_image (bidirectional)
             Rule(
                 condition=f"group:{GROUPS.ADD_SIGNATURE}",
                 implies="config:signature_image",
@@ -98,5 +98,7 @@ def get_skill_data() -> SkillData:
         describe_fn=describe_config,
         prepare_fn=prepare_temporary_workflow,
         build_config_fn=RunConfig.from_envelope,
-        dialect_id="anima",
+        envelope_validate_fn=validate_envelope,
     )
+
+

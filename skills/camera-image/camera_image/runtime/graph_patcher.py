@@ -1,4 +1,4 @@
-"""Declarative UI/API graph patching for camera workflows.
+﻿"""Declarative UI/API graph patching for camera workflows.
 
 Single signature ``apply_run_config(graph, *, config, mcp_list_loras=None)``
 accepts a ``RunConfig`` (defined in runtime.config_schema) and writes every
@@ -19,7 +19,7 @@ the source of truth for converting widget values to API inputs; we
 only need to write the right index.
 
 Order:
-1.  Prompts (24/25) from ``config.draft`` (prompt-forge-validated).
+1.  Prompts (24/25) from ``config.prompt``.
 2.  Camera (583) + camera_extra (585).
 3.  LoRA (26/66).
 4.  Sampling (50/51), seed (65), image_size (68/71).
@@ -56,12 +56,13 @@ from .source_workflow import (
 )
 
 
-# Single source of truth — patcher and describe_config both read this.
+# Single source of truth 鈥?patcher and describe_config both read this.
+# NOTE: sampler / scheduler are intentionally absent; they are pinned to
+# the static values baked into workflow.json (forbidden_inputs in the
+# manifest). Patcher does not write them and describe_config does not surface them.
 NODE_FIELD_MAP: dict[str, tuple[str, str]] = {
     "sampling.steps_first":    ("50", "steps"),
     "sampling.cfg":            ("50", "cfg"),
-    "sampling.sampler":        ("50", "sampler"),
-    "sampling.scheduler":      ("50", "scheduler"),
     "sampling.denoise_first":  ("50", "denoise"),
     "sampling.steps_refine":   ("51", "steps"),
     "sampling.denoise_refine": ("51", "denoise"),
@@ -80,13 +81,13 @@ NODE_FIELD_MAP: dict[str, tuple[str, str]] = {
 # UI-format graph (pre-strip) so the value lands in the slot that
 # ComfyUI's strip will lift into the API dict.
 _UI_WIDGET_INDEX: dict[tuple[str, str], int] = {
-    # ImpactWildcardProcessor (24 / 25) — positive / negative main prompts.
+    # ImpactWildcardProcessor (24 / 25) 鈥?positive / negative main prompts.
     ("24", "wildcard_text"): 0,
     ("24", "populated_text"): 1,
     ("25", "wildcard_text"): 0,
     ("25", "populated_text"): 1,
-    # ImpactWildcardProcessor (3 / 4 / 5) — region prompts (Red/Green/Blue)
-    # used by 区域提示词（G1）. Same widget layout as 24/25.
+    # ImpactWildcardProcessor (3 / 4 / 5) 鈥?region prompts (Red/Green/Blue)
+    # used by 鍖哄煙鎻愮ず璇嶏紙G1锛? Same widget layout as 24/25.
     ("3", "wildcard_text"): 0,
     ("3", "populated_text"): 1,
     ("4", "wildcard_text"): 0,
@@ -95,40 +96,39 @@ _UI_WIDGET_INDEX: dict[tuple[str, str], int] = {
     ("5", "populated_text"): 1,
     # LoRA Text Loader (26) exposes one ordinary STRING widget.
     ("26", "lora_syntax"): 0,
-    # Input Parameters / Image Saver (50) — first-pass sampling
+    # Input Parameters / Image Saver (50) 鈥?first-pass sampling
     # widgets_values layout: [seed, control_after_generate, steps,
     # cfg, sampler, scheduler, denoise]; widget input positions skip
     # the hidden control_after_generate.
+    # NOTE: sampler / scheduler widgets are intentionally NOT registered
+    # here 鈥?they are pinned to the static values baked into workflow.json
+    # and the patcher must not write them.
     ("50", "seed"): 0,
     ("50", "steps"): 2,
     ("50", "cfg"): 3,
-    ("50", "sampler"): 4,
-    ("50", "scheduler"): 5,
     ("50", "denoise"): 6,
-    # KSampler (51) — refine pass; same widget layout as node 50.
+    # KSampler (51) 鈥?refine pass; same widget layout as node 50.
     ("51", "seed"): 0,
     ("51", "steps"): 2,
     ("51", "cfg"): 3,
-    ("51", "sampler_name"): 4,
-    ("51", "scheduler"): 5,
     ("51", "denoise"): 6,
-    # Seed (rgthree) (65) — all implicit widgets.
+    # Seed (rgthree) (65) 鈥?all implicit widgets.
     ("65", "seed"): 0,
-    # easy int (68 / 71) — single value widget.
+    # easy int (68 / 71) 鈥?single value widget.
     ("68", "value"): 0,
     ("71", "value"): 0,
-    # LoadImage (129) — controlnet image.
+    # LoadImage (129) 鈥?controlnet image.
     ("129", "image"): 0,
-    # LoadImage (21) — i2i reference image.
+    # LoadImage (21) 鈥?i2i reference image.
     ("21", "image"): 0,
-    # PrimitiveInt (58) — select the VAE-encoded reference branch.
+    # PrimitiveInt (58) 鈥?select the VAE-encoded reference branch.
     ("58", "value"): 0,
-    # CameraAngleNode (583) — pos_x/y/z/roll at front of widgets_values.
+    # CameraAngleNode (583) 鈥?pos_x/y/z/roll at front of widgets_values.
     ("583", "pos_x"): 0,
     ("583", "pos_y"): 1,
     ("583", "pos_z"): 2,
     ("583", "roll"): 3,
-    # CameraExtraConfigNode (585) — 1:1 with widget input positions.
+    # CameraExtraConfigNode (585) 鈥?1:1 with widget input positions.
     ("585", "extreme_type"): 0,
     ("585", "extreme_weight"): 1,
     ("585", "lens_enabled"): 2,
@@ -186,7 +186,7 @@ def _set_value(graph: dict[str, Any], node_id: str, name: str, value: Any) -> No
         inputs[name] = value
         return
     if isinstance(inputs, list):
-        # UI format — write to widgets_values.
+        # UI format 鈥?write to widgets_values.
         key = (node_id, name)
         if key not in _UI_WIDGET_INDEX:
             raise KeyError(
@@ -262,7 +262,7 @@ def _set_camera_extra(graph: dict, extra: dict) -> None:
 
 
 def _set_lora(graph: dict, lora_patch: dict) -> None:
-    # Use _get_node (format-aware) instead of "26" in graph —
+    # Use _get_node (format-aware) instead of "26" in graph 鈥?
     # UI format has nodes in a list, not keyed by id.
     node_26 = _get_node(graph, "26")
     if node_26 is not None:
@@ -276,10 +276,10 @@ def _set_lora(graph: dict, lora_patch: dict) -> None:
 
 
 def _apply_sampling(graph: dict, s: SamplingConfig) -> None:
+    # NOTE: sampler / scheduler are intentionally not written 鈥?they are
+    # pinned to workflow.json static values.
     if s.steps_first is not None:    _set_value(graph, "50", "steps",    s.steps_first)
     if s.cfg is not None:            _set_value(graph, "50", "cfg",      s.cfg)
-    if s.sampler is not None:        _set_value(graph, "50", "sampler",  s.sampler)
-    if s.scheduler is not None:      _set_value(graph, "50", "scheduler", s.scheduler)
     if s.denoise_first is not None:  _set_value(graph, "50", "denoise",  s.denoise_first)
     if s.steps_refine is not None:   _set_value(graph, "51", "steps",    s.steps_refine)
     if s.denoise_refine is not None: _set_value(graph, "51", "denoise",  s.denoise_refine)
@@ -309,7 +309,7 @@ def apply_run_config(
 ) -> dict[str, Any]:
     """Write every tunable into the graph (UI or API format).
 
-    Caller supplies a RunConfig (with evidence + draft + tunables) and
+    Caller supplies a RunConfig with the direct model-native prompt and tunables.
     a graph produced by ``source_workflow.prepare_temporary_workflow``.
     Format is detected automatically: UI (pre-strip, inputs=list) writes
     to ``widgets_values``; API (post-strip, inputs=dict) writes to
@@ -318,7 +318,7 @@ def apply_run_config(
     only writes the *values*.
 
     Order:
-    1.  Prompts (24/25) from ``config.draft`` (prompt-forge-validated).
+    1.  Prompts (24/25) from ``config.prompt`` after revalidation.
     2.  Camera (583) + camera_extra (585).
     3.  LoRA (26/66).
     4.  Sampling (50/51), seed (65), image_size (68/71).
@@ -332,17 +332,13 @@ def apply_run_config(
     enabled_g1, _ = compute_enabled_groups(stage, config.groups)
 
     # 1. Prompts.
-    _set_prompt(graph, "24", config.draft["positive"].strip())
-    _set_prompt(graph, "25", config.draft["negative"].strip())
+    prompt = dict(config.prompt)
+    _set_prompt(graph, "24", prompt["positive"].strip())
+    _set_prompt(graph, "25", prompt["negative"].strip())
 
-    # 1b. Region prompts (Red/Green/Blue) — only when the G1 group is on.
+    # 1b. Region prompts (Red/Green/Blue) 鈥?only when the G1 group is on.
     if GROUPS.AREA_PROMPT in enabled_g1:
-        if config.red_prompt is not None:
-            _set_region_prompt(graph, "red", config.red_prompt)
-        if config.green_prompt is not None:
-            _set_region_prompt(graph, "green", config.green_prompt)
-        if config.blue_prompt is not None:
-            _set_region_prompt(graph, "blue", config.blue_prompt)
+        raise ValueError("regional prompt group is outside the direct prompt contract")
 
     # 2. Camera + camera_extra.
     if config.camera:
@@ -481,13 +477,13 @@ def describe_config(stage: str = STAGES.T2I) -> dict[str, Any]:
 
     # Special slots that don't map to NODE_FIELD_MAP.
     slots["positive"] = {
-        "source": "envelope.draft.positive",
+        "source": "envelope.prompt.positive",
         "node": "24",
         "type": "ImpactWildcardProcessor",
         "required": True,
     }
     slots["negative"] = {
-        "source": "envelope.draft.negative",
+        "source": "envelope.prompt.negative",
         "node": "25",
         "type": "ImpactWildcardProcessor",
         "required": True,
@@ -561,3 +557,4 @@ def _list_group_titles(stage: str) -> dict[str, list[str]]:
         "g1": sorted(groups.get("g1", {}).keys()),
         "g2": sorted(groups.get("g2", {}).keys()),
     }
+

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "camera-multiview"
-version = "0.1.0"
+version = "0.2.0"
 description = "Fixed Flux2-Klein character multiview workflow skill for comfyui-chenxin-mcp."
 requires-python = ">=3.10"
 dependencies = [

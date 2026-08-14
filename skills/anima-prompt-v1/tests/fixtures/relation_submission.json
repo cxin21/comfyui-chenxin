@@ -1,0 +1,13 @@
+{
+  "catalog_record_ids": ["662719", "150038"],
+  "relations": [
+    {
+      "from_record_id": "662719",
+      "to_record_id": "150038",
+      "relation_type": "related",
+      "confidence": 0.8,
+      "rationale": "both are explicit appearance context",
+      "evidence": ["same request"]
+    }
+  ]
+}

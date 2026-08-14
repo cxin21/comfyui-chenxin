@@ -1,46 +1,29 @@
-"""SkillData bridge for the fixed MiniMax H3 video workflows."""
+﻿"""SkillData bridge for the fixed MiniMax H3 video workflows."""
 
 from __future__ import annotations
 
 from comfyui_chenxin_mcp.engine.skill_data import ImageSpec, SkillData
 
 from .runtime.config_schema import STAGES, RunConfig
+from .runtime.assets import scene_spec
 from .runtime.graph_patcher import describe_config
 from .runtime.source_workflow import prepare_workflow
 
 
-def compile_prompt_gate(config) -> dict:
-    """Compile the one true camera-video prompt through MiniMax H3 rules."""
-    from comfyui_chenxin_mcp.engine.prompt_forge import compile_envelope
-
-    # The scene brief is config.prompt; reference_count is informational
-    # only (the actual reference images are passed via config.reference_image_N
-    # in the RunConfig, not the prompt text).
-    reference_count = sum(
-        bool(getattr(config, f"reference_image_{index}", None))
-        for index in range(1, 4)
-    )
-    scene_brief = (
-        f"{config.prompt}\n\nReferences: {reference_count} image(s)."
-    ).strip()
-    return compile_envelope(
-        scene_brief=scene_brief,
-        evidence=config.evidence,
-        dialect_id="minimax_h3",
-    )
-
-
 def validate_envelope(envelope: dict) -> list[str]:
     """Validate the video envelope boundary before config construction."""
-    errors: list[str] = []
-    if not isinstance(envelope.get("evidence"), dict):
-        errors.append("envelope.evidence must be an object")
-    if envelope.get("draft") not in (None, {}):
-        errors.append("camera-video does not accept envelope.draft; use config.prompt")
-    # dialect_id is auto-coerced to minimax_h3 in config_schema.from_envelope,
-    # so any caller-supplied value (including wrong ones like "anima") is
-    # silently accepted at this surface.
-    return errors
+    if set(envelope) - {"prompt"}:
+        return [f"envelope may contain only prompt, got {sorted(set(envelope))}"]
+    if "prompt" not in envelope:
+        return ["envelope must contain exactly prompt"]
+    prompt = envelope["prompt"]
+    if not isinstance(prompt, dict):
+        return ["envelope.prompt must be an object"]
+    if set(prompt) != {"text"}:
+        return ["envelope.prompt must contain text"]
+    if not isinstance(prompt["text"], str):
+        return ["envelope.prompt.text must be a string"]
+    return []
 
 
 def get_skill_data() -> SkillData:
@@ -65,7 +48,7 @@ def get_skill_data() -> SkillData:
         describe_fn=describe_config,
         prepare_fn=prepare_workflow,
         build_config_fn=RunConfig.from_envelope,
-        dialect_id="minimax_h3",
-        prompt_gate_fn=compile_prompt_gate,
         envelope_validate_fn=validate_envelope,
     )
+
+

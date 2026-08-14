@@ -110,6 +110,25 @@ if (-not $RepoRoot) {
     }
 }
 
+$releaseVerifier = Join-Path $RepoRoot 'scripts\verify_release.py'
+if (-not (Test-Path -LiteralPath $releaseVerifier -PathType Leaf)) {
+    Die "Missing release verifier at $releaseVerifier."
+}
+$releaseStager = Join-Path $RepoRoot 'scripts\stage_release.py'
+if (-not (Test-Path -LiteralPath $releaseStager -PathType Leaf)) {
+    Die "Missing release stager at $releaseStager."
+}
+$verifyPython = Get-Command python -ErrorAction SilentlyContinue
+if (-not $verifyPython) { $verifyPython = Get-Command py -ErrorAction SilentlyContinue }
+if (-not $verifyPython) { Die 'Python is required for release verification.' }
+if ($verifyPython.Name -eq 'py.exe') {
+    & $verifyPython.Source -3 $releaseVerifier --source-root $RepoRoot | Out-Null
+} else {
+    & $verifyPython.Source $releaseVerifier --source-root $RepoRoot | Out-Null
+}
+if ($LASTEXITCODE -ne 0) { Die 'Source release verification failed.' }
+Step 'Source release verified'
+
 # ---------- 1. Codex: upstream MCP block + plugin cache ----------
 
 if (-not $SkipCodex) {
@@ -139,27 +158,31 @@ if (-not $SkipCodex) {
     if (-not $version) { Die 'plugin.json has no version.' }
     $cacheRoot = Join-Path $CodexHome 'plugins\cache\personal\comfyui-chenxin'
     $stagingRoot = Join-Path $env:TEMP "comfyui-chenxin-install-$version"
-    if (Test-Path $stagingRoot) { cmd /c "rmdir /S /Q `"$stagingRoot`"" }
+    if (Test-Path -LiteralPath $stagingRoot) {
+        $resolvedStaging = (Resolve-Path -LiteralPath $stagingRoot).Path
+        $resolvedTemp = (Resolve-Path -LiteralPath $env:TEMP).Path
+        if (-not $resolvedStaging.StartsWith($resolvedTemp, [StringComparison]::OrdinalIgnoreCase)) {
+            Die "Refusing to remove staging path outside TEMP: $resolvedStaging"
+        }
+        Remove-Item -LiteralPath $resolvedStaging -Recurse -Force
+    }
     New-Item -ItemType Directory -Path $stagingRoot -Force | Out-Null
 
-    $candidates = @(
-        @{ Name = 'skills';         Src = Join-Path $RepoRoot 'skills' }
-        @{ Name = 'mcp_server';     Src = Join-Path $RepoRoot 'mcp_server' }
-        @{ Name = '.codex-plugin';  Src = Join-Path $RepoRoot '.codex-plugin' }
-        @{ Name = '.mcp.json';      Src = Join-Path $RepoRoot '.mcp.json' }
-        @{ Name = 'LICENSE';        Src = Join-Path $RepoRoot 'LICENSE' }
-        @{ Name = 'README.md';      Src = Join-Path $RepoRoot 'README.md' }
-    )
-    foreach ($c in $candidates) {
-        if (Test-Path $c.Src) {
-            Copy-Item -Path $c.Src -Destination (Join-Path $stagingRoot $c.Name) -Recurse -Force
-        }
+    if ($verifyPython.Name -eq 'py.exe') {
+        & $verifyPython.Source -3 $releaseStager --source-root $RepoRoot --destination-root $stagingRoot | Out-Null
+    } else {
+        & $verifyPython.Source $releaseStager --source-root $RepoRoot --destination-root $stagingRoot | Out-Null
     }
+    if ($LASTEXITCODE -ne 0) { Die 'Plugin release staging failed.' }
+    Step 'staged explicit plugin release file set'
     $stagedPlugin = Join-Path $stagingRoot '.codex-plugin\plugin.json'
     if (-not (Test-Path $stagedPlugin)) { Die "Staged plugin.json missing at $stagedPlugin." }
     $staged = Get-Content $stagedPlugin -Raw | ConvertFrom-Json
     if ([string]$staged.version -ne $version) { Die "Staged version [$($staged.version)] does not match directory." }
     if (-not (Test-Path (Join-Path $stagingRoot 'skills'))) { Die 'Staged skills/ missing.' }
+    foreach ($asset in @('skills\anima-prompt-v1\SKILL.md','skills\minimax-h3-prompt\SKILL.md')) {
+        if (-not (Test-Path (Join-Path $stagingRoot $asset))) { Die "Staged skill missing: $asset" }
+    }
 
     if (Test-Path $cacheRoot) {
         $existing = @(Get-ChildItem $cacheRoot -Directory -Force -ErrorAction SilentlyContinue)
@@ -169,13 +192,21 @@ if (-not $SkipCodex) {
                 Die "Refusing to delete path outside cache root: $full"
             }
             Step "removing previous version directory $full"
-            cmd /c "rmdir /S /Q `"$full`""
+            Remove-Item -LiteralPath $full -Recurse -Force
         }
     }
     if (-not (Test-Path $cacheRoot)) { New-Item -ItemType Directory -Path $cacheRoot -Force | Out-Null }
     $target = Join-Path $cacheRoot $version
     Move-Item -Path $stagingRoot -Destination $target
     Step "installed plugin at $target"
+
+    if ($verifyPython.Name -eq 'py.exe') {
+        & $verifyPython.Source -3 $releaseVerifier --source-root $RepoRoot --cache-root $target | Out-Null
+    } else {
+        & $verifyPython.Source $releaseVerifier --source-root $RepoRoot --cache-root $target | Out-Null
+    }
+    if ($LASTEXITCODE -ne 0) { Die 'Source/cache verification failed.' }
+    Step 'Source/cache verification passed'
 
     Step 'Codex: pip-installing mcp_server + skills (so the host finds comfyui-chenxin-mcp-server)'
     $pythonExe = $null
@@ -196,6 +227,8 @@ if (-not $SkipCodex) {
     }
     $installPkgs = @(
         @{ Name = 'mcp_server';     Src = Join-Path $target 'mcp_server' },
+        @{ Name = 'anima-prompt-v1'; Src = Join-Path $target 'skills\anima-prompt-v1' },
+        @{ Name = 'minimax-h3-prompt'; Src = Join-Path $target 'skills\minimax-h3-prompt' },
         @{ Name = 'camera-image';    Src = Join-Path $target 'skills\camera-image' },
         @{ Name = 'camera-multiview';Src = Join-Path $target 'skills\camera-multiview' },
         @{ Name = 'camera-video';    Src = Join-Path $target 'skills\camera-video' }
