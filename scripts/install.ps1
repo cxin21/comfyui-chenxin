@@ -205,10 +205,13 @@ if (-not $SkipCodex) {
         Step "backed up $configPath -> $backup"
     }
     $argsStr = Format-TomlArgs $argList
+    # TOML literal strings preserve Windows backslashes without requiring
+    # doubled separators. Double any single quote if a command path contains one.
+    $commandLiteral = $command.Replace("'", "''")
     $block = @(
         '[mcp_servers.comfyui-mcp]'
         'type = "stdio"'
-        "command = `"$command`""
+        "command = '$commandLiteral'"
         "args = [$argsStr]"
     )
     Set-TomlBlock -Path $configPath -Header '[mcp_servers.comfyui-mcp]' -BlockLines $block
