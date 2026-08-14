@@ -100,6 +100,70 @@ function Set-TomlBlock {
     Set-Content -Path $Path -Value $out -Encoding UTF8
 }
 
+# Download the Anima tag-catalog SQLite files (gitignored, too large for git;
+# distributed as a release asset) and verify sha256 before installing.
+function Ensure-AnimaCatalog {
+    param(
+        [string]$CacheRoot,
+        [string]$Version,
+        [string]$Repo = 'cxin21/comfyui-chenxin'
+    )
+    $skillRoot = Join-Path $CacheRoot 'skills\anima-prompt-v1'
+    $knowledgeDir = Join-Path $skillRoot 'knowledge'
+    $expected = @('tag-catalog.sqlite','tags.sqlite')
+    $missing = @()
+    foreach ($f in $expected) {
+        if (-not (Test-Path (Join-Path $knowledgeDir $f))) { $missing += $f }
+    }
+    if ($missing.Count -eq 0) {
+        Step 'Anima catalog already present in cache'
+        return
+    }
+
+    $releaseTag = "v$Version"
+    $assetBase = "anima-catalog-$Version"
+    $baseUrl = "https://github.com/$Repo/releases/download/$releaseTag"
+    $zipUrl = "$baseUrl/$assetBase.zip"
+    $shaUrl = "$baseUrl/$assetBase.zip.sha256"
+
+    $tmpDir = Join-Path $env:TEMP "comfyui-chenxin-catalog-$Version"
+    if (Test-Path -LiteralPath $tmpDir) {
+        Remove-Item -LiteralPath $tmpDir -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
+    $zipPath = Join-Path $tmpDir "$assetBase.zip"
+    $shaPath = Join-Path $tmpDir "$assetBase.zip.sha256"
+
+    Step "Anima catalog missing ($($missing -join ', ')); downloading $assetBase.zip from $baseUrl"
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $wc = New-Object System.Net.WebClient
+        $wc.DownloadFile($zipUrl, $zipPath)
+        $wc.DownloadFile($shaUrl, $shaPath)
+    } catch {
+        Die "Failed to download catalog from $baseUrl. Manual recovery: download $assetBase.zip + .sha256 from the v$Version release and place the files under $knowledgeDir. Error: $($_.Exception.Message)"
+    }
+
+    $expectedSha = ((Get-Content -LiteralPath $shaPath -Raw -ErrorAction Stop).Trim() -split '\s+')[0].ToLower()
+    $actualSha = (Get-FileHash -Algorithm SHA256 -LiteralPath $zipPath).Hash.ToLower()
+    if ($expectedSha -ne $actualSha) {
+        Die "catalog sha256 mismatch: expected $expectedSha got $actualSha. Refusing to install unverified catalog."
+    }
+    Step "catalog sha256 verified: $actualSha"
+
+    Expand-Archive -LiteralPath $zipPath -DestinationPath $tmpDir -Force
+    $extracted = Join-Path $tmpDir 'anima-prompt-v1\knowledge'
+    if (-not (Test-Path -LiteralPath $extracted)) {
+        Die "Extracted zip missing expected layout (anima-prompt-v1/knowledge/)."
+    }
+    if (-not (Test-Path $knowledgeDir)) {
+        New-Item -ItemType Directory -Path $knowledgeDir -Force | Out-Null
+    }
+    Copy-Item -Path (Join-Path $extracted '*') -Destination $knowledgeDir -Recurse -Force
+    Step "Anima catalog installed to $knowledgeDir"
+    Remove-Item -LiteralPath $tmpDir -Recurse -Force
+}
+
 # Resolve RepoRoot if not provided (handles wrappers that leave $PSScriptRoot empty).
 if (-not $RepoRoot) {
     $scriptPath = $MyInvocation.MyCommand.Path
@@ -199,6 +263,9 @@ if (-not $SkipCodex) {
     $target = Join-Path $cacheRoot $version
     Move-Item -Path $stagingRoot -Destination $target
     Step "installed plugin at $target"
+
+    Ensure-AnimaCatalog -CacheRoot $target -Version $version
+    Step 'Anima catalog ensured in plugin cache'
 
     if ($verifyPython.Name -eq 'py.exe') {
         & $verifyPython.Source -3 $releaseVerifier --source-root $RepoRoot --cache-root $target | Out-Null

@@ -66,3 +66,8 @@ outputs/
 
 # uv cache
 .uv-cache/
+
+# Anima knowledge catalog SQLite (regenerable; distributed via GitHub Release,
+# scripts/install.ps1 downloads + sha256-verifies the zip into the plugin cache)
+skills/anima-prompt-v1/knowledge/*.sqlite
+skills/anima-prompt-v1/knowledge/*.sqlite.sha256
