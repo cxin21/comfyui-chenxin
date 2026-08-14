@@ -1,11 +1,11 @@
 # comfyui-chenxin-mcp
 
 `comfyui-chenxin-mcp` is the project MCP server. It exposes one stable tool
-surface and dispatches to installed skills through `SkillData`.
+surface for ComfyUI execution and model-native prompt authoring.
 
 ## Tools
 
-The server registers exactly four tools:
+The server registers four execution tools plus two prompt-authoring tools:
 
 | Tool | Contract |
 |---|---|
@@ -13,17 +13,21 @@ The server registers exactly four tools:
 | `describe_config` | Return the selected stage's semantic config schema. |
 | `validate_config` | Validate envelope shape and dependency rules without rendering. |
 | `run_skill` | Execute one stage and return a verified artifact. |
+| `describe_prompt` | Return the request/output schema for a prompt stage. |
+| `author_prompt` | Run `anima-prompt-v1` or `minimax-h3-prompt` authoring. |
 
-The server does not grow a new MCP tool for every skill. A skill registers an
-entry point that returns `SkillData`; the engine owns the shared execution
-protocol.
+The server does not grow a new MCP tool for every skill. Execution skills
+register `SkillData`; prompt skills register the
+`comfyui_chenxin_mcp.prompt_skills` entry-point group. The shared tools dispatch
+through those contracts.
 
 ## Architecture
 
 ```text
 MCP host
   -> server.py / JSON-RPC stdio
-  -> registry.py / SkillData discovery
+  -> registry.py / execution discovery
+  -> prompt_registry.py / authoring discovery
   -> engine/
        describe.py
        validate.py
@@ -104,7 +108,9 @@ Example result:
   "skills": [
     {"name": "camera-image", "stages": ["t2i-camera", "i2i-camera"], "output_type": "images"},
     {"name": "camera-multiview", "stages": ["multiview"], "output_type": "images", "artifact_mode": "all"},
-    {"name": "camera-video", "stages": ["t2v-video", "i2v-video", "multi-i2v-video"], "output_type": "gifs", "artifact_mode": "all"}
+    {"name": "camera-video", "stages": ["t2v-video", "i2v-video", "multi-i2v-video"], "output_type": "gifs", "artifact_mode": "all"},
+    {"name": "anima-prompt-v1", "kind": "authoring", "stages": ["author"], "output_type": "prompt"},
+    {"name": "minimax-h3-prompt", "kind": "authoring", "stages": ["t2va", "ref2va"], "output_type": "prompt"}
   ]
 }
 ```
@@ -165,7 +171,38 @@ artifact with byte count and SHA-256, and `run_record_path`.
 Failure returns `exit_code=1`, `accepted=false`, and a typed error message. Do
 not treat queue submission, queue-idle state, or a prompt ID alone as success.
 
-## Skill contract
+## Prompt authoring contract
+
+Call `describe_prompt` first when the request shape is unclear, then call:
+
+```json
+{
+  "skill": "anima-prompt-v1",
+  "stage": "author",
+  "request": {"facts": [], "subjects": []}
+}
+```
+
+or:
+
+```json
+{
+  "skill": "minimax-h3-prompt",
+  "stage": "t2va",
+  "request": {
+    "facts": [],
+    "duration_seconds": 5,
+    "shot_count": 1,
+    "integrated_multimodal_description": []
+  }
+}
+```
+
+The result has a `prompt` object ready for the matching camera skill:
+Anima returns `positive`/`negative`; H3 returns `text`. Findings and
+advisories remain outside the prompt fields.
+
+## Execution skill contract
 
 An installed skill provides an entry point:
 

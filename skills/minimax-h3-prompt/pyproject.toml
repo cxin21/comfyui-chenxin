@@ -9,6 +9,9 @@ description = "Independent MiniMax-H3 video prompt authoring"
 requires-python = ">=3.10"
 dependencies = ["tokenizers==0.22.2"]
 
+[project.entry-points."comfyui_chenxin_mcp.prompt_skills"]
+minimax-h3-prompt = "h3_prompt.mcp:get_prompt_skill"
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["h3_prompt*"]

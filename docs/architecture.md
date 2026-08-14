@@ -1,10 +1,11 @@
 # Architecture
 
-## Independent prompt skills
+## Prompt skills
 
-`anima-prompt` and `minimax-h3-prompt` are ordinary authoring packages. They
-own their model dialect, knowledge assets, validation, and output records.
-They do not import camera runtime code and do not expose execution artifacts.
+`anima-prompt-v1` and `minimax-h3-prompt` are authoring packages. They own
+their model dialect, knowledge assets, validation, and output records. Each
+also registers an MCP prompt-skill entry point, so the MCP server can call the
+canonical authoring API without importing camera runtime code.
 
 ## Execution skills
 
@@ -16,6 +17,7 @@ duration, ordered reference images, and output downloads.
 
 ## MCP boundary
 
-The MCP server exposes four operations: list skills, describe a stage, validate
-an envelope/config pair, and run a stage. Prompt authoring is not an MCP
-execution operation.
+The MCP server exposes the four execution operations (`list_skills`,
+`describe_config`, `validate_config`, `run_skill`) and two authoring operations
+(`describe_prompt`, `author_prompt`). Prompt output is model-native and can be
+passed directly into the matching camera skill's envelope.

@@ -17,4 +17,5 @@ reference ID, or execution gate. Camera envelopes use direct model-native data:
 {"prompt": {"text": "..."}}
 ```
 
-The MCP server only discovers, validates, and executes ComfyUI skills.
+The MCP server discovers, validates, and executes ComfyUI skills, and exposes
+the Anima and MiniMax-H3 authoring workflows through `author_prompt`.

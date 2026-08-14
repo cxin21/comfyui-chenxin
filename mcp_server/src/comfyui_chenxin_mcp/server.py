@@ -1,9 +1,4 @@
-"""stdio MCP server for executable ComfyUI skills.
-
-Prompt authoring is intentionally outside this server. Camera skills receive
-model-native prompt text directly in their envelope and only validate/execute
-their own runtime configuration.
-"""
+"""stdio MCP server for ComfyUI execution and model-native prompt authoring."""
 from __future__ import annotations
 
 import asyncio
@@ -15,6 +10,7 @@ from .engine.describe import describe_config
 from .engine.execute import run_skill
 from .engine.skill_data import SkillData
 from .engine.validate import validate_config
+from .prompt_registry import PromptSkillData, discover_prompt_skills, find_prompt_skill
 from .protocol import Server
 from .registry import discover_skills
 
@@ -44,22 +40,74 @@ def _find_skill(skills: list[SkillData], name: str) -> SkillData:
     raise ValueError(f"unknown skill: {name!r}; installed: {[s.name for s in skills]}")
 
 
+def _find_prompt_skill(skills: list[PromptSkillData], name: str) -> PromptSkillData:
+    return find_prompt_skill(skills, name)
+
+
 def main() -> None:
     server = Server(name="comfyui-chenxin-mcp", version="1.0.0")
     skills = discover_skills()
+    prompt_skills = discover_prompt_skills()
 
     @server.tool(
         name="list_skills",
-        description="List installed executable ComfyUI skills and their stages.",
+        description="List installed execution and prompt-authoring skills and their stages.",
         input_schema={"type": "object", "additionalProperties": False},
     )
     async def list_tools() -> dict:
         return {
             "skills": [
-                {"name": skill.name, "stages": list(skill.stages), "output_type": skill.output_type}
+                {"name": skill.name, "kind": "execution", "stages": list(skill.stages), "output_type": skill.output_type}
                 for skill in skills
+            ] + [
+                {"name": skill.name, "kind": "authoring", "model": skill.model, "stages": list(skill.stages), "output_type": "prompt"}
+                for skill in prompt_skills
             ]
         }
+
+    @server.tool(
+        name="describe_prompt",
+        description=(
+            "Return the request and output schema for a model-native prompt authoring stage. "
+            "Use before author_prompt when the request shape is unclear."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {"skill": {"type": "string"}, "stage": {"type": "string"}},
+            "required": ["skill", "stage"],
+            "additionalProperties": False,
+        },
+    )
+    async def describe_prompt(skill: str, stage: str) -> dict:
+        return _find_prompt_skill(prompt_skills, skill).describe_fn(stage)
+
+    @server.tool(
+        name="author_prompt",
+        description=(
+            "Author a model-native prompt through an installed prompt skill. "
+            "Use skill=anima-prompt-v1, stage=author for Anima positive/negative "
+            "prompts, or skill=minimax-h3-prompt, stage=t2va/ref2va for MiniMax-H3. "
+            "The result contains a prompt object ready for the matching camera skill."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "skill": {"type": "string", "description": "Prompt skill name from list_skills."},
+                "stage": {"type": "string", "description": "Stage declared by the selected prompt skill."},
+                "request": {"type": "object"},
+            },
+            "required": ["skill", "stage", "request"],
+            "additionalProperties": False,
+        },
+    )
+    async def author_prompt(skill: str, stage: str, request: dict) -> dict:
+        prompt_skill = _find_prompt_skill(prompt_skills, skill)
+        if stage not in prompt_skill.stages:
+            raise ValueError(
+                f"unknown stage {stage!r} for prompt skill {skill!r}; "
+                f"available: {prompt_skill.stages}"
+            )
+        return prompt_skill.author_fn(stage, request)
 
     @server.tool(
         name="describe_config",
@@ -99,8 +147,8 @@ def main() -> None:
         name="run_skill",
         description=(
             "Execute one ComfyUI skill stage. The caller supplies the direct prompt "
-            "shape required by that camera skill; this server performs no prompt "
-            "authoring, artifact lookup, or prompt gate."
+            "shape required by that camera skill. Use author_prompt first when a "
+            "prompt-authoring skill is needed."
         ),
         input_schema={
             "type": "object",

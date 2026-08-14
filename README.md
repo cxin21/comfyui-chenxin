@@ -16,4 +16,5 @@
 {"prompt": {"text": "..."}}
 ```
 
-MCP 服务器只负责发现、校验和执行 ComfyUI 技能。
+MCP 服务器负责发现、校验和执行 ComfyUI 技能，也通过 `author_prompt` 暴露
+Anima 与 MiniMax-H3 的模型原生提示词作者流程。
