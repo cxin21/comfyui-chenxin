@@ -7,3 +7,12 @@ dependencies = []
 
 [project.scripts]
 anima-catalog = "anima_prompt_v1.catalog.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["anima_prompt_v1*"]
+exclude = ["agents*", "knowledge*", "references*", "tests*", "*.tests", "*.tests.*"]
