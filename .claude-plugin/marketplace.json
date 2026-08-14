@@ -1,0 +1,42 @@
+{
+  "name": "comfyui-chenxin",
+  "owner": {
+    "name": "cxin21",
+    "url": "https://github.com/cxin21"
+  },
+  "metadata": {
+    "description": "Local-first ComfyUI plugin: independent prompt authoring skills for Anima and MiniMax-H3, plus three fixed-workflow camera execution skills consumed through a unified local MCP server."
+  },
+  "plugins": [
+    {
+      "name": "comfyui-chenxin",
+      "source": "./",
+      "description": "Local-first ComfyUI plugin: anima-prompt-v1 and minimax-h3-prompt independent authoring skills plus three fixed-workflow camera execution skills (image, multiview, video) consumed through a unified local MCP server.",
+      "version": "1.0.0",
+      "author": {
+        "name": "cxin21",
+        "url": "https://github.com/cxin21/comfyui-chenxin"
+      },
+      "homepage": "https://github.com/cxin21/comfyui-chenxin",
+      "repository": "https://github.com/cxin21/comfyui-chenxin",
+      "license": "MIT",
+      "keywords": [
+        "comfyui",
+        "prompt-engineering",
+        "anima",
+        "minimax-h3",
+        "video",
+        "ai-image"
+      ],
+      "category": "creative",
+      "tags": [
+        "comfyui",
+        "prompts",
+        "image",
+        "video",
+        "mcp"
+      ],
+      "strict": false
+    }
+  ]
+}
