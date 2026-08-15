@@ -4,15 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "camera-image"
-version = "0.2.0"
-description = "Anima camera workflow skill for comfyui-chenxin-mcp."
+version = "0.3.0"
+description = "Anima camera workflow skill (standalone, no MCP dependency)."
 requires-python = ">=3.10"
 dependencies = [
-    "comfyui-chenxin-mcp",
+    "comfyui-http-runtime",
 ]
 
-[project.entry-points."comfyui_chenxin_mcp.skills"]
-camera-image = "camera_image.skill_data:get_skill_data"
+[project.scripts]
+camera-image = "camera_image.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
