@@ -4,6 +4,63 @@ All notable changes to comfyui-chenxin are documented here. Format follows [Keep
 
 ## [Unreleased] — current state on disk
 
+### Skill-owned CLIs / no MCP dependency (2026-08-15) — next major release (2.0)
+
+The MCP bridge (`mcp_server/`, `.mcp.json`, `.codex-plugin/`) is
+retired. Each Skill ships its own `[project.scripts]` console entry
+and can be installed / invoked without any MCP server, Node, or
+`npx`. The Claude Code install path goes through the `.claude-plugin/`
+marketplace; the legacy Codex `config.toml`-editting installer is
+removed. Eight implementation stages (`P0`–`P8`) land together,
+verified end-to-end by `scripts/smoke_cli.py` + `tests/e2e/test_installed_cli.py`:
+
+- **P1 — CLI protocol freeze**. Each Skill embeds its own stdlib-only
+  `cli_protocol.py`; the shared contract is the P1 JSON envelope
+  (`ok` / `command` / `stage` / `result` / `errors` / `advisories`)
+  plus exit codes 0/2/3/4/5/70 mapped to failure category. Test
+  coverage: `tests/cli_protocol/test_protocol_examples.py`.
+- **P2 — anima-prompt-v1 CLI**. `anima-prompt-v1` exposes `author`,
+  `inspect`, `catalog`, and `relation`; the previous `anima-catalog`
+  alias still works.
+- **P3 — minimax-h3-prompt CLI**. `minimax-h3-prompt` exposes
+  `author` / `audit` / `tokenizer` / `count` / `context-plan`; the
+  bundled `h3-qwen3-vl` tokenizer snapshot is LF-pinned via a new
+  `.gitattributes` rule (`skills/minimax-h3-prompt/knowledge/** text
+  eol=lf`) so `core.autocrlf=true` on Windows no longer drifts the
+  manifest hash.
+- **P4 — `runtime/comfyui_http`**. New neutral, stdlib-only
+  `ComfyUIClient` with `health` / `upload_image` / `enqueue` /
+  `history` / `get_artifact` / `wait_for_success`. The transport has
+  zero third-party dependencies and zero subprocess paths; tested
+  with a monkey-patched `urllib.request.urlopen`.
+- **P5 — camera-image decoupling**. `camera-image` exposes
+  `describe` / `validate` / `run` / `assets verify`; the runner uses
+  the P4 transport directly. Removes the last `from
+  comfyui_chenxin_mcp.engine.skill_data import …` line from a
+  camera Skill.
+- **P6 — camera-video + camera-multiview decoupling**. Both Skills
+  follow the same MVP pattern; 13 pose-asset SHA-256 values
+  re-pinned to current disk state at the same time the runner
+  signature bug (`load_fixed_workflow("multiview")` vs. no-arg)
+  was repaired.
+- **P7 — retire the MCP runtime**. `mcp_server/`, `.mcp.json`, and
+  `.codex-plugin/` are deleted; `scripts/install.sh` and
+  `scripts/install.ps1` rewritten as Claude Code plugin installers
+  that only `pip install -e` the Skill packages. `tests/test_release_no_mcp.py`
+  pins 8 invariants for the post-P7 surface (no `mcp_server`, no
+  `.mcp.json`, no `.codex-plugin`, no `comfyui_chenxin_mcp` imports,
+  install scripts do not touch `[mcp_servers.comfyui-mcp]`, every
+  Skill declares `[project.scripts]`, `runtime/comfyui_http` has
+  no MCP dependency, `.claude-plugin/plugin.json` +
+  `marketplace.json` intact).
+- **P8 — staged-release smoke + e2e gate**. `scripts/verify_release.py`
+  + `scripts/stage_release.py` rewritten for the P8 surface; the
+  new `scripts/smoke_cli.py` smoke-runs 14 sub-commands offline
+  (5 `--help`, 1 anima fail-closed, 1 anima catalog stats, 1 h3
+  tokenizer verify, 3× camera describe, 3× camera assets verify);
+  `tests/e2e/test_installed_cli.py` proves the whole chain
+  (`stage → pip install → smoke_cli`) end-to-end in ~80s.
+
 ### Drop `prompt-core` orphan package
 
 The leftover `skills/prompt-core/` package was unused — neither `anima-prompt-v1` nor `minimax-h3-prompt` imported it, and the README's claim that it "shares immutable fact records across authoring skills" no longer reflected reality. Removed the directory; updated `README.md`, `README.en.md`, `docs/architecture.md`, `scripts/install.sh`, and `skills/minimax-h3-prompt/pyproject.toml` (`pythonpath` no longer references it).
