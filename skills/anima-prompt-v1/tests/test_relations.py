@@ -115,7 +115,7 @@ def test_prompt_workflow_finishes_before_relation_submission():
         submission = submit_relation_payload(payload, catalog=catalog, overlay=overlay)
         output = attach_relation_submission(result.output, submission)
         assert output.positive == result.output.positive
-        assert output.assumptions[0].startswith("relation_candidate:")
+        assert any(item.startswith("relation_candidate:") for item in output.assumptions)
         assert not any("relation_candidate" in item for item in output.notes)
 
 

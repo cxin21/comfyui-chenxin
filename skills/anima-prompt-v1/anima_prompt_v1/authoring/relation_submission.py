@@ -139,6 +139,8 @@ def submit_relation_payload(
         model=model,
         source=source,
     )
+    if submission.issues:
+        return submission
     save_issues = list(submission.issues)
     for proposal in submission.proposals:
         try:

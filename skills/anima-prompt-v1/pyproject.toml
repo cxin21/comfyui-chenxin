@@ -6,7 +6,8 @@ requires-python = ">=3.10"
 dependencies = []
 
 [project.scripts]
-anima-catalog = "anima_prompt_v1.catalog.cli:main"
+anima-prompt-v1 = "anima_prompt_v1.cli:main"
+anima-catalog = "anima_prompt_v1.cli:catalog_main"
 
 [project.entry-points."comfyui_chenxin_mcp.prompt_skills"]
 anima-prompt-v1 = "anima_prompt_v1.mcp:get_prompt_skill"
