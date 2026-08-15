@@ -60,7 +60,7 @@ H3_DEFAULT_TEXT_QUALITY_LIMIT = 2400
 
 
 def main(
-    argv: Sequence[str] | None,
+    argv: Sequence[str] | None = None,
     *,
     stdin: TextIO | None = None,
     stdout: TextIO | None = None,

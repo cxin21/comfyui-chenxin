@@ -32,7 +32,7 @@ def _descriptor(stage: str) -> dict[str, Any]:
 
 
 def main(
-    argv: Sequence[str] | None,
+    argv: Sequence[str] | None = None,
     *,
     stdin: TextIO | None = None,
     stdout: TextIO | None = None,

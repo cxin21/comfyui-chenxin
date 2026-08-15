@@ -37,7 +37,7 @@ from .runtime.workflow_assets import asset_descriptor, load_fixed_workflow
 
 
 def main(
-    argv: Sequence[str] | None,
+    argv: Sequence[str] | None = None,
     *,
     stdin: TextIO | None = None,
     stdout: TextIO | None = None,
