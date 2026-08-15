@@ -181,14 +181,14 @@ def _cmd_assets(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     if args.assets_command != "verify":
         raise RequestInputError("assets subcommand must be 'verify'")
     descriptor = _descriptor()
-    workflow = load_fixed_workflow("multiview")
+    workflow = load_fixed_workflow()
     node_count = len(workflow.get("nodes", [])) if isinstance(workflow, dict) else 0
     return emit_success(
         "assets verify",
         args.stage,
         {
             "verified": True,
-            "asset": "multiview",
+            "asset": descriptor["workflow_name"],
             "workflow_name": descriptor["workflow_name"],
             "fingerprint": descriptor["workflow_fingerprint"],
             "node_count": node_count,

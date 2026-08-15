@@ -41,7 +41,7 @@ POSE_NODES: dict[str, str] = {
     )
 }
 
-EXPECTED_WORKFLOW_SHA256 = "33584a54b6587914fce078cdcddbab7915e7d834ca741ded06a44a3ba484252e"
+EXPECTED_WORKFLOW_SHA256 = "6fbebf172d580db2d37593a4ca63b422082788b7683233ed91ac2a1dd5ff87db"
 
 
 def _sha256(path: Path) -> str:

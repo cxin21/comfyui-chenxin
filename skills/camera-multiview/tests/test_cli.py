@@ -32,19 +32,19 @@ def test_package_does_not_import_comfyui_mcp():
 
 
 def test_describe_for_multiview_stage():
-    # Skipped at MVP scope: the bundled multiview asset hash differs from its
-    # declared EXPECTED_WORKFLOW_SHA256. Asset-hash repair is out of P6 scope;
-    # the fixed_nodes dict is asserted via the CLI surface in code review.
-    import pytest
-
-    pytest.skip("pre-existing asset hash mismatch; deferred to asset-hardening phase")
+    code, envelope, _ = _invoke(["describe", "--stage", "multiview", "--json"])
+    assert code == 0
+    assert envelope["ok"] is True
+    assert envelope["stage"] == "multiview"
+    assert envelope["result"]["fixed_nodes"]["body"] == "111"
+    assert envelope["result"]["fixed_nodes"]["face"] == "667"
 
 
 def test_assets_verify_passes_for_bundled_asset():
-    # Same reason as test_describe_for_multiview_stage.
-    import pytest
-
-    pytest.skip("pre-existing asset hash mismatch; deferred to asset-hardening phase")
+    code, envelope, _ = _invoke(["assets", "verify", "--stage", "multiview", "--json"])
+    assert code == 0
+    assert envelope["ok"] is True
+    assert envelope["result"]["verified"] is True
 
 
 def test_validate_rejects_nonempty_envelope(tmp_path: Path):
