@@ -170,10 +170,10 @@ class STAGES:
 
 @dataclass(frozen=True)
 class GroupTitle:
-    LOAD_IMAGE: str = "Load Image (G1)"
-    CONTROLNET_LLLITE: str = "ControlNet LLLite (G1)"
-    AREA_PROMPT: str = "Regional Prompts (G1)"
-    ADD_SIGNATURE: str = "Add Signature (G1)"
+    LOAD_IMAGE: str = "加载图片（G1）"
+    CONTROLNET_LLLITE: str = "ControlNet LLLite（G1）"
+    AREA_PROMPT: str = "区域提示词（G1）"
+    ADD_SIGNATURE: str = "添加签名（G1）"
 
 
 GROUPS = GroupTitle()
@@ -193,13 +193,13 @@ CONTROLNET_IMAGE_NODE: dict[str, str] = {STAGES.T2I: "129", STAGES.I2I: "129"}
 # Patcher merges these with the user's RunConfig.groups.g1/g2 (user-provided
 # groups are added on top 鈥?they can enable MORE, never disable these).
 DEFAULT_ENABLED_G1: list[str] = [
-    "Save Image (G1)",
-    "Second KSampler (G1)",
-    "Camera View Generation (G1)",
+    "保存图片（G1）",
+    "第二轮采样器（G1）",
+    "相机视角生图（G1）",
 ]
 DEFAULT_ENABLED_G2: list[str] = [
-    "Image Sharpen (G2)",
-    "Contrast (G2)",
+    "图像锐化（G2）",
+    "对比度（G2）",
 ]
 
 # i2i nodes 鈥?single source for the latent-rewire step (was hardcoded in
