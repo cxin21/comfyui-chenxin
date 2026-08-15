@@ -4,15 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "camera-video"
-version = "0.2.0"
-description = "Fixed MiniMax H3 video workflow skill for comfyui-chenxin-mcp."
+version = "0.3.0"
+description = "Fixed MiniMax H3 video workflow skill (standalone, no MCP dependency)."
 requires-python = ">=3.10"
 dependencies = [
-    "comfyui-chenxin-mcp",
+    "comfyui-http-runtime",
 ]
 
-[project.entry-points."comfyui_chenxin_mcp.skills"]
-camera-video = "camera_video.skill_data:get_skill_data"
+[project.scripts]
+camera-video = "camera_video.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
