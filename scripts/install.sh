@@ -1,222 +1,77 @@
 #!/usr/bin/env bash
-# install.sh - one-shot installer for comfyui-chenxin on POSIX systems.
+# install.sh - Claude Code one-shot installer for comfyui-chenxin.
 #
-# Writes the upstream comfyui-mcp stdio block into $CODEX_HOME/config.toml,
-# pip-installs the project MCP server and skills (so the host can spawn
-# comfyui-chenxin-mcp-server), then stages the plugin (skills + mcp_server +
-# .codex-plugin + .mcp.json + LICENSE + README.md) into
-# $CODEX_HOME/plugins/cache/personal/comfyui-chenxin/<version>.
-# Re-running replaces the previous version directory; config.toml is backed up
-# once per run before any edit.
+# Per P7 of the Skill-owned CLI / no-MCP plan, this script no longer
+# touches $CODEX_HOME/config.toml and no longer stages a Codex plugin
+# cache. It pip-installs each Skill and the comfyui-http-runtime
+# transport in editable mode so the Claude Code marketplace plugin
+# (`.claude-plugin/plugin.json`) resolves them on the next session.
 #
 # Usage:
-#   bash scripts/install.sh                                # npx mode (portable default)
-#   MODE=local LOCAL_CLONE_PATH=/path/to/comfyui-mcp bash scripts/install.sh
+#   bash scripts/install.sh
 #
 # Environment overrides:
-#   MODE=npx|local           (default npx)
-#   PACKAGE_VERSION=0.49.8
-#   COMFY_URL=http://127.0.0.1:8188
-#   LOCAL_CLONE_PATH=<path>  (required when MODE=local)
-#   CODEX_HOME=$HOME/.codex
-#   SKIP_CODEX=1  SKIP_PROBE=1
+#   PY=python3           which interpreter to use (default: first python3*)
+#   SKIP_PROBE=1         skip the ComfyUI reachability probe
 #
-# Idempotent. Re-running replaces existing registrations; Codex side keeps a
-# timestamped backup of config.toml.
+# Idempotent.
 
 set -eu
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-MODE="${MODE:-npx}"
-PACKAGE_VERSION="${PACKAGE_VERSION:-0.49.8}"
-COMFY_URL="${COMFY_URL:-http://127.0.0.1:8188}"
-LOCAL_CLONE_PATH="${LOCAL_CLONE_PATH:-}"
-CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
-
-# Pick a working Python (3.10+) for the TOML edit helper.
-PY=""
+PY="${PY:-}"
 for cand in python python3 python3.11 python3.12; do
   if command -v "$cand" >/dev/null 2>&1; then PY="$cand"; break; fi
 done
 if [ -z "$PY" ]; then
-  echo "[install][error] python is required for the Codex TOML edits." >&2
+  echo "[install][error] python is required so the Skills can be pip-installed." >&2
   exit 1
 fi
 
 RELEASE_VERIFIER="$REPO_ROOT/scripts/verify_release.py"
 [ -f "$RELEASE_VERIFIER" ] || { echo "[install][error] missing release verifier: $RELEASE_VERIFIER" >&2; exit 1; }
-RELEASE_STAGER="$REPO_ROOT/scripts/stage_release.py"
-[ -f "$RELEASE_STAGER" ] || { echo "[install][error] missing release stager: $RELEASE_STAGER" >&2; exit 1; }
-"$PY" "$RELEASE_VERIFIER" --source-root "$REPO_ROOT" >/dev/null
 
 step() { printf "[install] %s\n" "$*"; }
 warn() { printf "[install][warn] %s\n" "$*" >&2; }
 die()  { printf "[install][error] %s\n" "$*" >&2; exit 1; }
 
-# ---------- 0. Resolve upstream comfyui-mcp launch spec ----------
-case "$MODE" in
-  npx)
-    command -v npx >/dev/null 2>&1 || die "Mode=npx requires npx on PATH."
-    LAUNCH_CMD="npx"
-    LAUNCH_ARGS=( "-y" "comfyui-mcp@${PACKAGE_VERSION}" "--full" "--comfyui-url" "$COMFY_URL" )
-    ;;
-  local)
-    [ -n "$LOCAL_CLONE_PATH" ] || die "MODE=local requires LOCAL_CLONE_PATH."
-    DIST="$LOCAL_CLONE_PATH/dist/index.js"
-    [ -f "$DIST" ] || die "Local clone build not found at $DIST."
-    command -v node >/dev/null 2>&1 || die "node is required for MODE=local."
-    LAUNCH_CMD="node"
-    LAUNCH_ARGS=( "$DIST" "--full" "--comfyui-url" "$COMFY_URL" )
-    ;;
-  *) die "Unknown MODE=$MODE (use npx or local)." ;;
-esac
-
 if [ "${SKIP_PROBE:-}" != "1" ]; then
   if command -v curl >/dev/null 2>&1; then
-    if ! curl -fsS --max-time 3 "$COMFY_URL/system_stats" >/dev/null 2>&1; then
-      warn "ComfyUI at $COMFY_URL did not respond (continuing)."
+    if ! curl -fsS --max-time 3 "http://127.0.0.1:8188/system_stats" >/dev/null 2>&1; then
+      warn "ComfyUI at http://127.0.0.1:8188 did not respond (continuing)."
     fi
   elif command -v wget >/dev/null 2>&1; then
-    if ! wget -q --timeout=3 -O- "$COMFY_URL/system_stats" >/dev/null 2>&1; then
-      warn "ComfyUI at $COMFY_URL did not respond (continuing)."
+    if ! wget -q --timeout=3 -O- "http://127.0.0.1:8188/system_stats" >/dev/null 2>&1; then
+      warn "ComfyUI at http://127.0.0.1:8188 did not respond (continuing)."
     fi
   else
     warn "No curl/wget; skipping ComfyUI reachability probe."
   fi
 fi
 
-# ---------- 1. Codex: upstream MCP block + plugin cache ----------
-if [ "${SKIP_CODEX:-}" != "1" ]; then
-  step "Codex: writing [mcp_servers.comfyui-mcp] into config.toml"
-  CONFIG="$CODEX_HOME/config.toml"
-  if [ -f "$CONFIG" ]; then
-    TS=$(date +%Y%m%d%H%M%S)
-    BACKUP="$CONFIG.bak-comfyui-chenxin-$TS"
-    cp "$CONFIG" "$BACKUP"
-    step "backed up $CONFIG -> $BACKUP"
-  fi
+step "verifying source tree"
+"$PY" "$RELEASE_VERIFIER" --source-root "$REPO_ROOT" >/dev/null
 
-  ARGS_FOR_PY="$("$PY" -c 'import json,sys; print(json.dumps(sys.argv[1:]))' "${LAUNCH_ARGS[@]}")"
-
-  "$PY" - "$CONFIG" "$LAUNCH_CMD" "$ARGS_FOR_PY" << 'PYEOF'
-import json, sys
-path = sys.argv[1]
-cmd = sys.argv[2]
-args = json.loads(sys.argv[3])
-
-lines = []
-try:
-    with open(path, "r", encoding="utf-8") as f:
-        lines = f.read().splitlines()
-except FileNotFoundError:
-    pass
-
-def quote_toml_string(s):
-    return '"' + s.replace("\\", "\\\\").replace("\"", "\\\"") + '"'
-
-args_str = ", ".join(quote_toml_string(a) for a in args)
-block = [
-    "[mcp_servers.comfyui-mcp]",
-    "type = \"stdio\"",
-    f"command = {quote_toml_string(cmd)}",
-    f"args = [{args_str}]",
-]
-
-out = []
-skipping = False
-replaced = False
-for line in lines:
-    t = line.strip()
-    if t.startswith("[") and t.endswith("]"):
-        if skipping:
-            skipping = False
-        if t == "[mcp_servers.comfyui-mcp]":
-            out.extend(block)
-            replaced = True
-            skipping = True
-            continue
-    if not skipping:
-        out.append(line)
-if not replaced:
-    if out and out[-1] != "":
-        out.append("")
-    out.extend(block)
-
-with open(path, "w", encoding="utf-8") as f:
-    f.write("\n".join(out) + "\n")
-PYEOF
-  step "wrote MCP block to $CONFIG"
-
-  step "Codex: installing plugin into plugin cache"
-  PLUGIN_JSON="$REPO_ROOT/.codex-plugin/plugin.json"
-  [ -f "$PLUGIN_JSON" ] || die "Missing $PLUGIN_JSON."
-
-  VERSION="$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1],encoding="utf-8"))["version"])' "$PLUGIN_JSON")"
-  [ -n "$VERSION" ] || die "plugin.json has no version."
-
-  CACHE_ROOT="$CODEX_HOME/plugins/cache/personal/comfyui-chenxin"
-  STAGING="${TMPDIR:-/tmp}/comfyui-chenxin-install-$VERSION"
-  TEMP_ROOT="$($PY -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "${TMPDIR:-/tmp}")"
-  STAGING_REAL="$($PY -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$STAGING")"
-  case "$STAGING_REAL" in
-    "$TEMP_ROOT"/*) ;;
-    *) die "Refusing to remove staging path outside TEMP: $STAGING_REAL" ;;
-  esac
-  if [ -e "$STAGING_REAL" ]; then
-    rm -rf -- "$STAGING_REAL"
-  fi
-  mkdir -p "$STAGING"
-
-  "$PY" "$RELEASE_STAGER" --source-root "$REPO_ROOT" --destination-root "$STAGING" >/dev/null
-  step "staged explicit plugin release file set"
-
-  [ -f "$STAGING/.codex-plugin/plugin.json" ] || die "Staged plugin.json missing."
-  STAGED_VERSION="$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1],encoding="utf-8"))["version"])' "$STAGING/.codex-plugin/plugin.json")"
-  [ "$STAGED_VERSION" = "$VERSION" ] || die "Staged version [$STAGED_VERSION] does not match directory version [$VERSION]."
-  [ -d "$STAGING/skills" ] || die "Staged skills/ missing."
-  for asset in \
-    "skills/anima-prompt-v1/SKILL.md" \
-    "skills/minimax-h3-prompt/SKILL.md"
-  do
-    [ -f "$STAGING/$asset" ] || die "Staged skill asset missing: $asset"
-  done
-
-  mkdir -p "$CACHE_ROOT"
-  CODEX_HOME_REAL="$($PY -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$CODEX_HOME")"
-  CACHE_ROOT_REAL="$($PY -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$CACHE_ROOT")"
-  case "$CACHE_ROOT_REAL" in
-    "$CODEX_HOME_REAL"/*) ;;
-    *) die "Refusing to operate on a CACHE_ROOT outside CODEX_HOME: $CACHE_ROOT_REAL" ;;
-  esac
-  for dir in "$CACHE_ROOT"/*; do
-    [ -d "$dir" ] || continue
-    DIR_REAL="$($PY -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$dir")"
-    case "$DIR_REAL" in
-      "$CACHE_ROOT_REAL"/*) ;;
-      *) die "Refusing to remove path outside cache root: $DIR_REAL" ;;
-    esac
-    step "removing previous version directory $DIR_REAL"
-    rm -rf -- "$DIR_REAL"
-  done
-  TARGET="$CACHE_ROOT/$VERSION"
-  mv "$STAGING" "$TARGET"
-  step "installed plugin at $TARGET"
-  "$PY" "$RELEASE_VERIFIER" --source-root "$REPO_ROOT" --cache-root "$TARGET" >/dev/null
-  step "Source/cache verification passed"
-
-  step "pip-installing mcp_server + skills (so the host finds comfyui-chenxin-mcp-server)"
-  for pkg_src in "$TARGET/mcp_server" "$TARGET/skills/anima-prompt-v1" "$TARGET/skills/minimax-h3-prompt" "$TARGET/skills/camera-image" "$TARGET/skills/camera-multiview" "$TARGET/skills/camera-video"; do
-    if [ -f "$pkg_src/pyproject.toml" ]; then
-      if ! "$PY" -m pip install -e "$pkg_src" --quiet 2>/dev/null; then
-        die "pip install -e $pkg_src failed. Re-run without -e is fine; -e gives live source edits."
-      fi
-      step "pip-installed $pkg_src"
-    else
-      warn "skip $pkg_src (no pyproject.toml)"
+step "pip-installing Skills + comfyui-http-runtime (editable)"
+PKGS=(
+  "$REPO_ROOT/runtime/comfyui_http"
+  "$REPO_ROOT/skills/anima-prompt-v1"
+  "$REPO_ROOT/skills/minimax-h3-prompt"
+  "$REPO_ROOT/skills/camera-image"
+  "$REPO_ROOT/skills/camera-video"
+  "$REPO_ROOT/skills/camera-multiview"
+)
+for pkg in "${PKGS[@]}"; do
+  if [ -f "$pkg/pyproject.toml" ]; then
+    if ! "$PY" -m pip install -e "$pkg" --quiet 2>/dev/null; then
+      die "pip install -e $pkg failed."
     fi
-  done
-fi
+    step "pip-installed $pkg"
+  else
+    warn "skip $pkg (no pyproject.toml)"
+  fi
+done
 
 step "DONE."
-step "next: restart the Codex desktop app (or open a new task) so it picks up the new MCP server."
+step "next: reload the Claude Code plugin (marketplace id: comfyui-chenxin)."
 exit 0
