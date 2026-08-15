@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from comfyui_chenxin_mcp.engine.skill_data import ImageSpec, SkillData
+from .runtime.types import ImageSpec, SkillData  # noqa: F401  (canonical types live in .runtime.types)
 
 from .runtime.config_schema import RunConfig, STAGE
 from .runtime.graph_patcher import describe_config

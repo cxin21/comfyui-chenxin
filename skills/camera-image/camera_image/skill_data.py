@@ -10,7 +10,7 @@ the stripped API graph with every config value baked in.
 """
 from __future__ import annotations
 
-from comfyui_chenxin_mcp.engine.skill_data import SkillData, Rule, ImageSpec  # noqa: F401  (legacy re-export shim; canonical types live in .runtime.types)
+from .runtime.types import ImageSpec, Rule, SkillData  # noqa: F401  (canonical types now live in .runtime.types)
 from camera_image.runtime.config_schema import GROUPS, STAGES, RunConfig
 from camera_image.runtime.graph_patcher import NODE_FIELD_MAP, describe_config
 from camera_image.runtime.source_workflow import prepare_temporary_workflow
